@@ -1,0 +1,2 @@
+-- Initial schema placeholder.
+-- Add tables from the dbdiagram ERD here as the domain model is implemented.
