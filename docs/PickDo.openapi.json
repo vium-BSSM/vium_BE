@@ -1,0 +1,2502 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "PickDo",
+    "description": "자취생 음식물 낭비 분석 앱 PickDo의 API 명세서",
+    "version": "1.0.0"
+  },
+  "tags": [
+    {
+      "name": "user"
+    },
+    {
+      "name": "ingredient"
+    },
+    {
+      "name": "logic"
+    },
+    {
+      "name": "dispose"
+    },
+    {
+      "name": "receipt"
+    },
+    {
+      "name": "notification"
+    },
+    {
+      "name": "shopping"
+    },
+    {
+      "name": "settings"
+    }
+  ],
+  "paths": {
+    "/api/auth/login": {
+      "post": {
+        "summary": "로그인",
+        "deprecated": false,
+        "description": "",
+        "tags": [
+          "user"
+        ],
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "email",
+                  "password"
+                ]
+              },
+              "example": {
+                "email": "user@example.com",
+                "password": "P@ssw0rd123"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "accessToken": {
+                          "type": "string"
+                        },
+                        "refreshToken": {
+                          "type": "string"
+                        },
+                        "user": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "integer"
+                            },
+                            "email": {
+                              "type": "string"
+                            },
+                            "displayName": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "email",
+                            "displayName"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "accessToken",
+                        "refreshToken",
+                        "user"
+                      ]
+                    },
+                    "error": {
+                      "type": "null"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "error"
+                  ]
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "accessToken": "eyJhbGciOiJIUzI1NiJ9.example",
+                    "refreshToken": "eyJhbGciOiJIUzI1NiJ9.refresh",
+                    "user": {
+                      "id": 1,
+                      "email": "user@example.com",
+                      "displayName": "홍길동"
+                    }
+                  },
+                  "error": null
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "summary": "로그아웃",
+        "deprecated": false,
+        "description": "",
+        "tags": [
+          "user"
+        ],
+        "parameters": [
+          {
+            "name": "Authorization: Bearer {{token}}",
+            "in": "header",
+            "description": "",
+            "required": false,
+            "example": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "refreshToken": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "refreshToken"
+                ]
+              },
+              "example": {
+                "refreshToken": "eyJhbGciOiJIUzI1NiJ9.refresh"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "type": "null"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "error"
+                  ]
+                },
+                "example": {
+                  "success": true,
+                  "data": null,
+                  "error": null
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/auth/register": {
+      "post": {
+        "summary": "회원가입",
+        "deprecated": false,
+        "description": "이메일/비밀번호로 신규 계정을 생성한다. users, user_auth_accounts 테이블과 관련.",
+        "tags": [
+          "user"
+        ],
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email",
+                  "password",
+                  "displayName"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "example": "user@example.com"
+                  },
+                  "password": {
+                    "type": "string",
+                    "example": "P@ssw0rd123"
+                  },
+                  "displayName": {
+                    "type": "string",
+                    "example": "홍길동"
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "userId": {
+                          "type": "integer"
+                        },
+                        "email": {
+                          "type": "string"
+                        },
+                        "displayName": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {},
+                      "nullable": true
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "userId": 12,
+                    "email": "user@example.com",
+                    "displayName": "홍길동"
+                  },
+                  "error": null
+                }
+              }
+            },
+            "headers": {}
+          },
+          "409": {
+            "description": "이메일 중복",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/auth/token/refresh": {
+      "post": {
+        "summary": "리프레시 토큰 재발급",
+        "deprecated": false,
+        "description": "refreshToken으로 accessToken을 재발급한다. user_sessions 테이블과 관련.",
+        "tags": [
+          "user"
+        ],
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "refreshToken"
+                ],
+                "properties": {
+                  "refreshToken": {
+                    "type": "string",
+                    "example": "eyJhbGciOiJIUzI1NiJ9.refresh"
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {}
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "accessToken": "eyJhbGciOiJIUzI1NiJ9.access",
+                    "refreshToken": "eyJhbGciOiJIUzI1NiJ9.refresh2",
+                    "expiresIn": 3600
+                  },
+                  "error": null
+                }
+              }
+            },
+            "headers": {}
+          },
+          "401": {
+            "description": "리프레시 토큰 만료/무효",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/auth/{provider}/login": {
+      "post": {
+        "summary": "소셜 로그인 연동",
+        "deprecated": false,
+        "description": "외부 인증 제공자(카카오, 구글 등) 로그인 결과로 받은 사용자 식별값으로 로그인하거나 신규 계정을 연동 생성한다.",
+        "tags": [
+          "user"
+        ],
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "path",
+            "description": "auth_providers.code 값 (예: kakao, google, apple)",
+            "required": true,
+            "example": "",
+            "schema": {
+              "type": "string",
+              "example": "kakao"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "providerUserKey"
+                ],
+                "properties": {
+                  "providerUserKey": {
+                    "type": "string",
+                    "example": "kakao_9912345"
+                  },
+                  "email": {
+                    "type": "string",
+                    "example": "user@example.com"
+                  },
+                  "displayName": {
+                    "type": "string",
+                    "example": "홍길동"
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {}
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "userId": 12,
+                    "accessToken": "eyJhbGciOiJIUzI1NiJ9.access",
+                    "refreshToken": "eyJhbGciOiJIUzI1NiJ9.refresh",
+                    "isNewUser": false
+                  },
+                  "error": null
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/me/ingredients": {
+      "post": {
+        "summary": "식재료 수동 등록",
+        "deprecated": false,
+        "description": "",
+        "tags": [],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "inventoryItemId": {
+                          "type": "integer"
+                        },
+                        "ingredientCatalogId": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "customName": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "initialQuantity": {
+                          "type": "number"
+                        },
+                        "remainingQuantity": {
+                          "type": "number"
+                        },
+                        "unitId": {
+                          "type": "integer"
+                        },
+                        "storageMethodId": {
+                          "type": "integer"
+                        },
+                        "statusCode": {
+                          "type": "string"
+                        },
+                        "purchasedOn": {
+                          "type": "string"
+                        },
+                        "expiresOn": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "inventoryItemId",
+                        "ingredientCatalogId",
+                        "customName",
+                        "initialQuantity",
+                        "remainingQuantity",
+                        "unitId",
+                        "storageMethodId",
+                        "statusCode",
+                        "purchasedOn",
+                        "expiresOn"
+                      ]
+                    },
+                    "error": {
+                      "type": "null"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "error"
+                  ]
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "inventoryItemId": 10,
+                    "ingredientCatalogId": 5,
+                    "customName": "우유",
+                    "initialQuantity": 1000,
+                    "remainingQuantity": 1000,
+                    "unitId": 1,
+                    "storageMethodId": 1,
+                    "statusCode": "active",
+                    "purchasedOn": "2026-08-20",
+                    "expiresOn": "2026-08-27"
+                  },
+                  "error": null
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "get": {
+        "summary": "식재료 조회",
+        "deprecated": false,
+        "description": "",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "expiringSoon",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "example": "true",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "ingredients": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "inventoryItemId": {
+                                "type": "integer"
+                              },
+                              "ingredientCatalogId": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "categoryName": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "initialQuantity": {
+                                "type": "number"
+                              },
+                              "remainingQuantity": {
+                                "type": "number"
+                              },
+                              "unitId": {
+                                "type": "integer"
+                              },
+                              "unit": {
+                                "type": "string"
+                              },
+                              "statusCode": {
+                                "type": "string"
+                              },
+                              "purchasedOn": {
+                                "type": "string"
+                              },
+                              "expiresOn": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "required": [
+                        "ingredients"
+                      ]
+                    },
+                    "error": {
+                      "type": "null"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "error"
+                  ]
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "ingredients": [
+                      {
+                        "inventoryItemId": 1,
+                        "ingredientCatalogId": 5,
+                        "name": "우유",
+                        "categoryName": "dairy",
+                        "initialQuantity": 1,
+                        "remainingQuantity": 1,
+                        "unitId": 1,
+                        "unit": "개",
+                        "statusCode": "active",
+                        "purchasedOn": "2026-08-13",
+                        "expiresOn": "2026-08-20"
+                      }
+                    ]
+                  },
+                  "error": null
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/me/ingredients/scan": {
+      "post": {
+        "summary": "식재료 스캔 등록",
+        "deprecated": false,
+        "description": "",
+        "tags": [],
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "scanType": {
+                    "type": "string"
+                  },
+                  "imageUrl": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "scanType",
+                  "imageUrl"
+                ]
+              },
+              "example": {
+                "scanType": "receipt",
+                "imageUrl": "https://example.com/receipt.jpg"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "receiptId": {
+                          "type": "integer"
+                        },
+                        "ocrStatus": {
+                          "type": "string"
+                        },
+                        "purchaseId": {
+                          "type": "integer"
+                        },
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "inventoryItemId": {
+                                "type": "integer"
+                              },
+                              "ingredientCatalogId": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "categoryName": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "initialQuantity": {
+                                "type": "number"
+                              },
+                              "remainingQuantity": {
+                                "type": "number"
+                              },
+                              "unitId": {
+                                "type": "integer"
+                              },
+                              "unit": {
+                                "type": "string"
+                              },
+                              "expiresOn": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "required": [
+                        "receiptId",
+                        "ocrStatus",
+                        "purchaseId",
+                        "items"
+                      ]
+                    },
+                    "error": {
+                      "type": "null"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "error"
+                  ]
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "receiptId": 3,
+                    "ocrStatus": "completed",
+                    "purchaseId": 7,
+                    "items": [
+                      {
+                        "inventoryItemId": 12,
+                        "ingredientCatalogId": 2,
+                        "name": "달걀",
+                        "categoryName": "dairy",
+                        "initialQuantity": 10,
+                        "remainingQuantity": 10,
+                        "unitId": 2,
+                        "unit": "개",
+                        "expiresOn": "2026-09-10"
+                      }
+                    ]
+                  },
+                  "error": null
+                }
+              }
+            },
+            "headers": {}
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/me/ingredients/{ingredientId}": {
+      "patch": {
+        "summary": "식재료 수정",
+        "deprecated": false,
+        "description": "[MVP] 등록된 식재료의 품목·수량·구매일 등을 수정한다.",
+        "tags": [
+          "ingredient"
+        ],
+        "parameters": [
+          {
+            "name": "ingredientId",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "example": "",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "customName": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "quantity": {
+                    "type": "number"
+                  },
+                  "unitId": {
+                    "type": "integer"
+                  },
+                  "storageMethodId": {
+                    "type": "integer"
+                  },
+                  "purchasedOn": {
+                    "type": "string"
+                  },
+                  "expiresOn": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "customName",
+                  "quantity",
+                  "unitId",
+                  "storageMethodId",
+                  "purchasedOn",
+                  "expiresOn"
+                ]
+              },
+              "example": {
+                "customName": "우유",
+                "quantity": 500,
+                "unitId": 1,
+                "storageMethodId": 1,
+                "purchasedOn": "2026-08-20",
+                "expiresOn": "2026-08-27"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "inventoryItemId": {
+                          "type": "integer"
+                        },
+                        "customName": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "quantity": {
+                          "type": "number"
+                        },
+                        "unitId": {
+                          "type": "integer"
+                        },
+                        "storageMethodId": {
+                          "type": "integer"
+                        },
+                        "purchasedOn": {
+                          "type": "string"
+                        },
+                        "expiresOn": {
+                          "type": "string"
+                        },
+                        "statusCode": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "inventoryItemId",
+                        "customName",
+                        "quantity",
+                        "unitId",
+                        "storageMethodId",
+                        "purchasedOn",
+                        "expiresOn",
+                        "statusCode"
+                      ]
+                    },
+                    "error": {
+                      "type": "null"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "error"
+                  ]
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "inventoryItemId": 1,
+                    "customName": "우유",
+                    "quantity": 500,
+                    "unitId": 1,
+                    "storageMethodId": 1,
+                    "purchasedOn": "2026-08-20",
+                    "expiresOn": "2026-08-27",
+                    "statusCode": "active"
+                  },
+                  "error": null
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/ingredients/estimate-expiry": {
+      "get": {
+        "summary": "유통기한(소비기한) 자동 추정",
+        "deprecated": false,
+        "description": "[MVP] 품목별 평균 보관 기간으로 소비기한을 자동 설정하고, 사용자가 수정할 수 있다. 재료명(또는 카테고리)을 조회하면 평균 보관일수 기반 예상 소비기한을 반환한다. '식재료 수동 등록' 시 기본값으로 활용.",
+        "tags": [
+          "ingredient",
+          "logic"
+        ],
+        "parameters": [
+          {
+            "name": "ingredientName",
+            "in": "query",
+            "description": "재료명 (ingredient_catalog.name 매칭 기준)",
+            "required": false,
+            "example": "",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "storageMethodId",
+            "in": "query",
+            "description": "보관 방법 ID(storage_methods FK)",
+            "required": true,
+            "example": "",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "ingredientCatalogId": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "ingredientName": {
+                          "type": "string"
+                        },
+                        "storageMethodId": {
+                          "type": "integer"
+                        },
+                        "shelfLifeDays": {
+                          "type": "integer"
+                        },
+                        "estimatedExpiryDate": {
+                          "type": "string"
+                        },
+                        "storageMethodName": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "ingredientCatalogId",
+                        "ingredientName",
+                        "storageMethodId",
+                        "shelfLifeDays",
+                        "estimatedExpiryDate"
+                      ]
+                    },
+                    "error": {
+                      "type": "null"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "error"
+                  ]
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "ingredientCatalogId": 12,
+                    "ingredientName": "우유",
+                    "storageMethod": "cold",
+                    "shelfLifeDays": 7,
+                    "estimatedExpiryDate": "2026-09-03"
+                  },
+                  "error": null
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/ingredients/catalog": {
+      "get": {
+        "summary": "식재료 카탈로그 검색",
+        "deprecated": false,
+        "description": "ingredient_catalog 테이블을 검색한다. 식재료 수동 등록 시 ingredientCatalogId를 지정하기 위한 검색 API.",
+        "tags": [
+          "ingredient"
+        ],
+        "parameters": [
+          {
+            "name": "keyword",
+            "in": "query",
+            "description": "재료명 검색 키워드",
+            "required": false,
+            "example": "",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "categoryId",
+            "in": "query",
+            "description": "카테고리 필터",
+            "required": false,
+            "example": "",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {}
+              },
+              "examples": {}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {}
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "items": [
+                      {
+                        "ingredientCatalogId": 5,
+                        "name": "우유",
+                        "categoryId": 3,
+                        "categoryName": "dairy",
+                        "defaultUnitId": 1,
+                        "defaultUnitName": "ml"
+                      }
+                    ]
+                  },
+                  "error": null
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/me/ingredients/{ingredientId}/status": {
+      "patch": {
+        "summary": "소진/폐기 처리",
+        "deprecated": false,
+        "description": "[MVP] 재료를 소진(consumed) 또는 폐기(disposed)로 처리한다. 예/아니오 알림 등에서 호출되어 상태를 갱신한다. status가 consumed/disposed로 변경되면 서버는 consumption_events에 이벤트 1건을 자동 기록한다(event_type, quantity, amount, occurred_at). disposed면 wasteQuantity/wasteAmount가 함께 기록된다.",
+        "tags": [
+          "dispose",
+          "ingredient"
+        ],
+        "parameters": [
+          {
+            "name": "ingredientId",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "example": "",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "description": "소진(consumed) 또는 폐기(disposed)",
+                    "enum": [
+                      "consumed",
+                      "disposed"
+                    ]
+                  },
+                  "quantity": {
+                    "type": "number",
+                    "description": "처리한 수량(게이지로 조절)"
+                  },
+                  "wasteQuantity": {
+                    "type": "number",
+                    "description": "status=disposed일 때 버린 수량(선택)",
+                    "nullable": true
+                  },
+                  "wasteAmount": {
+                    "type": "integer",
+                    "description": "status=disposed일 때 버린 금액(원)",
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "status",
+                  "quantity"
+                ]
+              },
+              "example": {
+                "status": "consumed",
+                "quantity": 300
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "inventoryItemId": {
+                          "type": "integer"
+                        },
+                        "statusCode": {
+                          "type": "string"
+                        },
+                        "remainingQuantity": {
+                          "type": "number"
+                        },
+                        "wasteQuantity": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "wasteAmount": {
+                          "type": "integer",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "inventoryItemId",
+                        "statusCode",
+                        "remainingQuantity"
+                      ]
+                    },
+                    "error": {
+                      "type": "null"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "error"
+                  ]
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "inventoryItemId": 1,
+                    "statusCode": "consumed",
+                    "remainingQuantity": 200
+                  },
+                  "error": null
+                }
+              }
+            },
+            "headers": {}
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/ingredients/auto-dispose": {
+      "post": {
+        "summary": "식재료 자동 폐기",
+        "deprecated": false,
+        "description": "내부 배치 스케줄러, 클라이언트 직접 호출 없음",
+        "tags": [],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "disposedCount": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "disposedCount"
+                      ]
+                    },
+                    "error": {
+                      "type": "null"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "error"
+                  ]
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "disposedCount": 3
+                  },
+                  "error": null
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/me/waste-reports": {
+      "get": {
+        "summary": "폐기량 리포트 조회",
+        "deprecated": false,
+        "description": "",
+        "tags": [],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "reports": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "wasteReportId": {
+                                "type": "integer"
+                              },
+                              "periodStart": {
+                                "type": "string"
+                              },
+                              "periodEnd": {
+                                "type": "string"
+                              },
+                              "totalWastedAmount": {
+                                "type": "integer"
+                              },
+                              "totalSavedAmount": {
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "required": [
+                        "reports"
+                      ]
+                    },
+                    "error": {
+                      "type": "null"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "error"
+                  ]
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "reports": [
+                      {
+                        "wasteReportId": 1,
+                        "periodStart": "2026-07-01",
+                        "periodEnd": "2026-07-31",
+                        "totalWastedAmount": 15000,
+                        "totalSavedAmount": 42000
+                      }
+                    ]
+                  },
+                  "error": null
+                }
+              }
+            },
+            "headers": {}
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/me/waste-patterns": {
+      "get": {
+        "summary": "낭비 패턴 리포트",
+        "deprecated": false,
+        "description": "[MVP] 낭비 이력을 분석해 품목/카테고리별로 어떤 재료를 많이 버리는지 낭비 비율을 반환한다.",
+        "tags": [
+          "logic",
+          "dispose"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "patterns": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "categoryId": {
+                                "type": "integer"
+                              },
+                              "categoryName": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "wasteCount": {
+                                "type": "integer"
+                              },
+                              "totalWastedAmount": {
+                                "type": "integer"
+                              },
+                              "wasteRatio": {
+                                "type": "number"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "required": [
+                        "patterns"
+                      ]
+                    },
+                    "error": {
+                      "type": "null"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "error"
+                  ]
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "patterns": [
+                      {
+                        "categoryId": 3,
+                        "categoryName": "dairy",
+                        "wasteCount": 5,
+                        "totalWastedAmount": 20000,
+                        "wasteRatio": 0.35
+                      }
+                    ]
+                  },
+                  "error": null
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/me/consumption-events": {
+      "get": {
+        "summary": "소진/폐기 이벤트 이력 조회",
+        "deprecated": false,
+        "description": "consumption_events 이력을 조회한다. 낭비 집계·패턴·구매 제안의 원천 데이터.",
+        "tags": [
+          "dispose",
+          "logic"
+        ],
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "example": "",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "example": "",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "eventType",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "example": "",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "consumed",
+                "disposed"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "events": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "eventId": {
+                                "type": "integer",
+                                "format": "int64"
+                              },
+                              "inventoryItemId": {
+                                "type": "integer",
+                                "format": "int64"
+                              },
+                              "eventType": {
+                                "type": "string",
+                                "enum": [
+                                  "consumed",
+                                  "disposed"
+                                ]
+                              },
+                              "eventSource": {
+                                "type": "string",
+                                "enum": [
+                                  "manual",
+                                  "auto_estimated"
+                                ]
+                              },
+                              "quantity": {
+                                "type": "number"
+                              },
+                              "amount": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "occurredAt": {
+                                "type": "string",
+                                "format": "date-time"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "error": {
+                      "type": "null"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/me/recipes/recommended": {
+      "get": {
+        "summary": "소비기한 임박 레시피 조회",
+        "deprecated": false,
+        "description": "",
+        "tags": [],
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {}
+              },
+              "examples": {}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "recipes": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "recipeId": {
+                                "type": "integer"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "usedIngredients": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "ingredientCatalogId": {
+                                      "type": "integer",
+                                      "nullable": true
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "ingredientCatalogId",
+                                    "name"
+                                  ]
+                                }
+                              },
+                              "reason": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "required": [
+                        "recipes"
+                      ]
+                    },
+                    "error": {
+                      "type": "null"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "error"
+                  ]
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "recipes": [
+                      {
+                        "recipeId": 1,
+                        "title": "우유 팬케이크",
+                        "usedIngredients": [
+                          {
+                            "ingredientCatalogId": 5,
+                            "name": "우유"
+                          },
+                          {
+                            "ingredientCatalogId": 8,
+                            "name": "달걀"
+                          }
+                        ],
+                        "reason": "소비기한이 임박한 우유와 달걀을 활용할 수 있는 레시피입니다."
+                      }
+                    ]
+                  },
+                  "error": null
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/me/receipts": {
+      "get": {
+        "summary": "구매/영수증 내역 조회",
+        "deprecated": false,
+        "description": "receipts, purchases, purchase_items 테이블을 조회해 구매/영수증 내역을 반환한다.",
+        "tags": [
+          "receipt"
+        ],
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "description": "조회 시작일",
+            "required": false,
+            "example": "",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "조회 종료일",
+            "required": false,
+            "example": "",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {}
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "receipts": [
+                      {
+                        "receiptId": 3,
+                        "purchaseId": 7,
+                        "purchaseSourceName": "이마트",
+                        "purchasedAt": "2026-08-20T10:00:00",
+                        "totalAmount": 15000,
+                        "ocrStatus": "completed",
+                        "items": [
+                          {
+                            "ingredientCatalogId": 5,
+                            "name": "우유",
+                            "quantity": 1,
+                            "unitPrice": 3500,
+                            "amount": 3500
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "error": null
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/me/notifications/expiry-popup": {
+      "get": {
+        "summary": "소비기한 팝업 알림",
+        "deprecated": false,
+        "description": "",
+        "tags": [],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {}
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "items": [
+                      {
+                        "inventoryItemId": 1,
+                        "name": "우유",
+                        "daysLeft": 2
+                      }
+                    ]
+                  },
+                  "error": null
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/me/notifications/expiry-widget": {
+      "get": {
+        "summary": "소비기한 위젯 알림",
+        "deprecated": false,
+        "description": "",
+        "tags": [],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {}
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "items": [
+                      {
+                        "ingredientId": 1,
+                        "name": "우유",
+                        "daysLeft": 2
+                      }
+                    ]
+                  },
+                  "error": null
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/me/notifications/consumption-check": {
+      "get": {
+        "summary": "소진 여부 확인 알림",
+        "deprecated": false,
+        "description": "[MVP] '이거 다 드셨어요?'에 예/아니오만 눌러 소진 또는 잔여로 처리한다. 폐기 기록의 부담을 최소화하는 장치. 예=소진 시 재료 소진 처리, 아니오=잔여 시 재고 유지. 소진/폐기 처리(PATCH /api/v1/me/ingredients/{ingredientId}/status) API와 연동.",
+        "tags": [
+          "notification",
+          "dispose"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {}
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/me/notifications": {
+      "get": {
+        "summary": "알림 이력 조회",
+        "deprecated": false,
+        "description": "notifications 테이블의 id, sent_at, read_at 등을 활용해 알림 이력을 조회한다.",
+        "tags": [
+          "notification"
+        ],
+        "parameters": [
+          {
+            "name": "isRead",
+            "in": "query",
+            "description": "읽음 여부 필터",
+            "required": false,
+            "example": "",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {}
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "notifications": [
+                      {
+                        "notificationId": 10,
+                        "type": "expiry_popup",
+                        "title": "유통기한 임박",
+                        "body": "우유의 소비기한이 2일 남았습니다.",
+                        "scheduledAt": "2026-09-01T09:00:00",
+                        "sentAt": "2026-09-01T09:00:05",
+                        "readAt": null
+                      }
+                    ]
+                  },
+                  "error": null
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/me/notifications/{notificationId}/read": {
+      "patch": {
+        "summary": "알림 읽음 처리",
+        "deprecated": false,
+        "description": "알림을 읽음 처리하여 notifications.read_at을 갱신한다.",
+        "tags": [
+          "notification"
+        ],
+        "parameters": [
+          {
+            "name": "notificationId",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "example": "",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {}
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "notificationId": 10,
+                    "readAt": "2026-09-01T09:10:00"
+                  },
+                  "error": null
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/me/purchase-suggestions": {
+      "get": {
+        "summary": "다음 구매량 제안",
+        "deprecated": false,
+        "description": "[MVP] 낭비 이력을 바탕으로 '이번엔 절반만 사세요' 등 다음 장보기 구매량을 제안한다. 품목별 최근 낭비 비율(폐기량/구매량)을 분석하여 추천 구매 수량 또는 구매 조정 메시지를 반환한다.",
+        "tags": [
+          "logic"
+        ],
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {}
+              },
+              "examples": {}
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {}
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/me/shopping-helper": {
+      "get": {
+        "summary": "장보기 도우미 뷰",
+        "deprecated": false,
+        "description": "[MVP] 장보기 전 '이미 있는 것 / 사야 할 것'을 정리해 보여줘 과잉구매를 막는다. 반성 도구가 아닌 실용 도구로 만드는 핵심 차별점. 현재 보유 재료 목록과 다음 구매량 제안 결과를 결합해 장보기 리스트 형태로 제공한다.",
+        "tags": [
+          "logic",
+          "user"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {}
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/me/shopping-list-items": {
+      "post": {
+        "summary": "장보기 리스트 항목 추가",
+        "deprecated": false,
+        "description": "shopping_list_items 테이블에 장보기 항목을 추가한다.",
+        "tags": [
+          "shopping"
+        ],
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ingredientCatalogId": {
+                    "type": "integer",
+                    "nullable": true,
+                    "example": 5
+                  },
+                  "customName": {
+                    "type": "string",
+                    "nullable": true,
+                    "example": "우유"
+                  },
+                  "suggestedQuantity": {
+                    "type": "number",
+                    "example": 1000
+                  },
+                  "unitId": {
+                    "type": "integer",
+                    "example": 1
+                  },
+                  "reason": {
+                    "type": "string",
+                    "example": "낭비 이력 기반 재구매 제안"
+                  }
+                },
+                "required": [
+                  "ingredientCatalogId"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {}
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "shoppingListItemId": 1,
+                    "customName": "우유",
+                    "suggestedQuantity": 1000,
+                    "unitId": 1,
+                    "isChecked": false
+                  },
+                  "error": null
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      },
+      "get": {
+        "summary": "장보기 리스트 조회",
+        "deprecated": false,
+        "description": "사용자가 담아 둔 장보기 리스트 항목을 조회한다.",
+        "tags": [
+          "shopping"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {}
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "items": [
+                      {
+                        "shoppingListItemId": 1,
+                        "ingredientCatalogId": 5,
+                        "customName": "우유",
+                        "suggestedQuantity": 1000,
+                        "unitId": 1,
+                        "reason": "낭비 이력 기반 재구매 제안",
+                        "isChecked": false
+                      }
+                    ]
+                  },
+                  "error": null
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/me/shopping-list-items/{itemId}": {
+      "patch": {
+        "summary": "장보기 리스트 항목 체크 상태 변경",
+        "deprecated": false,
+        "description": "장보기 중 구매 완료로 체크(is_checked)하거나 해제한다.",
+        "tags": [
+          "shopping"
+        ],
+        "parameters": [
+          {
+            "name": "itemId",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "example": "",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "isChecked"
+                ],
+                "properties": {
+                  "isChecked": {
+                    "type": "boolean",
+                    "example": true
+                  }
+                }
+              },
+              "examples": {}
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {}
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "shoppingListItemId": 1,
+                    "isChecked": true
+                  },
+                  "error": null
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      },
+      "delete": {
+        "summary": "장보기 리스트 항목 삭제",
+        "deprecated": false,
+        "description": "장보기 리스트에서 항목을 삭제한다.",
+        "tags": [
+          "shopping"
+        ],
+        "parameters": [
+          {
+            "name": "itemId",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "example": "",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {}
+                },
+                "example": {
+                  "success": true,
+                  "data": null,
+                  "error": null
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/me/settings": {
+      "get": {
+        "summary": "사용자 설정 조회",
+        "deprecated": false,
+        "description": "user_settings 값을 조회한다. 자동폐기/유통기한 알림/장보기 알림/푸시 알림 여부 등 서비스 동작 설정.",
+        "tags": [
+          "settings"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {}
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "expiryAlertDays": 2,
+                    "autoDisposeEnabled": true,
+                    "shoppingReminderEnabled": false,
+                    "pushEnabled": true
+                  },
+                  "error": null
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      },
+      "patch": {
+        "summary": "사용자 설정 수정",
+        "deprecated": false,
+        "description": "user_settings 값을 수정한다.",
+        "tags": [
+          "settings"
+        ],
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expiryAlertDays": {
+                    "type": "integer",
+                    "example": 3
+                  },
+                  "autoDisposeEnabled": {
+                    "type": "boolean",
+                    "example": true
+                  },
+                  "shoppingReminderEnabled": {
+                    "type": "boolean",
+                    "example": true
+                  },
+                  "pushEnabled": {
+                    "type": "boolean",
+                    "example": true
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {}
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "expiryAlertDays": 3,
+                    "autoDisposeEnabled": true,
+                    "shoppingReminderEnabled": true,
+                    "pushEnabled": true
+                  },
+                  "error": null
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ErrorObject": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "INVALID_REQUEST"
+          },
+          "message": {
+            "type": "string",
+            "example": "요청이 올바르지 않습니다."
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ]
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": false
+          },
+          "data": {
+            "type": "null"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorObject"
+          }
+        },
+        "required": [
+          "success",
+          "error"
+        ]
+      }
+    },
+    "responses": {},
+    "securitySchemes": {
+      "bearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "servers": [],
+  "security": []
+}
