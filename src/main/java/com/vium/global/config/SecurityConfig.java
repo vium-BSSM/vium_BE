@@ -14,9 +14,8 @@ public class SecurityConfig {
 	public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 		return http
 			.csrf(csrf -> csrf.disable())
-			.authorizeHttpRequests(auth -> auth
-				.requestMatchers("/actuator/health", "/actuator/info", "/api/health").permitAll()
-				.anyRequest().authenticated())
+			// 인증은 CLAUDE.md 7단계(마지막)에서 구현 — 그 전까지 전체 개방
+			.authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
 			.formLogin(form -> form.disable())
 			.httpBasic(httpBasic -> httpBasic.disable())
 			.build();
