@@ -129,3 +129,17 @@
 - `docs/PickDo.openapi.json` — API 명세(진실의 원천).
 - `docs/vium.sql` — DB 스키마(테이블·컬럼·관계·제약)의 진실의 원천.
 - `docs/기능명세서.csv` — 기능 명세(분류·설명·우선순위).
+
+---
+
+## 10. 이슈 / 브랜치 / PR 워크플로우
+
+1. **이슈부터 만든다.** GitHub "New issue"에서 종류에 맞는 템플릿(`.github/ISSUE_TEMPLATE/`)을 골라 작성한다.
+   - ✨ 기능 개발 → `feature.yml`
+   - 🐛 버그 리포트 → `bug.yml`
+   - 🔧 리팩토링/문서/테스트/설정 → `chore.yml`
+2. **이슈 번호 기준으로 브랜치를 판다.** 이름 규칙: `<type>/<이슈번호>-<짧은-설명>`
+   - `type`은 커밋 타입과 동일: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`
+   - 예: `feat/12-ingredient-register`, `fix/27-waste-report-timezone`
+3. **커밋 메시지도 같은 타입 접두사를 쓴다.** 예: `feat: 재료 등록 API 구현 (#12)`
+4. **PR을 올릴 때는 `Closes #이슈번호`로 연결한다.** (PR 템플릿에 이미 자리 있음 → 머지 시 이슈 자동 닫힘)
