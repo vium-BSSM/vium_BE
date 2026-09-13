@@ -8,10 +8,13 @@ import com.vium.global.common.BusinessException;
 import com.vium.global.common.ErrorCode;
 import com.vium.ingredient.service.ExpiryEstimationService;
 import com.vium.ingredient.service.IngredientCatalogService;
+import com.vium.inventory.dto.IngredientListResponse;
 import com.vium.inventory.dto.IngredientRegisterRequest;
 import com.vium.inventory.dto.IngredientResponse;
 import com.vium.inventory.entity.InventoryItem;
 import com.vium.inventory.repository.InventoryItemRepository;
+import com.vium.inventory.repository.InventoryQueryRepository;
+import com.vium.user.service.UserSettingsService;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +34,15 @@ public class InventoryService {
 	private final StorageMethodRepository storageMethodRepository;
 	private final ItemStatusRepository itemStatusRepository;
 	private final ExpiryEstimationService expiryEstimationService;
+	private final InventoryQueryRepository inventoryQueryRepository;
+	private final UserSettingsService userSettingsService;
+
+	@Transactional(readOnly = true)
+	public IngredientListResponse list(Long userId, boolean expiringSoon) {
+		LocalDate expiresThrough = expiringSoon
+			? LocalDate.now().plusDays(userSettingsService.getExpiryAlertDays(userId)) : null;
+		return new IngredientListResponse(inventoryQueryRepository.findActiveIngredients(userId, expiresThrough));
+	}
 
 	@Transactional
 	public IngredientResponse register(Long userId, IngredientRegisterRequest request) {
