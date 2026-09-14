@@ -95,4 +95,9 @@ public class InventoryItem {
 	protected void onUpdate() {
 		this.updatedAt = LocalDateTime.now();
 	}
+
+	public void updateStatus(BigDecimal quantity, Short newStatusId) {
+		this.remainingQuantity = this.remainingQuantity.subtract(quantity);
+		this.statusId = newStatusId;
+	}
 }
