@@ -13,6 +13,12 @@ public class InventoryQueryRepository {
 
 	private final JdbcTemplate jdbcTemplate;
 
+	public boolean hasConsumptionEvents(Long inventoryItemId, Long userId) {
+		return Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+			"select exists (select 1 from consumption_events where inventory_item_id = ? and user_id = ?)",
+			Boolean.class, inventoryItemId, userId));
+	}
+
 	public List<IngredientListResponse.Item> findActiveIngredients(Long userId, LocalDate expiresThrough) {
 		String sql = """
 			select i.id, i.ingredient_catalog_id,

@@ -1,5 +1,7 @@
 package com.vium.inventory.entity;
 
+import com.vium.global.exception.InvalidRequestException;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -99,5 +101,23 @@ public class InventoryItem {
 	public void updateStatus(BigDecimal quantity, Short newStatusId) {
 		this.remainingQuantity = this.remainingQuantity.subtract(quantity);
 		this.statusId = newStatusId;
+	}
+
+	public void updateDetails(String customName, BigDecimal quantity, Short unitId, Short storageMethodId,
+			LocalDate purchasedOn, LocalDate expiresOn, boolean hasConsumptionEvents) {
+		BigDecimal processedQuantity = this.initialQuantity.subtract(this.remainingQuantity);
+		if (!this.unitId.equals(unitId) && (hasConsumptionEvents || processedQuantity.signum() != 0)) {
+			throw new InvalidRequestException("소진·폐기 이력이 있는 재료의 단위는 변경할 수 없습니다");
+		}
+		if (quantity.compareTo(processedQuantity) < 0) {
+			throw new InvalidRequestException("수량은 이미 소진·폐기한 수량보다 작을 수 없습니다");
+		}
+		this.customName = customName;
+		this.initialQuantity = quantity;
+		this.remainingQuantity = quantity.subtract(processedQuantity);
+		this.unitId = unitId;
+		this.storageMethodId = storageMethodId;
+		this.purchasedOn = purchasedOn;
+		this.expiresOn = expiresOn;
 	}
 }
