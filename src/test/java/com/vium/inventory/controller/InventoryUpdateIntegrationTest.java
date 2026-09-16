@@ -109,6 +109,27 @@ class InventoryUpdateIntegrationTest {
 	}
 
 	@Test
+	void rejectsUnitChangeBeforeComparingQuantitiesInDifferentUnits() throws Exception {
+		addEvent();
+		jdbcTemplate.update("update inventory_items set initial_quantity=100, remaining_quantity=40 where id=100");
+		jdbcTemplate.update("update consumption_events set quantity=60 where id=100");
+		String body = BODY.replace("\"quantity\":8", "\"quantity\":5")
+			.replace("\"unitId\":1", "\"unitId\":2");
+		mockMvc.perform(patch("/api/me/ingredients/100")
+				.contentType(MediaType.APPLICATION_JSON).content(body))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"))
+			.andExpect(jsonPath("$.error.message")
+				.value("소진·폐기 이력이 있는 재료의 단위는 변경할 수 없습니다"));
+		flush();
+		assertQuantity("100", "40");
+		assertThat(jdbcTemplate.queryForObject("select unit_id from inventory_items where id=100", Integer.class))
+			.isEqualTo(1);
+		assertThat(jdbcTemplate.queryForObject("select quantity from consumption_events where id=100", BigDecimal.class))
+			.isEqualByComparingTo("60");
+	}
+
+	@Test
 	void allowsUnitChangeWithoutHistory() throws Exception {
 		mockMvc.perform(patch("/api/me/ingredients/100").contentType(MediaType.APPLICATION_JSON).content(BODY.replace("\"unitId\":1","\"unitId\":2")))
 			.andExpect(status().isOk()).andExpect(jsonPath("$.data.unitId").value(2));
