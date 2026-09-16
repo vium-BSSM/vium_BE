@@ -4,19 +4,22 @@ import com.vium.global.code.ItemStatus;
 import com.vium.global.code.ItemStatusRepository;
 import com.vium.global.code.StorageMethodRepository;
 import com.vium.global.code.UnitRepository;
-import com.vium.global.common.BusinessException;
-import com.vium.global.common.ErrorCode;
+import com.vium.global.exception.BusinessException;
+import com.vium.global.exception.ErrorCode;
+import com.vium.global.exception.NotFoundException;
 import com.vium.ingredient.service.ExpiryEstimationService;
 import com.vium.ingredient.service.IngredientCatalogService;
 import com.vium.inventory.dto.IngredientListResponse;
 import com.vium.inventory.dto.IngredientRegisterRequest;
 import com.vium.inventory.dto.IngredientResponse;
+import com.vium.inventory.dto.InventoryState;
 import com.vium.inventory.entity.InventoryItem;
 import com.vium.inventory.repository.InventoryItemRepository;
 import com.vium.inventory.repository.InventoryQueryRepository;
 import com.vium.user.service.UserSettingsService;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +39,23 @@ public class InventoryService {
 	private final ExpiryEstimationService expiryEstimationService;
 	private final InventoryQueryRepository inventoryQueryRepository;
 	private final UserSettingsService userSettingsService;
+
+	@Transactional
+	public InventoryState updateStatus(Long userId, Long inventoryItemId, BigDecimal quantity, Short statusId) {
+		InventoryItem item = inventoryItemRepository.findByIdAndUserId(inventoryItemId, userId)
+			.orElseThrow(() -> new NotFoundException("Inventory item not found"));
+		item.updateStatus(quantity, statusId);
+		inventoryItemRepository.save(item);
+		return new InventoryState(item.getId(), item.getUserId(), item.getRemainingQuantity());
+	}
+
+	@Transactional(readOnly = true)
+	public List<InventoryState> findAutoDisposeCandidates(Short disposedStatusId, LocalDate expiresBefore) {
+		return inventoryItemRepository.findAllByStatusIdNotAndExpiresOnBefore(disposedStatusId, expiresBefore)
+			.stream()
+			.map(item -> new InventoryState(item.getId(), item.getUserId(), item.getRemainingQuantity()))
+			.toList();
+	}
 
 	@Transactional(readOnly = true)
 	public IngredientListResponse list(Long userId, boolean expiringSoon) {
