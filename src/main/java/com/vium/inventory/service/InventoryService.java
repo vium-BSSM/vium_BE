@@ -12,6 +12,8 @@ import com.vium.ingredient.service.IngredientCatalogService;
 import com.vium.inventory.dto.IngredientListResponse;
 import com.vium.inventory.dto.IngredientRegisterRequest;
 import com.vium.inventory.dto.IngredientResponse;
+import com.vium.inventory.dto.IngredientUpdateRequest;
+import com.vium.inventory.dto.IngredientUpdateResponse;
 import com.vium.inventory.dto.InventoryState;
 import com.vium.inventory.entity.InventoryItem;
 import com.vium.inventory.repository.InventoryItemRepository;
@@ -39,6 +41,31 @@ public class InventoryService {
 	private final ExpiryEstimationService expiryEstimationService;
 	private final InventoryQueryRepository inventoryQueryRepository;
 	private final UserSettingsService userSettingsService;
+
+	@Transactional
+	public IngredientUpdateResponse update(Long userId, Long inventoryItemId, IngredientUpdateRequest request) {
+		InventoryItem item = inventoryItemRepository.findByIdAndUserId(inventoryItemId, userId)
+			.orElseThrow(() -> new NotFoundException("식재료를 찾을 수 없습니다"));
+		String customName = normalizeCustomName(request.customName());
+		if (item.getIngredientCatalogId() == null && customName == null) {
+			throw new BusinessException(ErrorCode.INVALID_REQUEST, "카탈로그에 없는 재료는 customName이 필요합니다");
+		}
+		if (!unitRepository.existsById(request.unitId())) {
+			throw new BusinessException(ErrorCode.INVALID_REQUEST, "존재하지 않는 unitId 입니다");
+		}
+		if (!storageMethodRepository.existsById(request.storageMethodId())) {
+			throw new BusinessException(ErrorCode.INVALID_REQUEST, "존재하지 않는 storageMethodId 입니다");
+		}
+		validateDates(request.purchasedOn(), request.expiresOn());
+		ItemStatus status = itemStatusRepository.findById(item.getStatusId())
+			.orElseThrow(() -> new BusinessException(ErrorCode.INTERNAL_ERROR));
+		boolean hasEvents = !item.getUnitId().equals(request.unitId())
+			&& inventoryQueryRepository.hasConsumptionEvents(inventoryItemId, userId);
+		item.updateDetails(customName, request.quantity(), request.unitId(), request.storageMethodId(),
+			request.purchasedOn(), request.expiresOn(), hasEvents);
+		return new IngredientUpdateResponse(item.getId(), item.getCustomName(), item.getInitialQuantity(),
+			item.getUnitId(), item.getStorageMethodId(), item.getPurchasedOn(), item.getExpiresOn(), status.getCode());
+	}
 
 	@Transactional
 	public InventoryState updateStatus(Long userId, Long inventoryItemId, BigDecimal quantity, Short statusId) {
