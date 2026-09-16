@@ -1,7 +1,7 @@
 package com.vium.user.service;
 
-import com.vium.global.common.BusinessException;
-import com.vium.global.common.ErrorCode;
+import com.vium.global.exception.BusinessException;
+import com.vium.global.exception.ErrorCode;
 import com.vium.user.repository.UserSettingsRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

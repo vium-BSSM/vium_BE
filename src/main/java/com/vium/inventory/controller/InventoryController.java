@@ -1,7 +1,7 @@
 package com.vium.inventory.controller;
 
-import com.vium.global.auth.CurrentUserProvider;
 import com.vium.global.common.ApiResponse;
+import com.vium.global.security.CurrentUserProvider;
 import com.vium.inventory.dto.IngredientListResponse;
 import com.vium.inventory.dto.IngredientRegisterRequest;
 import com.vium.inventory.dto.IngredientResponse;

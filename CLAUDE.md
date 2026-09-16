@@ -95,21 +95,91 @@
 
 ---
 
-## 7. 코드 컨벤션 / 구조
+## 7. 아키텍처 / 코드 구조
 
-- **패키지 구조: 기능별(package-by-feature).** `com.vium` 밑에 도메인별로 최상위 패키지를 두고,
-  그 안에서만 `controller → service → repository` 계층(+ `dto`, `entity`)을 나눈다.
-  전역 `controller`/`service` 폴더에 몰아넣지 않는다.
-  - `global` — `config`, `common`(`ApiResponse`, `ErrorCode`, `BusinessException`, `GlobalExceptionHandler`),
-    `auth`(`CurrentUserProvider`), `code`(units/storage_methods/item_statuses/event_sources/
-    purchase_sources/ingredient_categories 같은 코드 테이블), `presentation`(HealthController)
-  - `user`, `ingredient`, `inventory`, `consumption`, `receipt`, `report`, `shopping`, `notification`, `recipe`
-- **도메인 간 접근은 Repository 직접 참조 금지, 반드시 상대 도메인의 Service를 거친다.**
-  (예: 소진/폐기 처리 시 재고 차감은 `InventoryService`를 통해서만.)
-- 컨트롤러는 얇게, 비즈니스 로직은 서비스에.
-- DTO와 엔티티를 분리한다(엔티티를 그대로 응답에 노출하지 않는다).
-- 상태값(status, event_type 등)은 문자열 남발 대신 enum 또는 코드 테이블 참조로 다룬다.
-- 커밋은 기능 단위로 작게. 각 단계 완료 시 동작하는 상태를 유지한다.
+### 7.1 기본 구조와 도메인 책임
+
+- **도메인별 모놀리식 + 계층형 아키텍처**를 사용한다. 하나의 Spring Boot 애플리케이션과 PostgreSQL DB를 운영한다.
+- `dispose`는 소진·폐기, 자동 폐기, 이벤트 이력, 낭비 리포트·패턴 집계를 담당한다.
+- `ingredient`는 공용 재료 카탈로그·소비기한 규칙, `inventory`는 사용자별 보유 재료·잔여 수량·상태, `user`는 사용자 정보·설정을 담당한다.
+- 인증 업무를 구현할 때는 `auth`에 회원가입·로그인·토큰 발급/갱신 로직을 둔다.
+
+**큰 구조와 규칙은 먼저 합의하고, 구체적인 패키지·클래스는 기능 개발에 맞춰 추가한다.**
+
+- 도메인별 책임, 계층별 역할, 도메인 간 접근 방식, 트랜잭션 경계, 인증·예외·응답 처리 기준은 개발 전에 정한다.
+- 새 기능을 개발할 때 기존 도메인에서 담당할 수 있는지 먼저 확인하고, 필요한 패키지와 클래스만 추가한다. 아래 구조도는 현재 구현 상태이며 앞으로 추가할 도메인을 제한하지 않는다.
+- 사용하지 않는 클래스나 모든 계층의 빈 폴더를 일괄 생성하지 않는다. 기능마다 별도의 계층 구조를 도입하지 않고 이 문서의 공통 규칙을 따른다.
+- 팀이 전체 구성과 역할을 공유하기 위해 빈 패키지를 미리 두는 것은 허용한다. 기존 빈 패키지를 사용하지 않는다는 이유만으로 일괄 삭제하지 않는다.
+- 기능이 구체화되며 구조 조정이 필요하면 관련 도메인의 책임과 의존성을 검토하고, 합의된 변경을 이 문서에 반영한다.
+
+현재 구조는 다음과 같다. 각 도메인은 실제 필요한 계층만 둔다.
+
+```text
+com.vium
+├── ingredient
+│   ├── service
+│   ├── entity
+│   └── repository
+├── inventory
+│   ├── controller
+│   ├── dto
+│   ├── service          InventoryService
+│   ├── entity           InventoryItem
+│   └── repository       InventoryItemRepository, InventoryQueryRepository
+├── dispose
+│   ├── controller       DisposeController
+│   ├── dto              소진·폐기 및 리포트 요청/응답
+│   ├── service          DisposeService, AutoDisposeService, WasteReportService
+│   ├── entity           ConsumptionEvent
+│   └── repository       ConsumptionEventRepository,
+│                        ConsumptionEventQueryRepository, WasteReportQueryRepository
+├── user
+│   ├── service          UserSettingsService
+│   └── repository       UserSettingsRepository
+└── global
+    ├── common           ApiResponse
+    ├── exception        BusinessException, ErrorCode, GlobalExceptionHandler 등
+    ├── security         SecurityConfig, CurrentUserProvider
+    ├── code             공통 코드 테이블 Entity·Repository
+    └── controller       HealthController
+```
+
+### 7.2 계층별 역할
+
+- 기본 호출 흐름은 **Controller → Service → Repository**다. `presentation/application/*UseCase` 구조와 혼용하지 않는다.
+- `controller`: HTTP 요청 바인딩·검증, 현재 사용자 확인, 서비스 호출, 응답 반환. DB에 직접 접근하지 않는다.
+- `service`: 업무 흐름 조율, 사용자 소유권 확인, 트랜잭션 경계 설정. SQL과 JDBC 결과 매핑을 작성하지 않는다.
+- `entity`: 데이터와 해당 데이터의 수량·상태 변경 규칙을 관리한다.
+- `repository`: DB 조회·저장과 조회 결과 매핑을 담당한다.
+- `dto`: 요청·응답 및 서비스 간 전달 데이터를 정의한다. 엔티티를 API 응답으로 직접 노출하지 않는다.
+- 불필요한 인터페이스/구현체 쌍이나 별도 어댑터 계층을 일괄 추가하지 않는다.
+
+### 7.3 도메인 간 의존성과 DB 접근
+
+- 다른 도메인의 Repository를 직접 주입하지 않고, 해당 도메인의 Service를 통해 접근한다. 공통 코드 테이블은 `global.code`의 Repository를 사용할 수 있다.
+- 특히 **다른 도메인의 데이터를 변경할 때는 소유 도메인의 Service를 반드시 거친다.** `dispose`의 재고 변경은 `InventoryService`에 위임한다.
+- 도메인 사이에 변경 가능한 엔티티를 전달해 외부에서 수정하지 않는다. 필요한 정보는 `InventoryState` 같은 DTO로 전달한다.
+- 서비스 간 순환 의존성을 만들지 않는다. `dispose → inventory` 호출은 가능하지만 `inventory → dispose` 역호출은 만들지 않는다.
+- 저장과 일반 조회는 JPA를 기본으로 사용한다. 복합 조회·집계는 전용 `*QueryRepository`에서 JDBC 또는 native SQL로 처리할 수 있다.
+- **읽기 전용 QueryRepository는 여러 도메인의 테이블을 조인할 수 있다.** 조회를 위해 항목마다 다른 서비스를 반복 호출하지 않는다. 이 허용은 다른 도메인의 데이터를 직접 변경하는 권한을 의미하지 않는다.
+
+### 7.4 트랜잭션과 현재 사용자
+
+- 함께 성공해야 하는 업무의 최상위 Service 메서드에 `@Transactional`을 둔다.
+- 소진·폐기는 `DisposeService → InventoryService`로 재고를 변경한 뒤 `ConsumptionEventRepository`에 이벤트를 저장한다. 자동 폐기는 `AutoDisposeService`가 같은 원칙으로 조율한다.
+- **재고 변경과 이벤트 저장은 동일 트랜잭션에 참여하며, 하나라도 실패하면 모두 롤백한다.** 재고 변경에 별도 `REQUIRES_NEW` 트랜잭션을 사용하지 않는다.
+- 조회 서비스에는 `@Transactional(readOnly = true)`를 적용한다.
+- 현재 사용자 ID는 `global.security.CurrentUserProvider` 한 곳에서 제공한다. 컨트롤러는 이를 주입받고, 서비스에 사용자 ID를 전달한다. `AuthenticationUtil` 같은 중복 접근 경로를 만들지 않는다.
+- 향후 인증 시 `auth`는 인증 업무를, `global.security`는 요청 인증 검증과 현재 사용자 접근을 담당한다.
+
+### 7.5 리팩토링 범위와 검증
+
+- 구조 변경만으로 기존 API 경로·요청/응답·DB 테이블/컬럼을 변경하지 않는다. Java 도메인 이름과 DB 테이블 이름은 같을 필요가 없다. `dispose`에서도 `consumption_events`를 그대로 사용한다.
+- 이미 적용된 Flyway 마이그레이션은 수정하지 않는다. 실제 스키마 변경이 필요할 때는 별도 마이그레이션을 추가한다.
+- 상태값은 enum 또는 코드 테이블 참조를 기준으로 다룬다.
+- 구조 변경과 기존 기능 버그 수정은 구분해 진행한다.
+- 변경 후 기존 테스트와 주요 회귀 테스트를 실행한다. 사용자별 접근 제한, 재고 변경·이벤트 저장의 원자성, API 응답 호환성을 확인한다.
+- 커밋은 기능 단위로 작게 유지하고 각 단계 완료 시 동작하는 상태를 유지한다.
 
 ---
 
