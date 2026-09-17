@@ -1,6 +1,7 @@
 package com.vium.global.security;
 
 import com.vium.global.common.ApiResponse;
+import com.vium.global.exception.ErrorCode;
 import jakarta.servlet.DispatcherType;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -19,11 +20,11 @@ public class SecurityConfig {
 	@Bean
 	public SecurityFilterChain securityFilterChain(HttpSecurity http, JsonMapper mapper) throws Exception {
 		AuthenticationEntryPoint unauthorized = (request, response, exception) -> {
-			response.setStatus(401);
+			response.setStatus(ErrorCode.UNAUTHORIZED.getStatus().value());
 			response.setHeader("WWW-Authenticate", "Bearer");
 			response.setContentType("application/json;charset=UTF-8");
 			response.getWriter().write(mapper.writeValueAsString(ApiResponse.fail(
-				new ApiResponse.ErrorObject("UNAUTHORIZED", "인증이 필요합니다."))));
+				new ApiResponse.ErrorObject(ErrorCode.UNAUTHORIZED.name(), ErrorCode.UNAUTHORIZED.getDefaultMessage()))));
 		};
 		return http
 			.csrf(csrf -> csrf.disable())
@@ -36,10 +37,10 @@ public class SecurityConfig {
 				.anyRequest().authenticated())
 			.exceptionHandling(errors -> errors.authenticationEntryPoint(unauthorized)
 				.accessDeniedHandler((request, response, exception) -> {
-					response.setStatus(403);
+					response.setStatus(ErrorCode.FORBIDDEN.getStatus().value());
 					response.setContentType("application/json;charset=UTF-8");
 					response.getWriter().write(mapper.writeValueAsString(ApiResponse.fail(
-						new ApiResponse.ErrorObject("FORBIDDEN", "접근 권한이 없습니다."))));
+						new ApiResponse.ErrorObject(ErrorCode.FORBIDDEN.name(), ErrorCode.FORBIDDEN.getDefaultMessage()))));
 				}))
 			.oauth2ResourceServer(resource -> resource.jwt(Customizer.withDefaults()).authenticationEntryPoint(unauthorized))
 			.formLogin(form -> form.disable())
