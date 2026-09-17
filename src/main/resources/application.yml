@@ -37,3 +37,10 @@ management:
 logging:
   level:
     org.hibernate.SQL: debug
+
+security:
+  jwt:
+    secret: ${JWT_SECRET}
+    issuer: ${JWT_ISSUER:vium}
+    access-token-seconds: ${JWT_ACCESS_TOKEN_SECONDS:3600}
+    refresh-token-seconds: ${JWT_REFRESH_TOKEN_SECONDS:1209600}
