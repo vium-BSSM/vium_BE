@@ -1,5 +1,6 @@
 package com.vium.inventory.controller;
 
+import com.vium.auth.service.TokenService;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -30,6 +31,9 @@ class InventoryControllerIntegrationTest {
 	@Autowired
 	private InventoryItemRepository inventoryItemRepository;
 
+	@Autowired
+	private TokenService tokenService;
+
 	@BeforeEach
 	void setUp() {
 		jdbcTemplate.update("INSERT INTO units (id, code, name) VALUES (1, 'ea', '개')");
@@ -46,7 +50,7 @@ class InventoryControllerIntegrationTest {
 
 	@Test
 	void register_estimatesExpiryAndStoresInventory() throws Exception {
-		mockMvc.perform(post("/api/me/ingredients")
+		mockMvc.perform(post("/api/me/ingredients").header("Authorization", "Bearer " + tokenService.issue(1L).accessToken())
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("""
 					{
@@ -73,7 +77,7 @@ class InventoryControllerIntegrationTest {
 
 	@Test
 	void register_rejectsZeroQuantity() throws Exception {
-		mockMvc.perform(post("/api/me/ingredients")
+		mockMvc.perform(post("/api/me/ingredients").header("Authorization", "Bearer " + tokenService.issue(1L).accessToken())
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("""
 					{
@@ -91,7 +95,7 @@ class InventoryControllerIntegrationTest {
 
 	@Test
 	void register_rejectsExpiryBeforePurchase() throws Exception {
-		mockMvc.perform(post("/api/me/ingredients")
+		mockMvc.perform(post("/api/me/ingredients").header("Authorization", "Bearer " + tokenService.issue(1L).accessToken())
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("""
 					{
@@ -109,7 +113,7 @@ class InventoryControllerIntegrationTest {
 
 	@Test
 	void register_requiresExpiryWhenItCannotBeEstimated() throws Exception {
-		mockMvc.perform(post("/api/me/ingredients")
+		mockMvc.perform(post("/api/me/ingredients").header("Authorization", "Bearer " + tokenService.issue(1L).accessToken())
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("""
 					{
@@ -126,7 +130,7 @@ class InventoryControllerIntegrationTest {
 
 	@Test
 	void register_acceptsCustomIngredientWithExplicitExpiry() throws Exception {
-		mockMvc.perform(post("/api/me/ingredients")
+		mockMvc.perform(post("/api/me/ingredients").header("Authorization", "Bearer " + tokenService.issue(1L).accessToken())
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("""
 					{

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -147,6 +148,49 @@ class AuthIntegrationTest {
 			.andExpect(status().isInternalServerError())
 			.andExpect(jsonPath("$.data.accessToken").doesNotExist());
 		assertThat(userSessionRepository.count()).isZero();
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = {"missing", "malformed", "opaque-refresh", "refresh-jwt", "expired", "issuer", "subject", "missing-exp", "future", "signature"})
+	void rejectsInvalidBearerTokensWithCommonResponse(String scenario) throws Exception {
+		var request = get("/api/me/ingredients");
+		if (!scenario.equals("missing")) {
+			String token;
+			if (scenario.equals("malformed")) { token = "not-a-jwt"; }
+			else if (scenario.equals("opaque-refresh")) { token = login().get("data").get("refreshToken").asText(); }
+			else {
+				Instant now = Instant.now();
+				var claims = new com.nimbusds.jwt.JWTClaimsSet.Builder()
+					.issuer(scenario.equals("issuer") ? "other" : jwtProperties.issuer())
+					.subject(scenario.equals("subject") ? "not-a-user-id" : "42")
+					.claim("token_type", scenario.equals("refresh-jwt") ? "refresh" : "access")
+					.issueTime(java.util.Date.from(now.minusSeconds(3600)))
+					.notBeforeTime(java.util.Date.from(now.plusSeconds(scenario.equals("future") ? 3600 : -3600)));
+				if (!scenario.equals("missing-exp")) {
+					claims.expirationTime(java.util.Date.from(now.plusSeconds(scenario.equals("expired") ? -10 : 3600)));
+				}
+				var jwt = new SignedJWT(new com.nimbusds.jose.JWSHeader(com.nimbusds.jose.JWSAlgorithm.HS256), claims.build());
+				byte[] key = Base64.getDecoder().decode(jwtProperties.secret());
+				if (scenario.equals("signature")) { key[0] ^= 1; }
+				jwt.sign(new com.nimbusds.jose.crypto.MACSigner(key));
+				token = jwt.serialize();
+			}
+			request.header("Authorization", "Bearer " + token);
+		}
+		mockMvc.perform(request).andExpect(status().isUnauthorized())
+			.andExpect(header().string("WWW-Authenticate", "Bearer"))
+			.andExpect(jsonPath("$.success").value(false))
+			.andExpect(jsonPath("$.data").value(org.hamcrest.Matchers.nullValue()))
+			.andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+	}
+
+	@Test
+	void healthIsPublicAndAuthenticationDoesNotPersistBetweenRequests() throws Exception {
+		mockMvc.perform(get("/api/health")).andExpect(status().isOk());
+		String access = login().get("data").get("accessToken").asText();
+		mockMvc.perform(get("/api/health").header("Authorization", "Bearer " + access))
+			.andExpect(status().isOk()).andExpect(result -> assertThat(result.getRequest().getSession(false)).isNull());
+		mockMvc.perform(get("/api/me/ingredients")).andExpect(status().isUnauthorized());
 	}
 
 	private JsonNode login() throws Exception {
