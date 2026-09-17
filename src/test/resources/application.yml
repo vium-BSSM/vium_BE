@@ -19,3 +19,4 @@ security:
     issuer: vium-test
     access-token-seconds: 3600
     refresh-token-seconds: 1209600
+    clock-skew-seconds: 60

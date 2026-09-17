@@ -44,3 +44,4 @@ security:
     issuer: ${JWT_ISSUER:vium}
     access-token-seconds: ${JWT_ACCESS_TOKEN_SECONDS:3600}
     refresh-token-seconds: ${JWT_REFRESH_TOKEN_SECONDS:1209600}
+    clock-skew-seconds: ${JWT_CLOCK_SKEW_SECONDS:60}

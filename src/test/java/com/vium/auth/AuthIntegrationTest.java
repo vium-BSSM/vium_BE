@@ -167,7 +167,7 @@ class AuthIntegrationTest {
 					.issueTime(java.util.Date.from(now.minusSeconds(3600)))
 					.notBeforeTime(java.util.Date.from(now.plusSeconds(scenario.equals("future") ? 3600 : -3600)));
 				if (!scenario.equals("missing-exp")) {
-					claims.expirationTime(java.util.Date.from(now.plusSeconds(scenario.equals("expired") ? -10 : 3600)));
+					claims.expirationTime(java.util.Date.from(now.plusSeconds(scenario.equals("expired") ? -120 : 3600)));
 				}
 				var jwt = new SignedJWT(new com.nimbusds.jose.JWSHeader(com.nimbusds.jose.JWSAlgorithm.HS256), claims.build());
 				byte[] key = Base64.getDecoder().decode(jwtProperties.secret());

@@ -33,14 +33,15 @@ public class TokenConfig {
 			.macAlgorithm(MacAlgorithm.HS256).build();
 		decoder.setJwtValidator(jwt -> {
 			var now = authClock.instant();
+			long skew = properties.clockSkewSeconds();
 			boolean validSubject;
 			try { validSubject = Long.parseLong(jwt.getSubject()) > 0; }
 			catch (NumberFormatException e) { validSubject = false; }
 			if (!properties.issuer().equals(jwt.getClaimAsString("iss"))
 				|| !"access".equals(jwt.getClaimAsString("token_type")) || !validSubject
-				|| jwt.getExpiresAt() == null || !now.isBefore(jwt.getExpiresAt())
-				|| jwt.getIssuedAt() == null || jwt.getIssuedAt().isAfter(now)
-				|| (jwt.getNotBefore() != null && now.isBefore(jwt.getNotBefore()))) {
+				|| jwt.getExpiresAt() == null || !now.minusSeconds(skew).isBefore(jwt.getExpiresAt())
+				|| jwt.getIssuedAt() == null || jwt.getIssuedAt().isAfter(now.plusSeconds(skew))
+				|| (jwt.getNotBefore() != null && now.plusSeconds(skew).isBefore(jwt.getNotBefore()))) {
 				return OAuth2TokenValidatorResult.failure(
 					new OAuth2Error("invalid_token"));
 			}

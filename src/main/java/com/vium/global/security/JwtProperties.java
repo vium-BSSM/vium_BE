@@ -11,7 +11,8 @@ public record JwtProperties(
 	@NotBlank String secret,
 	@NotBlank String issuer,
 	@Min(1) long accessTokenSeconds,
-	@Min(1) long refreshTokenSeconds
+	@Min(1) long refreshTokenSeconds,
+	@Min(0) long clockSkewSeconds
 ) {
 	@Override
 	public String toString() { return "JwtProperties[secret=REDACTED]"; }

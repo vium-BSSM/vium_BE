@@ -11,7 +11,7 @@ class TokenConfigTest {
 	@ParameterizedTest
 	@ValueSource(strings = {"not base64!", "c2hvcnQ=", ""})
 	void rejectsInvalidSigningKeys(String secret) {
-		assertThatThrownBy(() -> new TokenConfig().jwtEncoder(new JwtProperties(secret,"vium",3600,1209600)))
+		assertThatThrownBy(() -> new TokenConfig().jwtEncoder(new JwtProperties(secret,"vium",3600,1209600,60)))
 			.isInstanceOf(IllegalArgumentException.class);
 	}
 }
