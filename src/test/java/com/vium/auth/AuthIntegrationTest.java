@@ -61,7 +61,7 @@ class AuthIntegrationTest {
 	}
 
 	@Test
-	void loginWithoutBearerReturnsSignedTokensAndCommitsHashedSession() throws Exception {
+	void loginWithoutBearerReturnsAccessJwtAndOpaqueRefreshTokenAndCommitsHashedSession() throws Exception {
 		Instant before = Instant.now().minusSeconds(1);
 		JsonNode response = login();
 		assertThat(response.get("success").asBoolean()).isTrue();
@@ -74,7 +74,8 @@ class AuthIntegrationTest {
 		String access = data.get("accessToken").asText();
 		String refresh = data.get("refreshToken").asText();
 		SignedJWT accessJwt = verify(access, "access", 3600);
-		SignedJWT refreshJwt = verify(refresh, "refresh", 1209600);
+		assertThat(refresh).matches("[A-Za-z0-9_-]{43}");
+		assertThat(Base64.getUrlDecoder().decode(refresh)).hasSize(32);
 		assertThat(access).isNotEqualTo(refresh);
 		assertThat(accessJwt.getJWTClaimsSet().getIssueTime().toInstant()).isAfterOrEqualTo(before);
 		assertThat(userSessionRepository.findAll()).singleElement().satisfies(session -> {
@@ -85,8 +86,10 @@ class AuthIntegrationTest {
 		UserSession session = userSessionRepository.findAll().getFirst();
 		assertThat(session.getRefreshTokenHash()).isEqualTo(HexFormat.of().formatHex(
 			MessageDigest.getInstance("SHA-256").digest(refresh.getBytes(StandardCharsets.UTF_8))));
+		Instant issuedAt = accessJwt.getJWTClaimsSet().getIssueTime().toInstant();
+		assertThat(session.getIssuedAt().toInstant(ZoneOffset.UTC)).isEqualTo(issuedAt);
 		assertThat(session.getExpiresAt().toInstant(ZoneOffset.UTC))
-			.isEqualTo(refreshJwt.getJWTClaimsSet().getExpirationTime().toInstant());
+			.isEqualTo(issuedAt.plusSeconds(jwtProperties.refreshTokenSeconds()));
 	}
 
 	@Test

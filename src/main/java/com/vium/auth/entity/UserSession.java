@@ -51,6 +51,11 @@ public class UserSession {
 		return session;
 	}
 
+	/** Session timestamps are UTC even when the server runs in another time zone. */
+	public boolean isExpired(Instant now) {
+		return !now.isBefore(expiresAt.toInstant(ZoneOffset.UTC));
+	}
+
 	private static String hashToken(String token) {
 		try {
 			return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
