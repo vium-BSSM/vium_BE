@@ -48,9 +48,9 @@
 
 ---
 
-## 4. 개발 순서 (이 순서대로 진행한다)
+## 4. 개발 순서와 현재 진행 상태
 
-데이터가 "생기고 → 흐르고 → 분석되는" 순서를 따른다.
+기본 개발 계획은 데이터가 "생기고 → 흐르고 → 분석되는" 순서다. 사용자 요청에 따라 이메일 로그인과 Access Token 인증은 먼저 구현했으며, 현재 인증 상태는 5항을 따른다.
 
 1. **[먼저] 프로젝트 뼈대 + DB 마이그레이션**
     - Spring Boot 프로젝트 구성, PostgreSQL 연결, Flyway로 `docs/vium.sql` 기반 스키마 생성.
@@ -66,19 +66,23 @@
       **요청 시점에 집계**해서 반환한다. 자주 버리는 위험 품목도 이 집계에서 자동 발견.
 5. **장보기 도우미 / 구매량 제안** — shopping-helper, purchase-suggestions, shopping-list-items
 6. **알림** — notifications (서버 배치가 생성)
-7. **인증(로그인/회원가입)** — 이 단계에서 마지막에 얹는다. (아래 5항 참고)
+7. **인증** — 이메일 로그인과 Access Token 인증 구현 완료. 회원가입·토큰 갱신·로그아웃은 후속 작업이다. (아래 5항 참고)
 8. **확장** — 영수증 OCR(scan, `purchases`에 저장), 레시피 추천, 대시보드/절약금액.
 
 ---
 
-## 5. 인증에 대한 임시 규칙 (중요)
+## 5. 인증 구조와 현재 구현 범위
 
-- **인증은 마지막에 구현한다.** 초반에는 만들지 않는다.
-- 그 전까지는 현재 사용자 id를 **한 곳에서만** 가져오도록 유틸/컴포넌트로 분리한다.
-    - 예: `CurrentUserProvider.getCurrentUserId()` → 지금은 고정값(예: 1L) 반환.
-    - 나중에 인증을 붙이면 이 메서드 내부만 "JWT에서 추출"로 교체한다.
-- 컨트롤러·서비스 어디에도 user_id를 하드코딩하지 말고 반드시 이 유틸을 거친다.
-- API 명세상 전역 보안은 Bearer(JWT)로 되어 있으나, 실제 필터 적용은 7단계에서 한다.
+- `POST /api/auth/login`에서 이메일·BCrypt 비밀번호를 검증하고 Access Token과 Refresh Token을 발급한다.
+- Access Token은 HS256 JWT이며, Spring Security Resource Server와 `NimbusJwtDecoder`로 서명·발급자·토큰 종류(`access`)·양수 Long 사용자 ID·시간 조건을 검증한다.
+- `JWT_SECRET`은 Base64로 인코딩된 32바이트 이상의 비밀키로 필수 설정한다. 기본 유효기간은 Access Token 1시간, Refresh Token 14일이다.
+- `JWT_CLOCK_SKEW_SECONDS`는 발급·만료·사용 시작 시각 검증의 시간 오차 허용치다. 기본 60초이며 0~300초만 허용한다.
+- 공개 경로는 `POST /api/auth/login`, `GET /api/health`, `GET /actuator/health` 및 그 하위 경로다. 나머지 요청에는 인증이 필요하다. HTTP 세션에 인증을 저장하지 않는 stateless 방식이다.
+- 현재 사용자 ID는 `CurrentUserProvider.getCurrentUserId()`가 `SecurityContext`의 검증된 JWT에서 가져온다. 고정 사용자 ID를 사용하지 않는다. 컨트롤러는 이 값을 서비스에 전달한다.
+- 인증 실패는 `UNAUTHORIZED(401)`, 접근 거부는 `FORBIDDEN(403)`을 공통 응답 형식으로 반환한다. 사용자별 데이터 소유권 검사는 기존 서비스·저장소에서 수행한다.
+- Refresh Token은 `SecureRandom`으로 만든 32바이트 난수의 Base64 URL 문자열이다. `user_sessions`에는 원문 대신 SHA-256 해시를 저장한다.
+- 세션의 기존 `timestamp` 컬럼에는 UTC 기준 `LocalDateTime`을 저장하고, 만료 비교는 `UserSession.isExpired(Instant)`를 사용한다. 기존 재고·소진 이벤트의 서버 기본 시간대 사용까지 통일한 상태는 아니다.
+- **미구현:** 회원가입, 토큰 갱신, 로그아웃, 세션 폐기 및 만료 세션 정리. `isExpired()`는 준비된 비교 메서드이며 아직 프로덕션 호출자는 없다. 새 환경의 로그인에는 BCrypt 비밀번호가 저장된 계정이 필요하며, 회원가입은 별도 이슈로 구현한다.
 
 ---
 
@@ -102,7 +106,7 @@
 - **도메인별 모놀리식 + 계층형 아키텍처**를 사용한다. 하나의 Spring Boot 애플리케이션과 PostgreSQL DB를 운영한다.
 - `dispose`는 소진·폐기, 자동 폐기, 이벤트 이력, 낭비 리포트·패턴 집계를 담당한다.
 - `ingredient`는 공용 재료 카탈로그·소비기한 규칙, `inventory`는 사용자별 보유 재료·잔여 수량·상태, `user`는 사용자 정보·설정을 담당한다.
-- 인증 업무를 구현할 때는 `auth`에 회원가입·로그인·토큰 발급/갱신 로직을 둔다.
+- `auth`는 로그인 흐름·토큰 발급·세션 저장을 담당한다. `user`는 계정 조회와 비밀번호 검증을 담당하며, `auth`에는 향후 회원가입·토큰 갱신·로그아웃 흐름을 추가한다.
 
 **큰 구조와 규칙은 먼저 합의하고, 구체적인 패키지·클래스는 기능 개발에 맞춰 추가한다.**
 
@@ -133,13 +137,20 @@ com.vium
 │   ├── entity           ConsumptionEvent
 │   └── repository       ConsumptionEventRepository,
 │                        ConsumptionEventQueryRepository, WasteReportQueryRepository
+├── auth
+│   ├── controller       AuthController
+│   ├── dto              LoginRequest, LoginResponse
+│   ├── service          AuthService, TokenService
+│   ├── entity           UserSession
+│   └── repository       UserSessionRepository
 ├── user
-│   ├── service          UserSettingsService
-│   └── repository       UserSettingsRepository
+│   ├── dto              UserIdentity
+│   ├── service          UserSettingsService, UserLoginService
+│   └── repository       UserSettingsRepository, UserCredentialRepository
 └── global
     ├── common           ApiResponse
     ├── exception        BusinessException, ErrorCode, GlobalExceptionHandler 등
-    ├── security         SecurityConfig, CurrentUserProvider
+    ├── security         SecurityConfig, CurrentUserProvider, TokenConfig, JwtProperties
     ├── code             공통 코드 테이블 Entity·Repository
     └── controller       HealthController
 ```
@@ -170,7 +181,8 @@ com.vium
 - **재고 변경과 이벤트 저장은 동일 트랜잭션에 참여하며, 하나라도 실패하면 모두 롤백한다.** 재고 변경에 별도 `REQUIRES_NEW` 트랜잭션을 사용하지 않는다.
 - 조회 서비스에는 `@Transactional(readOnly = true)`를 적용한다.
 - 현재 사용자 ID는 `global.security.CurrentUserProvider` 한 곳에서 제공한다. 컨트롤러는 이를 주입받고, 서비스에 사용자 ID를 전달한다. `AuthenticationUtil` 같은 중복 접근 경로를 만들지 않는다.
-- 향후 인증 시 `auth`는 인증 업무를, `global.security`는 요청 인증 검증과 현재 사용자 접근을 담당한다.
+- `auth`는 로그인·토큰 발급·세션 저장을, `global.security`는 요청 인증 검증과 현재 사용자 접근을 담당한다.
+- 로그인은 `AuthService → UserLoginService`로 자격 증명을 검증하고 `UserIdentity` DTO를 받는다. `AuthService`의 트랜잭션에서 세션을 저장하며, 저장 실패 시 토큰을 응답하지 않는다.
 
 ### 7.5 리팩토링 범위와 검증
 

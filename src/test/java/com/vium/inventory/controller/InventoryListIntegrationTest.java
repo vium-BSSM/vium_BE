@@ -1,5 +1,6 @@
 package com.vium.inventory.controller;
 
+import com.vium.auth.service.TokenService;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -28,6 +29,9 @@ class InventoryListIntegrationTest {
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
 
+	@Autowired
+	private TokenService tokenService;
+
 	@BeforeEach
 	void setUp() {
 		jdbcTemplate.update("""
@@ -55,7 +59,7 @@ class InventoryListIntegrationTest {
 		insertItem(12, 1, 2, 1L, null, expiry);
 		insertItem(13, 1, 3, 1L, null, expiry);
 
-		mockMvc.perform(get("/api/me/ingredients"))
+		mockMvc.perform(get("/api/me/ingredients").header("Authorization", "Bearer " + tokenService.issue(1L).accessToken()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.success").value(true))
 			.andExpect(jsonPath("$.error").value(nullValue()))
@@ -82,7 +86,7 @@ class InventoryListIntegrationTest {
 		insertItem(12, 1, 1, 1L, null, today);
 		insertItem(14, 1, 1, 1L, null, today.minusDays(1));
 
-		mockMvc.perform(get("/api/me/ingredients").param("expiringSoon", "false"))
+		mockMvc.perform(get("/api/me/ingredients").header("Authorization", "Bearer " + tokenService.issue(1L).accessToken()).param("expiringSoon", "false"))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.data.ingredients.length()").value(5))
 			.andExpect(jsonPath("$.data.ingredients[0].inventoryItemId").value(14))
@@ -100,7 +104,7 @@ class InventoryListIntegrationTest {
 		insertItem(11, 1, 1, 2L, null, expiry);
 		insertItem(12, 1, 1, 1L, "사용자 입력 이름", expiry);
 
-		mockMvc.perform(get("/api/me/ingredients"))
+		mockMvc.perform(get("/api/me/ingredients").header("Authorization", "Bearer " + tokenService.issue(1L).accessToken()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.data.ingredients.length()").value(3))
 			.andExpect(jsonPath("$.data.ingredients[0].name").value("직접 만든 반찬"))
@@ -113,12 +117,12 @@ class InventoryListIntegrationTest {
 
 	@Test
 	void list_returnsEmptyArrayWhenNoIngredientsMatch() throws Exception {
-		mockMvc.perform(get("/api/me/ingredients"))
+		mockMvc.perform(get("/api/me/ingredients").header("Authorization", "Bearer " + tokenService.issue(1L).accessToken()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.data.ingredients").isArray())
 			.andExpect(jsonPath("$.data.ingredients").isEmpty());
 		insertItem(10, 1, 1, 1L, null, LocalDate.now().plusDays(3));
-		mockMvc.perform(get("/api/me/ingredients").param("expiringSoon", "true"))
+		mockMvc.perform(get("/api/me/ingredients").header("Authorization", "Bearer " + tokenService.issue(1L).accessToken()).param("expiringSoon", "true"))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.data.ingredients").isEmpty());
 	}
@@ -135,7 +139,7 @@ class InventoryListIntegrationTest {
 		insertItem(16, 1, 2, 1L, null, today);
 		insertItem(17, 1, 3, 1L, null, today);
 
-		mockMvc.perform(get("/api/me/ingredients").param("expiringSoon", "true"))
+		mockMvc.perform(get("/api/me/ingredients").header("Authorization", "Bearer " + tokenService.issue(1L).accessToken()).param("expiringSoon", "true"))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.data.ingredients.length()").value(3))
 			.andExpect(jsonPath("$.data.ingredients[0].inventoryItemId").value(10))
@@ -149,7 +153,7 @@ class InventoryListIntegrationTest {
 		insertItem(10, 1, 1, 1L, null, LocalDate.now().plusDays(5));
 		insertItem(11, 1, 1, 1L, null, LocalDate.now().plusDays(6));
 
-		mockMvc.perform(get("/api/me/ingredients").param("expiringSoon", "true"))
+		mockMvc.perform(get("/api/me/ingredients").header("Authorization", "Bearer " + tokenService.issue(1L).accessToken()).param("expiringSoon", "true"))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.data.ingredients.length()").value(1))
 			.andExpect(jsonPath("$.data.ingredients[0].inventoryItemId").value(10));
@@ -157,7 +161,7 @@ class InventoryListIntegrationTest {
 
 	@Test
 	void list_rejectsInvalidBoolean() throws Exception {
-		mockMvc.perform(get("/api/me/ingredients").param("expiringSoon", "invalid"))
+		mockMvc.perform(get("/api/me/ingredients").header("Authorization", "Bearer " + tokenService.issue(1L).accessToken()).param("expiringSoon", "invalid"))
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.success").value(false))
 			.andExpect(jsonPath("$.data").value(nullValue()))

@@ -1,9 +1,9 @@
 package com.vium.dispose;
 
+import com.vium.auth.service.TokenService;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -11,7 +11,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.vium.dispose.entity.ConsumptionEvent;
 import com.vium.dispose.repository.ConsumptionEventRepository;
 import com.vium.dispose.service.DisposeService;
-import com.vium.global.security.CurrentUserProvider;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,7 +21,6 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -39,11 +37,11 @@ class DisposeIntegrationTest {
 	@Autowired
 	private DisposeService disposeService;
 
-	@MockitoBean
-	private CurrentUserProvider currentUserProvider;
-
 	@MockitoSpyBean
 	private ConsumptionEventRepository consumptionEventRepository;
+
+	@Autowired
+	private TokenService tokenService;
 
 	@BeforeEach
 	void setUp() {
@@ -56,12 +54,11 @@ class DisposeIntegrationTest {
 			(id, user_id, custom_name, status_id, unit_id, initial_quantity, remaining_quantity, created_at, updated_at)
 			values (100, 42, '두부', 1, 1, 5, 5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 			""");
-		when(currentUserProvider.getCurrentUserId()).thenReturn(42L);
 	}
 
 	@Test
 	void consumesInventoryAndRecordsEventForProvidedUser() throws Exception {
-		mockMvc.perform(patch("/api/me/ingredients/100/status")
+		mockMvc.perform(patch("/api/me/ingredients/100/status").header("Authorization", "Bearer " + tokenService.issue(42L).accessToken())
 				.contentType(MediaType.APPLICATION_JSON).content("""
 				{"status":"consumed","quantity":2}
 				"""))
@@ -80,7 +77,7 @@ class DisposeIntegrationTest {
 
 	@Test
 	void disposesInventoryAndPreservesWasteResponseAndAmount() throws Exception {
-		mockMvc.perform(patch("/api/me/ingredients/100/status")
+		mockMvc.perform(patch("/api/me/ingredients/100/status").header("Authorization", "Bearer " + tokenService.issue(42L).accessToken())
 				.contentType(MediaType.APPLICATION_JSON).content("""
 				{"status":"disposed","quantity":2,"wasteQuantity":2,"wasteAmount":1000}
 				"""))
@@ -96,8 +93,7 @@ class DisposeIntegrationTest {
 
 	@Test
 	void rejectsAnotherUsersInventory() throws Exception {
-		when(currentUserProvider.getCurrentUserId()).thenReturn(7L);
-		mockMvc.perform(patch("/api/me/ingredients/100/status")
+		mockMvc.perform(patch("/api/me/ingredients/100/status").header("Authorization", "Bearer " + tokenService.issue(7L).accessToken())
 				.contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"consumed\",\"quantity\":2}"))
 			.andExpect(status().isNotFound())
 			.andExpect(jsonPath("$.error.code").value("NOT_FOUND"));
@@ -107,7 +103,7 @@ class DisposeIntegrationTest {
 
 	@Test
 	void rejectsInvalidQuantityBeforeChangingInventory() throws Exception {
-		mockMvc.perform(patch("/api/me/ingredients/100/status")
+		mockMvc.perform(patch("/api/me/ingredients/100/status").header("Authorization", "Bearer " + tokenService.issue(42L).accessToken())
 				.contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"consumed\",\"quantity\":0}"))
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
@@ -119,7 +115,7 @@ class DisposeIntegrationTest {
 	void rollsBackInventoryWhenEventPersistenceFails() throws Exception {
 		doThrow(new DataIntegrityViolationException("event write failed"))
 			.when(consumptionEventRepository).save(any(ConsumptionEvent.class));
-		mockMvc.perform(patch("/api/me/ingredients/100/status")
+		mockMvc.perform(patch("/api/me/ingredients/100/status").header("Authorization", "Bearer " + tokenService.issue(42L).accessToken())
 				.contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"consumed\",\"quantity\":2}"))
 			.andExpect(status().isInternalServerError());
 		// No test transaction: this reads the database after the request transaction has ended.
