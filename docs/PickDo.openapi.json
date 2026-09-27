@@ -641,6 +641,12 @@
                               "remainingQuantity": {
                                 "type": "number"
                               },
+                              "amount": {
+                                "type": "integer",
+                                "format": "int64",
+                                "nullable": true,
+                                "description": "등록된 재료의 취득 금액(원). 미입력 시 null이며 잔여 수량에 따라 차감하지 않습니다."
+                              },
                               "unitId": {
                                 "type": "integer",
                                 "description": "고정 단위 ID: 1=개, 2=g, 3=kg, 4=ml, 5=L, 6=팩, 7=봉, 8=병, 9=캔, 10=통. 포장 단위는 무게·부피로 자동 환산하지 않습니다.",
@@ -698,6 +704,7 @@
                         "categoryName": "dairy",
                         "initialQuantity": 1,
                         "remainingQuantity": 1,
+                        "amount": 2500,
                         "unitId": 1,
                         "unit": "개",
                         "statusCode": "active",
