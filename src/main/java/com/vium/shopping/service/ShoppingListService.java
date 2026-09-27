@@ -2,7 +2,9 @@ package com.vium.shopping.service;
 
 import com.vium.global.exception.BusinessException;
 import com.vium.global.exception.ErrorCode;
+import com.vium.global.exception.NotFoundException;
 import com.vium.shopping.dto.request.ShoppingListItemCreateRequest;
+import com.vium.shopping.dto.request.ShoppingListItemUpdateRequest;
 import com.vium.shopping.dto.response.ShoppingListItemResponse;
 import com.vium.shopping.dto.response.ShoppingListResponse;
 import com.vium.shopping.entity.ShoppingListItem;
@@ -165,10 +167,71 @@ public class ShoppingListService {
 		return ShoppingListItemResponse.from(saved);
 	}
 
+	/**
+	 * 장보기 리스트 항목의 체크 상태 변경
+	 *
+	 * API: PATCH /api/me/shopping-list-items/{itemId}
+	 *
+	 * 역할:
+	 * 1. 항목의 소유권 확인 (사용자 ID와 일치하는지)
+	 * 2. 체크 상태 업데이트 (true/false)
+	 * 3. DB에 저장
+	 * 4. DTO로 변환해서 응답
+	 *
+	 * 흐름 다이어그램:
+	 * Controller(userId, itemId, request)
+	 *   ↓
+	 * updateCheckStatus(userId, itemId, request)
+	 *   ↓
+	 * 1. repository.findByIdAndUserId(itemId, userId) → 소유권 확인
+	 *   ↓ (없으면 NotFoundException)
+	 * 2. item.updateCheckStatus(request.isChecked()) → 상태 변경
+	 *   ↓
+	 * 3. repository.save(item) → DB 저장
+	 *   ↓
+	 * 4. ShoppingListItemResponse.from() → DTO 변환
+	 *   ↓
+	 * Controller → JSON 응답
+	 *
+	 * @param userId 현재 사용자 ID
+	 * @param itemId 변경할 항목 ID
+	 * @param request 체크 상태 변경 요청
+	 * @return 변경된 항목의 응답
+	 * @throws NotFoundException 항목을 찾을 수 없을 때
+	 *
+	 * @Transactional
+	 * - 저장 작업이므로 트랜잭션 필수
+	 * - 조회와 저장이 함께 성공하거나 모두 실패
+	 */
+	@Transactional
+	public ShoppingListItemResponse updateCheckStatus(
+		Long userId, Long itemId, ShoppingListItemUpdateRequest request) {
+		// Step 1: 항목 조회 및 소유권 확인
+		// findByIdAndUserId()는 AND 조건으로 검색
+		// - id = itemId
+		// - user_id = userId
+		// 다른 사용자의 항목은 조회되지 않음 (보안)
+		ShoppingListItem item = shoppingListItemRepository.findByIdAndUserId(itemId, userId)
+			.orElseThrow(() -> new NotFoundException(
+				"항목을 찾을 수 없습니다"
+			));
+
+		// Step 2: 체크 상태 변경
+		// Entity의 메서드를 통해 상태 변경
+		// isChecked: false → true 또는 true → false
+		item.updateCheckStatus(request.isChecked());
+
+		// Step 3: DB에 저장
+		// UPDATE 쿼리 실행
+		ShoppingListItem updated = shoppingListItemRepository.save(item);
+
+		// Step 4: Entity를 DTO로 변환해서 응답
+		return ShoppingListItemResponse.from(updated);
+	}
+
 	// ============================================
 	// 추후 구현 예정 메서드들
 	// ============================================
-	// - updateCheckStatus()
 	// - deleteItem()
 	// - PurchaseSuggestionService와의 통합
 }
