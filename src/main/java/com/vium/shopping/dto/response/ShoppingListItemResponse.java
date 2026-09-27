@@ -20,7 +20,7 @@ import java.time.LocalDateTime;
  *   "ingredientCatalogId": 5,
  *   "customName": "우유",
  *   "suggestedQuantity": 500,
- *   "unitId": 1,
+ *   "unitId": 4,
  *   "unitName": "ml",
  *   "reason": "지난달 절반을 버림",
  *   "isChecked": false,

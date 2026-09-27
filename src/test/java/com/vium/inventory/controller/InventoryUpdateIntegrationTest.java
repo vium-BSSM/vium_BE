@@ -37,7 +37,7 @@ class InventoryUpdateIntegrationTest {
 
 	@BeforeEach
 	void setUp() {
-		jdbcTemplate.update("insert into units (id, code, name) values (1,'ea','개'),(2,'g','그램')");
+		jdbcTemplate.update("insert into units (id, code, name) values (1,'ea','개'),(2,'g','g')");
 		jdbcTemplate.update("insert into storage_methods (id, code, name) values (1,'cold','냉장'),(2,'frozen','냉동')");
 		jdbcTemplate.update("insert into item_statuses (id, code, name) values (1,'active','보유중'),(2,'consumed','소진')");
 		jdbcTemplate.update("""

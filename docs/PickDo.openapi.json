@@ -507,7 +507,20 @@
                           "type": "number"
                         },
                         "unitId": {
-                          "type": "integer"
+                          "type": "integer",
+                          "description": "고정 단위 ID: 1=개, 2=g, 3=kg, 4=ml, 5=L, 6=팩, 7=봉, 8=병, 9=캔, 10=통. 포장 단위는 무게·부피로 자동 환산하지 않습니다.",
+                          "enum": [
+                            1,
+                            2,
+                            3,
+                            4,
+                            5,
+                            6,
+                            7,
+                            8,
+                            9,
+                            10
+                          ]
                         },
                         "storageMethodId": {
                           "type": "integer"
@@ -553,7 +566,7 @@
                     "customName": "우유",
                     "initialQuantity": 1000,
                     "remainingQuantity": 1000,
-                    "unitId": 1,
+                    "unitId": 4,
                     "storageMethodId": 1,
                     "statusCode": "active",
                     "purchasedOn": "2026-08-20",
@@ -629,7 +642,20 @@
                                 "type": "number"
                               },
                               "unitId": {
-                                "type": "integer"
+                                "type": "integer",
+                                "description": "고정 단위 ID: 1=개, 2=g, 3=kg, 4=ml, 5=L, 6=팩, 7=봉, 8=병, 9=캔, 10=통. 포장 단위는 무게·부피로 자동 환산하지 않습니다.",
+                                "enum": [
+                                  1,
+                                  2,
+                                  3,
+                                  4,
+                                  5,
+                                  6,
+                                  7,
+                                  8,
+                                  9,
+                                  10
+                                ]
                               },
                               "unit": {
                                 "type": "string"
@@ -776,7 +802,20 @@
                                 "type": "number"
                               },
                               "unitId": {
-                                "type": "integer"
+                                "type": "integer",
+                                "description": "고정 단위 ID: 1=개, 2=g, 3=kg, 4=ml, 5=L, 6=팩, 7=봉, 8=병, 9=캔, 10=통. 포장 단위는 무게·부피로 자동 환산하지 않습니다.",
+                                "enum": [
+                                  1,
+                                  2,
+                                  3,
+                                  4,
+                                  5,
+                                  6,
+                                  7,
+                                  8,
+                                  9,
+                                  10
+                                ]
                               },
                               "unit": {
                                 "type": "string"
@@ -819,7 +858,7 @@
                         "categoryName": "dairy",
                         "initialQuantity": 10,
                         "remainingQuantity": 10,
-                        "unitId": 2,
+                        "unitId": 1,
                         "unit": "개",
                         "expiresOn": "2026-09-10"
                       }
@@ -884,7 +923,20 @@
                     "type": "number"
                   },
                   "unitId": {
-                    "type": "integer"
+                    "type": "integer",
+                    "description": "고정 단위 ID: 1=개, 2=g, 3=kg, 4=ml, 5=L, 6=팩, 7=봉, 8=병, 9=캔, 10=통. 포장 단위는 무게·부피로 자동 환산하지 않습니다.",
+                    "enum": [
+                      1,
+                      2,
+                      3,
+                      4,
+                      5,
+                      6,
+                      7,
+                      8,
+                      9,
+                      10
+                    ]
                   },
                   "storageMethodId": {
                     "type": "integer"
@@ -908,7 +960,7 @@
               "example": {
                 "customName": "우유",
                 "quantity": 500,
-                "unitId": 1,
+                "unitId": 4,
                 "storageMethodId": 1,
                 "purchasedOn": "2026-08-20",
                 "expiresOn": "2026-08-27"
@@ -942,7 +994,20 @@
                           "type": "number"
                         },
                         "unitId": {
-                          "type": "integer"
+                          "type": "integer",
+                          "description": "고정 단위 ID: 1=개, 2=g, 3=kg, 4=ml, 5=L, 6=팩, 7=봉, 8=병, 9=캔, 10=통. 포장 단위는 무게·부피로 자동 환산하지 않습니다.",
+                          "enum": [
+                            1,
+                            2,
+                            3,
+                            4,
+                            5,
+                            6,
+                            7,
+                            8,
+                            9,
+                            10
+                          ]
                         },
                         "storageMethodId": {
                           "type": "integer"
@@ -984,7 +1049,7 @@
                     "inventoryItemId": 1,
                     "customName": "우유",
                     "quantity": 500,
-                    "unitId": 1,
+                    "unitId": 4,
                     "storageMethodId": 1,
                     "purchasedOn": "2026-08-20",
                     "expiresOn": "2026-08-27",
@@ -1161,7 +1226,7 @@
                         "name": "우유",
                         "categoryId": 3,
                         "categoryName": "dairy",
-                        "defaultUnitId": 1,
+                        "defaultUnitId": 4,
                         "defaultUnitName": "ml"
                       }
                     ]
@@ -2161,7 +2226,20 @@
                   },
                   "unitId": {
                     "type": "integer",
-                    "example": 1
+                    "example": 4,
+                    "description": "고정 단위 ID: 1=개, 2=g, 3=kg, 4=ml, 5=L, 6=팩, 7=봉, 8=병, 9=캔, 10=통. 포장 단위는 무게·부피로 자동 환산하지 않습니다.",
+                    "enum": [
+                      1,
+                      2,
+                      3,
+                      4,
+                      5,
+                      6,
+                      7,
+                      8,
+                      9,
+                      10
+                    ]
                   },
                   "reason": {
                     "type": "string",
@@ -2191,7 +2269,7 @@
                     "shoppingListItemId": 1,
                     "customName": "우유",
                     "suggestedQuantity": 1000,
-                    "unitId": 1,
+                    "unitId": 4,
                     "isChecked": false
                   },
                   "error": null
@@ -2229,7 +2307,7 @@
                         "ingredientCatalogId": 5,
                         "customName": "우유",
                         "suggestedQuantity": 1000,
-                        "unitId": 1,
+                        "unitId": 4,
                         "reason": "낭비 이력 기반 재구매 제안",
                         "isChecked": false
                       }
