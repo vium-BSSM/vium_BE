@@ -229,9 +229,60 @@ public class ShoppingListService {
 		return ShoppingListItemResponse.from(updated);
 	}
 
+	/**
+	 * 장보기 리스트 항목 삭제
+	 *
+	 * API: DELETE /api/me/shopping-list-items/{itemId}
+	 *
+	 * 역할:
+	 * 1. 항목의 소유권 확인 (사용자 ID와 일치하는지)
+	 * 2. 항목 삭제
+	 * 3. 응답 반환
+	 *
+	 * 흐름 다이어그램:
+	 * Controller(userId, itemId)
+	 *   ↓
+	 * deleteItem(userId, itemId)
+	 *   ↓
+	 * 1. repository.findByIdAndUserId(itemId, userId) → 소유권 확인
+	 *   ↓ (없으면 NotFoundException)
+	 * 2. repository.delete(item) → DB 삭제
+	 *   ↓
+	 * 3. void 반환
+	 *   ↓
+	 * Controller → HTTP 200 OK (또는 204 No Content)
+	 *
+	 * @param userId 현재 사용자 ID
+	 * @param itemId 삭제할 항목 ID
+	 * @throws NotFoundException 항목을 찾을 수 없을 때
+	 *
+	 * @Transactional
+	 * - 저장 작업이므로 트랜잭션 필수
+	 * - 조회와 삭제가 함께 성공하거나 모두 실패
+	 */
+	@Transactional
+	public void deleteItem(Long userId, Long itemId) {
+		// Step 1: 항목 조회 및 소유권 확인
+		// findByIdAndUserId()로 검색:
+		// - id = itemId
+		// - user_id = userId
+		// 다른 사용자의 항목은 조회되지 않음 (보안)
+		ShoppingListItem item = shoppingListItemRepository.findByIdAndUserId(itemId, userId)
+			.orElseThrow(() -> new NotFoundException(
+				"항목을 찾을 수 없습니다"
+			));
+
+		// Step 2: 항목 삭제
+		// DELETE 쿼리 실행
+		shoppingListItemRepository.delete(item);
+
+		// Step 3: 응답
+		// void이므로 별도 반환 없음
+		// Controller에서 HTTP 200 OK 응답
+	}
+
 	// ============================================
 	// 추후 구현 예정 메서드들
 	// ============================================
-	// - deleteItem()
 	// - PurchaseSuggestionService와의 통합
 }

@@ -10,6 +10,7 @@ import com.vium.shopping.service.ShoppingListService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -150,6 +151,87 @@ public class ShoppingController {
 
 		// Step 3: 응답 반환 (HTTP 201 Created)
 		return ApiResponse.ok(response);
+	}
+
+	/**
+	 * 장보기 리스트 항목 삭제 엔드포인트
+	 *
+	 * API 명세:
+	 * - HTTP Method: DELETE
+	 * - URL: /api/me/shopping-list-items/{itemId}
+	 * - Authentication: Bearer Token (현재 사용자)
+	 * - Response Code: 200 OK
+	 *
+	 * 요청 예시:
+	 * DELETE /api/me/shopping-list-items/1
+	 * Authorization: Bearer eyJhbGciOiJIUzI1NiJ9...
+	 *
+	 * 응답 예시 (성공 - 200):
+	 * {
+	 *   "success": true,
+	 *   "data": null,
+	 *   "error": null
+	 * }
+	 *
+	 * 응답 예시 (실패 - 404):
+	 * {
+	 *   "success": false,
+	 *   "data": null,
+	 *   "error": {
+	 *     "code": "NOT_FOUND",
+	 *     "message": "항목을 찾을 수 없습니다"
+	 *   }
+	 * }
+	 *
+	 * 처리 흐름:
+	 * 1. HTTP DELETE 요청 수신
+	 * 2. @PathVariable에서 itemId 추출
+	 * 3. CurrentUserProvider에서 사용자 ID 추출
+	 * 4. Service.deleteItem(userId, itemId) 호출
+	 * 5. ApiResponse.ok(null)로 감싸기
+	 * 6. HTTP 200 OK 응답
+	 *
+	 * @param itemId 삭제할 항목 ID
+	 * @throws NotFoundException 항목을 찾을 수 없는 경우
+	 *
+	 * HTTP 흐름:
+	 * DELETE Request 진입
+	 *   ↓
+	 * @DeleteMapping 라우팅
+	 *   ↓
+	 * deleteItem() 메서드 실행
+	 *   ↓
+	 * @PathVariable에서 itemId 추출: 1
+	 *   ↓
+	 * 현재 사용자 ID 추출: currentUserProvider.getCurrentUserId()
+	 *   ↓
+	 * Service.deleteItem(userId, itemId) 호출
+	 *   ↓
+	 * Service에서:
+	 *   1. repository.findByIdAndUserId(itemId, userId) → 소유권 확인
+	 *   2. repository.delete(item) → DB 삭제
+	 *   ↓
+	 * void 반환 (데이터 없음)
+	 *   ↓
+	 * ApiResponse.ok(null)로 감싸기
+	 *   ↓
+	 * Spring이 자동으로 JSON 변환
+	 *   ↓
+	 * HTTP 200 OK 응답
+	 */
+	@DeleteMapping("/shopping-list-items/{itemId}")
+	public ApiResponse<Void> deleteItem(@PathVariable Long itemId) {
+		// Step 1: 현재 사용자 ID 추출
+		Long userId = currentUserProvider.getCurrentUserId();
+
+		// Step 2: Service 호출
+		// Service가 다음을 수행:
+		// - 항목 조회 및 소유권 확인
+		// - DB 삭제
+		shoppingListService.deleteItem(userId, itemId);
+
+		// Step 3: 응답 반환 (HTTP 200 OK, 데이터 없음)
+		return ApiResponse.ok(null);
 	}
 
 	/**
