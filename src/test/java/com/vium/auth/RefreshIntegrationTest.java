@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -28,6 +29,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -175,6 +177,64 @@ class RefreshIntegrationTest {
 		}
 		assertThat(userSessionRepository.count()).isEqualTo(2);
 		assertThat(userSessionRepository.findAll()).filteredOn(s -> s.getRevokedAt() == null).hasSize(1);
+	}
+
+	@Test
+	void refreshIgnoresExpiredBearerWithContextPath() throws Exception {
+		String access = tokenService.issue(42L).accessToken();
+		when(authClock.instant()).thenReturn(NOW.plusSeconds(3661));
+		jdbcTemplate.update("update user_sessions set expires_at = ? where id = ?",
+			LocalDateTime.ofInstant(NOW.plusSeconds(7200), ZoneOffset.UTC), sessionId);
+		mockMvc.perform(post("/vium/api/auth/token/refresh").contextPath("/vium")
+				.header("Authorization", "Bearer " + access).contentType(MediaType.APPLICATION_JSON)
+				.content(mapper.writeValueAsString(Map.of("refreshToken", refreshToken))))
+			.andExpect(status().isOk());
+	}
+
+	@ParameterizedTest
+	@CsvSource({"login,expired", "register,expired", "token/refresh,expired",
+		"login,malformed", "register,malformed", "token/refresh,malformed"})
+	void publicAuthPostIgnoresBearerHeader(String endpoint, String kind) throws Exception {
+		when(authClock.instant()).thenReturn(NOW.minusSeconds(4000));
+		String access = tokenService.issue(42L).accessToken();
+		when(authClock.instant()).thenReturn(NOW);
+		String body = switch (endpoint) {
+			case "login" -> mapper.writeValueAsString(Map.of("email", "refresh@example.com", "password", PASSWORD));
+			case "register" -> mapper.writeValueAsString(Map.of("email", "new@example.com",
+				"password", PASSWORD, "displayName", "신규 사용자"));
+			default -> mapper.writeValueAsString(Map.of("refreshToken", refreshToken));
+		};
+		mockMvc.perform(post("/api/auth/" + endpoint)
+				.header("Authorization", kind.equals("expired") ? "Bearer " + access : "Bearer invalid token")
+				.contentType(MediaType.APPLICATION_JSON).content(body))
+			.andExpect(status().isOk());
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = {"/api/me/ingredients", "/api/auth/login", "/api/auth/register",
+		"/api/auth/token/refresh", "/api/auth/token/refresh/extra"})
+	void otherPathsAndMethodsStillRejectExpiredBearer(String path) throws Exception {
+		when(authClock.instant()).thenReturn(NOW.minusSeconds(4000));
+		String access = tokenService.issue(42L).accessToken();
+		when(authClock.instant()).thenReturn(NOW);
+		mockMvc.perform(get(path).header("Authorization", "Bearer " + access))
+			.andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	void protectedPostStillRequiresValidBearer() throws Exception {
+		mockMvc.perform(post("/api/me/ingredients").header("Authorization", "Bearer invalid token")
+				.contentType(MediaType.APPLICATION_JSON).content("{}"))
+			.andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	void ignoringBearerDoesNotBypassRefreshTokenValidation() throws Exception {
+		mockMvc.perform(post("/api/auth/token/refresh").header("Authorization", "Bearer invalid token")
+				.contentType(MediaType.APPLICATION_JSON).content("{\"refreshToken\":\"unknown\"}"))
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.error.message").value("리프레시 토큰이 유효하지 않습니다"));
+		assertThat(userSessionRepository.count()).isEqualTo(1);
 	}
 
 	@Test

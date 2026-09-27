@@ -23,10 +23,8 @@ public class UserLoginService {
 	}
 
 	@Transactional(readOnly = true)
-	public void requireActiveUser(Long userId) {
-		if (!userCredentialRepository.existsActiveById(userId)) {
-			throw new BusinessException(ErrorCode.UNAUTHORIZED, "리프레시 토큰이 유효하지 않습니다");
-		}
+	public boolean isActiveUser(Long userId) {
+		return userCredentialRepository.existsActiveById(userId);
 	}
 
 	@Transactional(readOnly = true)

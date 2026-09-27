@@ -10,8 +10,11 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
+import org.springframework.security.web.util.matcher.OrRequestMatcher;
 import tools.jackson.databind.json.JsonMapper;
 
 @Configuration
@@ -19,6 +22,12 @@ import tools.jackson.databind.json.JsonMapper;
 public class SecurityConfig {
 	@Bean
 	public SecurityFilterChain securityFilterChain(HttpSecurity http, JsonMapper mapper) throws Exception {
+		var paths = PathPatternRequestMatcher.withDefaults();
+		var publicAuth = new OrRequestMatcher(
+			paths.matcher(HttpMethod.POST, "/api/auth/login"),
+			paths.matcher(HttpMethod.POST, "/api/auth/register"),
+			paths.matcher(HttpMethod.POST, "/api/auth/token/refresh"));
+		var bearerTokenResolver = new DefaultBearerTokenResolver();
 		AuthenticationEntryPoint unauthorized = (request, response, exception) -> {
 			response.setStatus(ErrorCode.UNAUTHORIZED.getStatus().value());
 			response.setHeader("WWW-Authenticate", "Bearer");
@@ -32,7 +41,7 @@ public class SecurityConfig {
 			.requestCache(cache -> cache.disable())
 			.authorizeHttpRequests(auth -> auth
 				.dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
-				.requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/register", "/api/auth/token/refresh").permitAll()
+				.requestMatchers(publicAuth).permitAll()
 				.requestMatchers(HttpMethod.GET, "/api/health", "/actuator/health", "/actuator/health/**").permitAll()
 				.anyRequest().authenticated())
 			.exceptionHandling(errors -> errors.authenticationEntryPoint(unauthorized)
@@ -42,7 +51,9 @@ public class SecurityConfig {
 					response.getWriter().write(mapper.writeValueAsString(ApiResponse.fail(
 						new ApiResponse.ErrorObject(ErrorCode.FORBIDDEN.name(), ErrorCode.FORBIDDEN.getDefaultMessage()))));
 				}))
-			.oauth2ResourceServer(resource -> resource.jwt(Customizer.withDefaults()).authenticationEntryPoint(unauthorized))
+			.oauth2ResourceServer(resource -> resource
+				.bearerTokenResolver(request -> publicAuth.matches(request) ? null : bearerTokenResolver.resolve(request))
+				.jwt(Customizer.withDefaults()).authenticationEntryPoint(unauthorized))
 			.formLogin(form -> form.disable())
 			.httpBasic(basic -> basic.disable())
 			.logout(logout -> logout.disable())

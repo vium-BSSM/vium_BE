@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class AuthService {
+	private static final String INVALID_REFRESH_TOKEN = "리프레시 토큰이 유효하지 않습니다";
 	private final UserLoginService userLoginService;
 	private final UserRegistrationService userRegistrationService;
 	private final TokenService tokenService;
@@ -32,12 +33,12 @@ public class AuthService {
 	public RefreshResponse refresh(RefreshRequest request) {
 		// Lock before checking state so concurrent requests cannot rotate the same token twice.
 		var session = userSessionRepository.findByRefreshTokenHash(UserSession.hashToken(request.refreshToken()))
-			.orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED, "리프레시 토큰이 유효하지 않습니다"));
+			.orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED, INVALID_REFRESH_TOKEN));
 		var now = authClock.instant();
-		if (session.getRevokedAt() != null || session.isExpired(now)) {
-			throw new BusinessException(ErrorCode.UNAUTHORIZED, "리프레시 토큰이 유효하지 않습니다");
+		if (session.getRevokedAt() != null || session.isExpired(now)
+				|| !userLoginService.isActiveUser(session.getUserId())) {
+			throw new BusinessException(ErrorCode.UNAUTHORIZED, INVALID_REFRESH_TOKEN);
 		}
-		userLoginService.requireActiveUser(session.getUserId());
 		var tokens = tokenService.issue(session.getUserId());
 		session.revoke(now);
 		userSessionRepository.save(UserSession.create(session.getUserId(), tokens.refreshToken(),

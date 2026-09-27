@@ -84,7 +84,8 @@
 - 인증 실패는 `UNAUTHORIZED(401)`, 접근 거부는 `FORBIDDEN(403)`을 공통 응답 형식으로 반환한다. 사용자별 데이터 소유권 검사는 기존 서비스·저장소에서 수행한다.
 - Refresh Token은 `SecureRandom`으로 만든 32바이트 난수의 Base64 URL 문자열이다. `user_sessions`에는 원문 대신 SHA-256 해시를 저장한다.
 - 세션의 기존 `timestamp` 컬럼에는 UTC 기준 `LocalDateTime`을 저장하고, 만료 비교는 `UserSession.isExpired(Instant)`를 사용한다. 기존 재고·소진 이벤트의 서버 기본 시간대 사용까지 통일한 상태는 아니다.
-- `POST /api/auth/token/refresh`는 Authorization 헤더 없이 Refresh Token을 본문으로 받아 새 토큰 쌍과 `expiresIn`(Access Token 유효기간 초)을 반환한다. 세션 행의 비관적 쓰기 잠금으로 동시 재사용을 막고, 만료·폐기·탈퇴 사용자 토큰을 거부한다. 기존 세션 폐기와 새 세션 저장은 동일 트랜잭션이다. 새 Refresh Token 만료는 재발급 시점부터 계산하며 기존 Access Token은 만료까지 유지된다. 재사용 시 요청만 거부하고 토큰 계보 전체 폐기는 지원하지 않는다.
+- 로그인·회원가입·토큰 갱신의 POST 경로는 동일한 RequestMatcher로 공개 허용 및 Bearer 검증 생략을 적용한다. 만료되거나 잘못된 Authorization 헤더가 붙어도 요청 본문을 검증한다. 다른 메서드와 보호 경로의 Bearer 검증은 유지한다.
+- `POST /api/auth/token/refresh`는 Refresh Token을 본문으로 받아 새 토큰 쌍과 `expiresIn`(Access Token 유효기간 초)을 반환한다. 세션 행의 비관적 쓰기 잠금으로 동시 재사용을 막고, 만료·폐기·탈퇴 사용자 토큰을 거부한다. 기존 세션 폐기와 새 세션 저장은 동일 트랜잭션이다. 새 Refresh Token 만료는 재발급 시점부터 계산하며 기존 Access Token은 만료까지 유지된다. 재사용 시 요청만 거부하고 토큰 계보 전체 폐기는 지원하지 않는다. 교체 커밋 후 응답이 유실되면 다시 로그인해야 한다.
 - **미구현:** 로그아웃, 토큰 계보 기반 재사용 탐지·일괄 폐기 및 만료 세션 정리.
 
 ---
