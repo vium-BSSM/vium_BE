@@ -23,6 +23,9 @@ public class UserRegistrationService {
 
 	@Transactional
 	public UserIdentity register(String email, String password, String displayName) {
+		if (password.codePointCount(0, password.length()) < 8) {
+			throw new BusinessException(ErrorCode.INVALID_REQUEST, "비밀번호는 8자 이상이어야 합니다");
+		}
 		if (password.getBytes(StandardCharsets.UTF_8).length > 72) {
 			throw new BusinessException(ErrorCode.INVALID_REQUEST, "비밀번호는 UTF-8 기준 72바이트 이하여야 합니다");
 		}

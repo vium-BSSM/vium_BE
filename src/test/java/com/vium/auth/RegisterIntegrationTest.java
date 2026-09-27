@@ -7,8 +7,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.vium.auth.dto.RegisterRequest;
+import java.sql.Timestamp;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -33,7 +39,7 @@ class RegisterIntegrationTest {
 	@Autowired private JsonMapper mapper;
 
 	private static final String EMAIL = "register@example.com";
-	private static final String PASSWORD = "P@ssw0rd123";
+	private static final String PASSWORD = "correct horse battery";
 
 	@BeforeEach
 	void setUp() {
@@ -76,7 +82,7 @@ class RegisterIntegrationTest {
 			insert into users (email,display_name,password_hash,created_at,updated_at,deleted_at)
 			values (?,'기존 사용자',?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,?)
 			""", EMAIL, kind.equals("social") ? null : "original-hash",
-			kind.equals("deleted") ? java.sql.Timestamp.valueOf("2026-01-01 00:00:00") : null);
+			kind.equals("deleted") ? Timestamp.valueOf("2026-01-01 00:00:00") : null);
 		mockMvc.perform(post("/api/auth/register").contentType(MediaType.APPLICATION_JSON)
 				.content(mapper.writeValueAsString(validRequest())))
 			.andExpect(status().isConflict())
@@ -132,12 +138,12 @@ class RegisterIntegrationTest {
 	@Test
 	void simultaneousRegistrationsCreateOnlyOneAccount() throws Exception {
 		String body = mapper.writeValueAsString(validRequest());
-		var ready = new java.util.concurrent.CountDownLatch(2);
-		var start = new java.util.concurrent.CountDownLatch(1);
-		try (var executor = java.util.concurrent.Executors.newFixedThreadPool(2)) {
-			java.util.concurrent.Callable<Integer> register = () -> {
+		var ready = new CountDownLatch(2);
+		var start = new CountDownLatch(1);
+		try (var executor = Executors.newFixedThreadPool(2)) {
+			Callable<Integer> register = () -> {
 				ready.countDown();
-				if (!start.await(5, java.util.concurrent.TimeUnit.SECONDS)) {
+				if (!start.await(5, TimeUnit.SECONDS)) {
 					throw new IllegalStateException("Registration start timed out");
 				}
 				return mockMvc.perform(post("/api/auth/register").contentType(MediaType.APPLICATION_JSON)
@@ -145,12 +151,52 @@ class RegisterIntegrationTest {
 			};
 			var first = executor.submit(register);
 			var second = executor.submit(register);
-			assertThat(ready.await(5, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+			assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
 			start.countDown();
-			assertThat(java.util.List.of(first.get(10, java.util.concurrent.TimeUnit.SECONDS),
-				second.get(10, java.util.concurrent.TimeUnit.SECONDS))).containsExactlyInAnyOrder(200, 409);
+			assertThat(List.of(first.get(10, TimeUnit.SECONDS),
+				second.get(10, TimeUnit.SECONDS))).containsExactlyInAnyOrder(200, 409);
 		}
 		assertThat(jdbcTemplate.queryForObject("select count(*) from users", Long.class)).isEqualTo(1);
+	}
+
+	@Test
+	void normalizesEmailAndDisplayNameBeforeValidationAndStorage() throws Exception {
+		var request = validRequest();
+		request.put("email", "  REGISTER@Example.COM  ");
+		request.put("displayName", "　 가입 사용자 　");
+		mockMvc.perform(post("/api/auth/register").contentType(MediaType.APPLICATION_JSON)
+				.content(mapper.writeValueAsString(request)))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.email").value(EMAIL))
+			.andExpect(jsonPath("$.data.displayName").value("가입 사용자"));
+		assertThat(jdbcTemplate.queryForObject("select email from users", String.class)).isEqualTo(EMAIL);
+		assertThat(jdbcTemplate.queryForObject("select display_name from users", String.class)).isEqualTo("가입 사용자");
+		mockMvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+				.content(mapper.writeValueAsString(Map.of("email", "  Register@EXAMPLE.COM ", "password", PASSWORD))))
+			.andExpect(status().isOk());
+		mockMvc.perform(post("/api/auth/register").contentType(MediaType.APPLICATION_JSON)
+				.content(mapper.writeValueAsString(validRequest())))
+			.andExpect(status().isConflict());
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = {"a", "1234567", "😀😀😀😀"})
+	void rejectsShortPasswords(String password) throws Exception {
+		var request = validRequest();
+		request.put("password", password);
+		assertInvalid(request);
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = {"abcdefgh", "　abcdefgh　"})
+	void acceptsMinimumLengthWithoutCompositionRulesAndPreservesPassword(String password) throws Exception {
+		var request = validRequest();
+		request.put("password", password);
+		mockMvc.perform(post("/api/auth/register").contentType(MediaType.APPLICATION_JSON)
+				.content(mapper.writeValueAsString(request)))
+			.andExpect(status().isOk());
+		String hash = jdbcTemplate.queryForObject("select password_hash from users", String.class);
+		assertThat(passwordEncoder.matches(password, hash)).isTrue();
 	}
 
 	@Test

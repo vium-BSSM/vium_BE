@@ -1,12 +1,13 @@
 package com.vium.user.repository;
 
-import java.util.Optional;
 import com.vium.user.dto.UserIdentity;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
-import org.springframework.jdbc.support.GeneratedKeyHolder;
+import java.util.Objects;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -28,7 +29,7 @@ public class UserCredentialRepository {
 			statement.setTimestamp(5, Timestamp.valueOf(now));
 			return statement;
 		}, keys);
-		return new UserIdentity(java.util.Objects.requireNonNull(keys.getKey()).longValue(), email, displayName);
+		return new UserIdentity(Objects.requireNonNull(keys.getKey()).longValue(), email, displayName);
 	}
 
 	public Optional<Credentials> findActiveByEmail(String email) {
