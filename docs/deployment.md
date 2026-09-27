@@ -32,7 +32,7 @@ RDS URL의 `sslmode=verify-full`은 인증서와 호스트를 검증한다. 인�
 
 운영 EC2에서는 빌드하지 않는다. Gradle과 테스트 JVM이 운영 앱과 메모리를 경쟁하는 것을 피한다. Dockerfile의 BuildKit 캐시 마운트는 Gradle 배포판과 의존성을 다음 빌드에서도 재사용한다. 캐시가 삭제되거나 다른 빌드 머신을 쓰면 다시 다운로드한다.
 
-먼저 아래 변경을 커밋·병합한 뒤 배포할 main 커밋을 선택한다. 최초에는 저장소를 clone한다. 이후 명령은 Bash에서 실행한다. 기존 clone은 저장소 루트에서 시작한다. 각 Bash 블록은 괄호까지 함께 실행한다. `set -euo pipefail`은 서브셸 안에만 적용되어 실패하면 해당 블록이 중단되고 일반적인 대화형 SSH 셸은 유지된다. 부모 셸에서 이미 `set -e`를 켰다면 먼저 새 세션을 열어 실행한다. 작업 트리가 변경된 상태면 중단하며, 실제 checkout된 전체 SHA를 태그로 사용한다.
+먼저 아래 변경을 커밋·병합한 뒤 배포할 main 커밋을 선택한다. 최초에는 저장소를 clone한다. 이후 명령은 Bash에서 실행한다. macOS의 기본 zsh를 사용 중이면 먼저 터미널에서 `bash`를 실행한 뒤 아래 블록을 붙여넣는다. zsh의 대화형 주석 설정에 따라 `#` 주석 줄이 명령으로 처리될 수 있으므로 zsh에 직접 붙여넣지 않는다. 기존 clone은 저장소 루트에서 시작한다. 각 Bash 블록은 괄호까지 함께 실행한다. `set -euo pipefail`은 서브셸 안에만 적용되어 실패하면 해당 블록이 중단되고 일반적인 대화형 SSH 셸은 유지된다. 부모 셸에서 이미 `set -e`를 켰다면 먼저 새 세션을 열어 실행한다. 작업 트리가 변경된 상태면 중단하며, 실제 checkout된 전체 SHA를 태그로 사용한다.
 
 ```bash
 (
@@ -165,6 +165,7 @@ if ! docker image inspect "vium-be:$IMAGE_TAG" >/dev/null 2>&1; then
 fi
 docker image inspect "vium-be:$IMAGE_TAG" >/dev/null
 docker compose --env-file .env.prod -f compose.prod.yml up -d --no-build --wait --wait-timeout 180
+curl --fail http://127.0.0.1:8080/actuator/health
 )
 ```
 
