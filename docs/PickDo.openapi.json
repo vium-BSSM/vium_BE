@@ -234,7 +234,7 @@
       "post": {
         "summary": "회원가입",
         "deprecated": false,
-        "description": "이메일/비밀번호로 신규 계정을 생성한다. users, user_auth_accounts 테이블과 관련.",
+        "description": "이메일/비밀번호로 신규 계정을 생성한다. 비밀번호는 BCrypt로 users.password_hash에 저장하며 가입 시 토큰은 발급하지 않는다. 이메일은 로그인과 동일하게 대소문자를 구분하며 탈퇴 계정을 포함한 기존 이메일은 재사용할 수 없다.",
         "tags": [
           "user"
         ],
@@ -252,14 +252,21 @@
                 "properties": {
                   "email": {
                     "type": "string",
+                    "format": "email",
+                    "maxLength": 255,
                     "example": "user@example.com"
                   },
                   "password": {
                     "type": "string",
+                    "writeOnly": true,
+                    "maxLength": 72,
+                    "description": "공백만으로 구성할 수 없으며 UTF-8 기준 최대 72바이트.",
                     "example": "P@ssw0rd123"
                   },
                   "displayName": {
                     "type": "string",
+                    "maxLength": 80,
+                    "description": "공백만으로 구성할 수 없다.",
                     "example": "홍길동"
                   }
                 }
@@ -314,7 +321,7 @@
             "headers": {}
           },
           "409": {
-            "description": "이메일 중복",
+            "description": "이메일 중복 (탈퇴 계정 포함)",
             "content": {
               "application/json": {
                 "schema": {
@@ -323,6 +330,16 @@
               }
             },
             "headers": {}
+          },
+          "400": {
+            "description": "필수값 누락, 이메일 형식 오류 또는 입력 길이 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         },
         "security": []

@@ -66,7 +66,7 @@
       **요청 시점에 집계**해서 반환한다. 자주 버리는 위험 품목도 이 집계에서 자동 발견.
 5. **장보기 도우미 / 구매량 제안** — shopping-helper, purchase-suggestions, shopping-list-items
 6. **알림** — notifications (서버 배치가 생성)
-7. **인증** — 이메일 로그인과 Access Token 인증 구현 완료. 회원가입·토큰 갱신·로그아웃은 후속 작업이다. (아래 5항 참고)
+7. **인증** — 이메일 회원가입·로그인과 Access Token 인증 구현 완료. 토큰 갱신·로그아웃은 후속 작업이다. (아래 5항 참고)
 8. **확장** — 영수증 OCR(scan, `purchases`에 저장), 레시피 추천, 대시보드/절약금액.
 
 ---
@@ -74,15 +74,16 @@
 ## 5. 인증 구조와 현재 구현 범위
 
 - `POST /api/auth/login`에서 이메일·BCrypt 비밀번호를 검증하고 Access Token과 Refresh Token을 발급한다.
+- `POST /api/auth/register`는 users에 이메일 계정을 생성하고 사용자 정보를 반환한다. 비밀번호는 BCrypt로 저장하며 가입 시 토큰은 발급하지 않는다. 이메일 비교는 로그인과 동일하게 대소문자를 구분하고, 현재 DB의 전체 유니크 제약에 따라 탈퇴 계정 이메일도 중복으로 처리한다.
 - Access Token은 HS256 JWT이며, Spring Security Resource Server와 `NimbusJwtDecoder`로 서명·발급자·토큰 종류(`access`)·양수 Long 사용자 ID·시간 조건을 검증한다.
 - `JWT_SECRET`은 Base64로 인코딩된 32바이트 이상의 비밀키로 필수 설정한다. 기본 유효기간은 Access Token 1시간, Refresh Token 14일이다.
 - `JWT_CLOCK_SKEW_SECONDS`는 발급·만료·사용 시작 시각 검증의 시간 오차 허용치다. 기본 60초이며 0~300초만 허용한다.
-- 공개 경로는 `POST /api/auth/login`, `GET /api/health`, `GET /actuator/health` 및 그 하위 경로다. 나머지 요청에는 인증이 필요하다. HTTP 세션에 인증을 저장하지 않는 stateless 방식이다.
+- 공개 경로는 `POST /api/auth/login`, `POST /api/auth/register`, `GET /api/health`, `GET /actuator/health` 및 그 하위 경로다. 나머지 요청에는 인증이 필요하다. HTTP 세션에 인증을 저장하지 않는 stateless 방식이다.
 - 현재 사용자 ID는 `CurrentUserProvider.getCurrentUserId()`가 `SecurityContext`의 검증된 JWT에서 가져온다. 고정 사용자 ID를 사용하지 않는다. 컨트롤러는 이 값을 서비스에 전달한다.
 - 인증 실패는 `UNAUTHORIZED(401)`, 접근 거부는 `FORBIDDEN(403)`을 공통 응답 형식으로 반환한다. 사용자별 데이터 소유권 검사는 기존 서비스·저장소에서 수행한다.
 - Refresh Token은 `SecureRandom`으로 만든 32바이트 난수의 Base64 URL 문자열이다. `user_sessions`에는 원문 대신 SHA-256 해시를 저장한다.
 - 세션의 기존 `timestamp` 컬럼에는 UTC 기준 `LocalDateTime`을 저장하고, 만료 비교는 `UserSession.isExpired(Instant)`를 사용한다. 기존 재고·소진 이벤트의 서버 기본 시간대 사용까지 통일한 상태는 아니다.
-- **미구현:** 회원가입, 토큰 갱신, 로그아웃, 세션 폐기 및 만료 세션 정리. `isExpired()`는 준비된 비교 메서드이며 아직 프로덕션 호출자는 없다. 새 환경의 로그인에는 BCrypt 비밀번호가 저장된 계정이 필요하며, 회원가입은 별도 이슈로 구현한다.
+- **미구현:** 토큰 갱신, 로그아웃, 세션 폐기 및 만료 세션 정리. `isExpired()`는 준비된 비교 메서드이며 아직 프로덕션 호출자는 없다.
 
 ---
 
