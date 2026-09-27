@@ -23,6 +23,13 @@ public class UserLoginService {
 	}
 
 	@Transactional(readOnly = true)
+	public void requireActiveUser(Long userId) {
+		if (!userCredentialRepository.existsActiveById(userId)) {
+			throw new BusinessException(ErrorCode.UNAUTHORIZED, "리프레시 토큰이 유효하지 않습니다");
+		}
+	}
+
+	@Transactional(readOnly = true)
 	public UserIdentity authenticate(String email, String password) {
 		if (password.getBytes(StandardCharsets.UTF_8).length > 72) {
 			throw new BusinessException(ErrorCode.INVALID_REQUEST, "비밀번호는 UTF-8 기준 72바이트 이하여야 합니다");

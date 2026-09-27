@@ -32,7 +32,7 @@ public class SecurityConfig {
 			.requestCache(cache -> cache.disable())
 			.authorizeHttpRequests(auth -> auth
 				.dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
-				.requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/register").permitAll()
+				.requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/register", "/api/auth/token/refresh").permitAll()
 				.requestMatchers(HttpMethod.GET, "/api/health", "/actuator/health", "/actuator/health/**").permitAll()
 				.anyRequest().authenticated())
 			.exceptionHandling(errors -> errors.authenticationEntryPoint(unauthorized)
