@@ -3,6 +3,7 @@ package com.vium.shopping.controller;
 import com.vium.global.common.ApiResponse;
 import com.vium.global.security.CurrentUserProvider;
 import com.vium.shopping.dto.request.ShoppingListItemCreateRequest;
+import com.vium.shopping.dto.request.ShoppingListItemUpdateRequest;
 import com.vium.shopping.dto.response.ShoppingListItemResponse;
 import com.vium.shopping.dto.response.ShoppingListResponse;
 import com.vium.shopping.service.ShoppingListService;
@@ -10,6 +11,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -150,6 +153,116 @@ public class ShoppingController {
 	}
 
 	/**
+	 * 장보기 리스트 항목 체크 상태 변경 엔드포인트
+	 *
+	 * API 명세:
+	 * - HTTP Method: PATCH
+	 * - URL: /api/me/shopping-list-items/{itemId}
+	 * - Authentication: Bearer Token (현재 사용자)
+	 * - Request Body: ShoppingListItemUpdateRequest (JSON)
+	 * - Response Code: 200 OK
+	 *
+	 * 요청 예시:
+	 * PATCH /api/me/shopping-list-items/1
+	 * Content-Type: application/json
+	 * Authorization: Bearer eyJhbGciOiJIUzI1NiJ9...
+	 *
+	 * {
+	 *   "isChecked": true
+	 * }
+	 *
+	 * 응답 예시 (성공 - 200):
+	 * {
+	 *   "success": true,
+	 *   "data": {
+	 *     "shoppingListItemId": 1,
+	 *     "ingredientCatalogId": null,
+	 *     "customName": "우유",
+	 *     "suggestedQuantity": 1000,
+	 *     "unitId": 1,
+	 *     "unitName": null,
+	 *     "reason": "테스트",
+	 *     "isChecked": true,
+	 *     "createdAt": "2026-09-27T22:05:00"
+	 *   },
+	 *   "error": null
+	 * }
+	 *
+	 * 응답 예시 (실패 - 404):
+	 * {
+	 *   "success": false,
+	 *   "data": null,
+	 *   "error": {
+	 *     "code": "NOT_FOUND",
+	 *     "message": "항목을 찾을 수 없습니다"
+	 *   }
+	 * }
+	 *
+	 * 처리 흐름:
+	 * 1. HTTP PATCH 요청 수신
+	 * 2. @Valid로 요청 검증
+	 * 3. @PathVariable에서 itemId 추출
+	 * 4. CurrentUserProvider에서 사용자 ID 추출
+	 * 5. Service.updateCheckStatus(userId, itemId, request) 호출
+	 * 6. ShoppingListItemResponse 받음
+	 * 7. ApiResponse.ok(response)로 감싸기
+	 * 8. HTTP 200 OK 응답
+	 *
+	 * @param itemId 변경할 항목 ID
+	 * @param request 체크 상태 변경 요청
+	 * @return 변경된 항목이 포함된 API 응답
+	 * @throws NotFoundException 항목을 찾을 수 없는 경우
+	 *
+	 * HTTP 흐름:
+	 * PATCH Request 진입 (Content-Type: application/json)
+	 *   ↓
+	 * @PatchMapping 라우팅
+	 *   ↓
+	 * @Valid로 JSON 검증 및 ShoppingListItemUpdateRequest로 변환
+	 *   ↓
+	 * updateCheckStatus() 메서드 실행
+	 *   ↓
+	 * @PathVariable에서 itemId 추출: 1
+	 *   ↓
+	 * 현재 사용자 ID 추출: currentUserProvider.getCurrentUserId()
+	 *   ↓
+	 * Service.updateCheckStatus(userId, itemId, request) 호출
+	 *   ↓
+	 * Service에서:
+	 *   1. repository.findByIdAndUserId(itemId, userId) → 소유권 확인
+	 *   2. item.updateCheckStatus(request.isChecked()) → 상태 변경
+	 *   3. repository.save(item) → DB 저장
+	 *   4. ShoppingListItemResponse.from() → DTO 변환
+	 *   ↓
+	 * ShoppingListItemResponse 받음
+	 *   ↓
+	 * ApiResponse.ok(response)로 감싸기
+	 *   ↓
+	 * Spring이 자동으로 JSON 변환
+	 *   ↓
+	 * HTTP 200 OK 응답
+	 */
+	@PatchMapping("/shopping-list-items/{itemId}")
+	public ApiResponse<ShoppingListItemResponse> updateCheckStatus(
+		@PathVariable Long itemId,
+		@Valid @RequestBody ShoppingListItemUpdateRequest request) {
+		// Step 1: 현재 사용자 ID 추출
+		Long userId = currentUserProvider.getCurrentUserId();
+
+		// Step 2: Service 호출
+		// Service가 다음을 수행:
+		// - 항목 조회 및 소유권 확인
+		// - 체크 상태 변경
+		// - DB 저장
+		// - DTO로 변환
+		ShoppingListItemResponse response = shoppingListService.updateCheckStatus(
+			userId, itemId, request);
+
+		// Step 3: 응답 반환 (HTTP 200 OK)
+		return ApiResponse.ok(response);
+	}
+
+	/**
 	 * 장보기 리스트 조회 엔드포인트
 	 *
 	 * API 명세:
@@ -227,6 +340,5 @@ public class ShoppingController {
 	// ============================================
 	// 추후 구현 예정
 	// ============================================
-	// @PatchMapping("/shopping-list-items/{id}") // 체크 상태 변경
 	// @DeleteMapping("/shopping-list-items/{id}") // 항목 삭제
 }
