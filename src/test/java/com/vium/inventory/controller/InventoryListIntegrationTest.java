@@ -58,6 +58,7 @@ class InventoryListIntegrationTest {
 		insertItem(11, 2, 1, 1L, null, expiry);
 		insertItem(12, 1, 2, 1L, null, expiry);
 		insertItem(13, 1, 3, 1L, null, expiry);
+		jdbcTemplate.update("update inventory_items set amount = 2500 where id = 10");
 
 		mockMvc.perform(get("/api/me/ingredients").header("Authorization", "Bearer " + tokenService.issue(1L).accessToken()))
 			.andExpect(status().isOk())
@@ -70,11 +71,27 @@ class InventoryListIntegrationTest {
 			.andExpect(jsonPath("$.data.ingredients[0].categoryName").value("유제품"))
 			.andExpect(jsonPath("$.data.ingredients[0].initialQuantity").value(2.5))
 			.andExpect(jsonPath("$.data.ingredients[0].remainingQuantity").value(1.25))
+			.andExpect(jsonPath("$.data.ingredients[0].amount").value(2500))
 			.andExpect(jsonPath("$.data.ingredients[0].unitId").value(1))
 			.andExpect(jsonPath("$.data.ingredients[0].unit").value("개"))
 			.andExpect(jsonPath("$.data.ingredients[0].statusCode").value("active"))
 			.andExpect(jsonPath("$.data.ingredients[0].purchasedOn").value("2026-01-01"))
 			.andExpect(jsonPath("$.data.ingredients[0].expiresOn").value(expiry.toString()));
+	}
+
+	@Test
+	void list_preservesNullAndZeroAmounts() throws Exception {
+		insertItem(10, 1, 1, null, "금액 미입력", LocalDate.now());
+		insertItem(11, 1, 1, null, "무료 재료", LocalDate.now());
+		jdbcTemplate.update("update inventory_items set amount = 0 where id = 11");
+
+		mockMvc.perform(get("/api/me/ingredients")
+				.header("Authorization", "Bearer " + tokenService.issue(1L).accessToken()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.ingredients.length()").value(2))
+			.andExpect(jsonPath("$.data.ingredients[0]").value(org.hamcrest.Matchers.hasKey("amount")))
+			.andExpect(jsonPath("$.data.ingredients[0].amount").value(nullValue()))
+			.andExpect(jsonPath("$.data.ingredients[1].amount").value(0));
 	}
 
 	@Test

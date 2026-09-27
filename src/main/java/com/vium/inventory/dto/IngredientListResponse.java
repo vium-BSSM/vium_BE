@@ -13,6 +13,7 @@ public record IngredientListResponse(List<Item> ingredients) {
 		String categoryName,
 		BigDecimal initialQuantity,
 		BigDecimal remainingQuantity,
+		Long amount,
 		Short unitId,
 		String unit,
 		String statusCode,

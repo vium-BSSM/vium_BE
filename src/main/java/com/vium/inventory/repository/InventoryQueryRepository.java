@@ -23,7 +23,7 @@ public class InventoryQueryRepository {
 		String sql = """
 			select i.id, i.ingredient_catalog_id,
 			       coalesce(c.name, i.custom_name) as name, category.name as category_name,
-			       i.initial_quantity, i.remaining_quantity, i.unit_id, u.name as unit,
+			       i.initial_quantity, i.remaining_quantity, i.amount, i.unit_id, u.name as unit,
 			       s.code as status_code, i.purchased_on, i.expires_on
 			from inventory_items i
 			join item_statuses s on s.id = i.status_id
@@ -45,6 +45,7 @@ public class InventoryQueryRepository {
 			rs.getString("category_name"),
 			rs.getBigDecimal("initial_quantity"),
 			rs.getBigDecimal("remaining_quantity"),
+			rs.getObject("amount", Long.class),
 			rs.getShort("unit_id"),
 			rs.getString("unit"),
 			rs.getString("status_code"),
