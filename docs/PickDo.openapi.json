@@ -183,7 +183,7 @@
         },
         "responses": {
           "200": {
-            "description": "",
+            "description": "로그아웃 성공. 세션이 없거나 이미 폐기된 본인 세션인 경우에도 성공으로 처리한다.",
             "content": {
               "application/json": {
                 "schema": {

@@ -12,6 +12,7 @@ import com.vium.auth.dto.LogoutRequest;
 import com.vium.auth.entity.UserSession;
 import com.vium.auth.repository.UserSessionRepository;
 import com.vium.auth.service.TokenService;
+import com.vium.global.security.JwtProperties;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -47,6 +48,7 @@ class LogoutIntegrationTest {
 	@Autowired private TokenService tokenService;
 	@Autowired private UserSessionRepository userSessionRepository;
 	@Autowired private JwtDecoder jwtDecoder;
+	@Autowired private JwtProperties jwtProperties;
 	@Autowired private JsonMapper mapper;
 	@MockitoBean private Clock authClock;
 
@@ -127,7 +129,8 @@ class LogoutIntegrationTest {
 		if (kind.equals("malformed")) {
 			request.header("Authorization", "Bearer invalid-token");
 		} else if (kind.equals("expired")) {
-			when(authClock.instant()).thenReturn(NOW.plusSeconds(3661));
+			when(authClock.instant()).thenReturn(NOW.plusSeconds(
+				jwtProperties.accessTokenSeconds() + jwtProperties.clockSkewSeconds() + 1));
 			request.header("Authorization", "Bearer " + tokens.accessToken());
 		}
 		mockMvc.perform(request).andExpect(status().isUnauthorized());
@@ -171,6 +174,51 @@ class LogoutIntegrationTest {
 		}
 		assertThat(userSessionRepository.count()).isEqualTo(1);
 		assertThat(userSessionRepository.findById(sessionId).orElseThrow().getRevokedAt()).isNotNull();
+	}
+
+	@Test
+	void concurrentRefreshAndLogoutLeaveOnlyASerializedOutcome() throws Exception {
+		var ready = new CountDownLatch(2);
+		var start = new CountDownLatch(1);
+		try (var executor = Executors.newFixedThreadPool(2)) {
+			var logoutFuture = executor.submit(() -> {
+				awaitStart(ready, start);
+				return logout(tokens.accessToken(), tokens.refreshToken()).andReturn();
+			});
+			var refreshFuture = executor.submit(() -> {
+				awaitStart(ready, start);
+				return mockMvc.perform(post("/api/auth/token/refresh").contentType(MediaType.APPLICATION_JSON)
+					.content(body(tokens.refreshToken()))).andReturn();
+			});
+			assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+			start.countDown();
+			assertThat(logoutFuture.get(10, TimeUnit.SECONDS).getResponse().getStatus()).isEqualTo(200);
+			var refreshed = refreshFuture.get(10, TimeUnit.SECONDS).getResponse();
+			assertThat(refreshed.getStatus()).isIn(200, 401);
+			var sessions = userSessionRepository.findAll();
+			assertThat(userSessionRepository.findById(sessionId).orElseThrow().getRevokedAt()).isNotNull();
+			if (refreshed.getStatus() == 200) {
+				String replacement = mapper.readTree(refreshed.getContentAsString())
+					.get("data").get("refreshToken").asText();
+				assertThat(sessions).hasSize(2);
+				assertThat(sessions).filteredOn(s -> s.getRevokedAt() == null).singleElement()
+					.satisfies(s -> {
+						assertThat(s.getUserId()).isEqualTo(42L);
+						assertThat(s.getRefreshTokenHash()).isEqualTo(UserSession.hashToken(replacement));
+					});
+			} else {
+				assertThat(sessions).hasSize(1).allSatisfy(s -> assertThat(s.getRevokedAt()).isNotNull());
+				assertThat(mapper.readTree(refreshed.getContentAsString()).get("error").get("code").asText())
+					.isEqualTo("UNAUTHORIZED");
+			}
+		}
+	}
+
+	private void awaitStart(CountDownLatch ready, CountDownLatch start) throws InterruptedException {
+		ready.countDown();
+		if (!start.await(5, TimeUnit.SECONDS)) {
+			throw new IllegalStateException("Concurrent requests start timed out");
+		}
 	}
 
 	@Test
