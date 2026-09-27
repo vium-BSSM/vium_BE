@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.vium.auth.service.TokenService;
 import java.math.BigDecimal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,6 +18,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.transaction.annotation.Transactional;
 
 @SpringBootTest
@@ -29,6 +31,9 @@ class InventoryUpdateIntegrationTest {
 
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
+
+	@Autowired
+	private TokenService tokenService;
 
 	private static final String BODY = """
 		{"customName":"  수정한 재료  ","quantity":8,"unitId":1,"storageMethodId":2,
@@ -51,7 +56,7 @@ class InventoryUpdateIntegrationTest {
 
 	@Test
 	void updatesAllFieldsAndPersistsWithoutChangingAmountOrStatus() throws Exception {
-		mockMvc.perform(patch("/api/me/ingredients/100").contentType(MediaType.APPLICATION_JSON).content(BODY))
+		mockMvc.perform(authenticatedPatch("/api/me/ingredients/100").contentType(MediaType.APPLICATION_JSON).content(BODY))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.success").value(true))
 			.andExpect(jsonPath("$.error").value(nullValue()))
@@ -73,7 +78,7 @@ class InventoryUpdateIntegrationTest {
 	@Test
 	void preservesProcessedQuantityAndExistingEvent() throws Exception {
 		addEvent();
-		mockMvc.perform(patch("/api/me/ingredients/100").contentType(MediaType.APPLICATION_JSON).content(BODY))
+		mockMvc.perform(authenticatedPatch("/api/me/ingredients/100").contentType(MediaType.APPLICATION_JSON).content(BODY))
 			.andExpect(status().isOk());
 		flush();
 		assertQuantity("8","5");
@@ -84,7 +89,7 @@ class InventoryUpdateIntegrationTest {
 	@Test
 	void rejectsQuantityBelowProcessedAmountWithoutChangingFields() throws Exception {
 		addEvent();
-		mockMvc.perform(patch("/api/me/ingredients/100").contentType(MediaType.APPLICATION_JSON).content(BODY.replace("\"quantity\":8","\"quantity\":2")))
+		mockMvc.perform(authenticatedPatch("/api/me/ingredients/100").contentType(MediaType.APPLICATION_JSON).content(BODY.replace("\"quantity\":8","\"quantity\":2")))
 			.andExpect(status().isBadRequest()).andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
 		flush();
 		assertQuantity("10","7");
@@ -94,7 +99,7 @@ class InventoryUpdateIntegrationTest {
 	@Test
 	void allowsQuantityEqualToProcessedAmountWithoutChangingStatus() throws Exception {
 		addEvent();
-		mockMvc.perform(patch("/api/me/ingredients/100").contentType(MediaType.APPLICATION_JSON).content(BODY.replace("\"quantity\":8","\"quantity\":3")))
+		mockMvc.perform(authenticatedPatch("/api/me/ingredients/100").contentType(MediaType.APPLICATION_JSON).content(BODY.replace("\"quantity\":8","\"quantity\":3")))
 			.andExpect(status().isOk()).andExpect(jsonPath("$.data.statusCode").value("active"));
 		flush();
 		assertQuantity("3","0");
@@ -104,7 +109,7 @@ class InventoryUpdateIntegrationTest {
 	void rejectsUnitChangeWhenAnEventExistsEvenWithZeroProcessedQuantity() throws Exception {
 		addEvent();
 		jdbcTemplate.update("update inventory_items set remaining_quantity=10 where id=100");
-		mockMvc.perform(patch("/api/me/ingredients/100").contentType(MediaType.APPLICATION_JSON).content(BODY.replace("\"unitId\":1","\"unitId\":2")))
+		mockMvc.perform(authenticatedPatch("/api/me/ingredients/100").contentType(MediaType.APPLICATION_JSON).content(BODY.replace("\"unitId\":1","\"unitId\":2")))
 			.andExpect(status().isBadRequest());
 	}
 
@@ -115,7 +120,7 @@ class InventoryUpdateIntegrationTest {
 		jdbcTemplate.update("update consumption_events set quantity=60 where id=100");
 		String body = BODY.replace("\"quantity\":8", "\"quantity\":5")
 			.replace("\"unitId\":1", "\"unitId\":2");
-		mockMvc.perform(patch("/api/me/ingredients/100")
+		mockMvc.perform(authenticatedPatch("/api/me/ingredients/100")
 				.contentType(MediaType.APPLICATION_JSON).content(body))
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"))
@@ -131,7 +136,7 @@ class InventoryUpdateIntegrationTest {
 
 	@Test
 	void allowsUnitChangeWithoutHistory() throws Exception {
-		mockMvc.perform(patch("/api/me/ingredients/100").contentType(MediaType.APPLICATION_JSON).content(BODY.replace("\"unitId\":1","\"unitId\":2")))
+		mockMvc.perform(authenticatedPatch("/api/me/ingredients/100").contentType(MediaType.APPLICATION_JSON).content(BODY.replace("\"unitId\":1","\"unitId\":2")))
 			.andExpect(status().isOk()).andExpect(jsonPath("$.data.unitId").value(2));
 	}
 
@@ -139,7 +144,7 @@ class InventoryUpdateIntegrationTest {
 	void allowsExplicitNullNameForCatalogIngredientAndKeepsStatus() throws Exception {
 		jdbcTemplate.update("insert into ingredient_catalog (id,default_unit_id,name,created_at) values (100,1,'우유',CURRENT_TIMESTAMP)");
 		jdbcTemplate.update("update inventory_items set ingredient_catalog_id=100,status_id=2 where id=100");
-		mockMvc.perform(patch("/api/me/ingredients/100").contentType(MediaType.APPLICATION_JSON).content(BODY.replace("\"  수정한 재료  \"","null")))
+		mockMvc.perform(authenticatedPatch("/api/me/ingredients/100").contentType(MediaType.APPLICATION_JSON).content(BODY.replace("\"  수정한 재료  \"","null")))
 			.andExpect(status().isOk()).andExpect(jsonPath("$.data.customName").value(nullValue()))
 			.andExpect(jsonPath("$.data.statusCode").value("consumed"));
 	}
@@ -148,14 +153,14 @@ class InventoryUpdateIntegrationTest {
 	@ValueSource(strings={"customName","quantity","unitId","storageMethodId","purchasedOn","expiresOn"})
 	void rejectsMissingRequiredFields(String field) throws Exception {
 		String body=BODY.replaceAll("\\\""+field+"\\\"\\s*:\\s*(\\\"[^\\\"]*\\\"|[0-9]+)\\s*,?", "").replaceAll(",\\s*}","}");
-		mockMvc.perform(patch("/api/me/ingredients/100").contentType(MediaType.APPLICATION_JSON).content(body))
+		mockMvc.perform(authenticatedPatch("/api/me/ingredients/100").contentType(MediaType.APPLICATION_JSON).content(body))
 			.andExpect(status().isBadRequest()).andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
 	}
 
 	@ParameterizedTest
 	@ValueSource(strings={"0","-1","1.0001","1000000000"})
 	void rejectsInvalidQuantity(String quantity) throws Exception {
-		mockMvc.perform(patch("/api/me/ingredients/100").contentType(MediaType.APPLICATION_JSON).content(BODY.replace("\"quantity\":8","\"quantity\":"+quantity)))
+		mockMvc.perform(authenticatedPatch("/api/me/ingredients/100").contentType(MediaType.APPLICATION_JSON).content(BODY.replace("\"quantity\":8","\"quantity\":"+quantity)))
 			.andExpect(status().isBadRequest());
 	}
 
@@ -163,36 +168,54 @@ class InventoryUpdateIntegrationTest {
 	@ValueSource(strings={"unitId","storageMethodId"})
 	void rejectsUnknownCode(String field) throws Exception {
 		String body=BODY.replaceAll("\\\""+field+"\\\":[0-9]+","\""+field+"\":99");
-		mockMvc.perform(patch("/api/me/ingredients/100").contentType(MediaType.APPLICATION_JSON).content(body))
+		mockMvc.perform(authenticatedPatch("/api/me/ingredients/100").contentType(MediaType.APPLICATION_JSON).content(body))
 			.andExpect(status().isBadRequest());
 	}
 
 	@ParameterizedTest
 	@ValueSource(strings={"null","\"   \""})
 	void rejectsMissingIdentityForCustomIngredient(String name) throws Exception {
-		mockMvc.perform(patch("/api/me/ingredients/100").contentType(MediaType.APPLICATION_JSON).content(BODY.replace("\"  수정한 재료  \"",name)))
+		mockMvc.perform(authenticatedPatch("/api/me/ingredients/100").contentType(MediaType.APPLICATION_JSON).content(BODY.replace("\"  수정한 재료  \"",name)))
 			.andExpect(status().isBadRequest());
 	}
 
 	@ParameterizedTest
 	@ValueSource(strings={"2026-01-01","invalid-date"})
 	void rejectsInvalidExpiry(String date) throws Exception {
-		mockMvc.perform(patch("/api/me/ingredients/100").contentType(MediaType.APPLICATION_JSON).content(BODY.replace("2026-01-10",date)))
+		mockMvc.perform(authenticatedPatch("/api/me/ingredients/100").contentType(MediaType.APPLICATION_JSON).content(BODY.replace("2026-01-10",date)))
 			.andExpect(status().isBadRequest());
 	}
 
 	@Test
 	void rejectsMissingAndOtherUsersItems() throws Exception {
-		mockMvc.perform(patch("/api/me/ingredients/999").contentType(MediaType.APPLICATION_JSON).content(BODY))
+		mockMvc.perform(authenticatedPatch("/api/me/ingredients/999").contentType(MediaType.APPLICATION_JSON).content(BODY))
 			.andExpect(status().isNotFound());
 		jdbcTemplate.update("update inventory_items set user_id=2 where id=100");
-		mockMvc.perform(patch("/api/me/ingredients/100").contentType(MediaType.APPLICATION_JSON).content(BODY))
+		mockMvc.perform(authenticatedPatch("/api/me/ingredients/100").contentType(MediaType.APPLICATION_JSON).content(BODY))
 			.andExpect(status().isNotFound());
 		assertQuantity("10","10");
 	}
 
 	@Autowired
 	private jakarta.persistence.EntityManager entityManager;
+
+	@Test
+	void rejectsUnauthenticatedRequestWithoutChangingInventory() throws Exception {
+		mockMvc.perform(patch("/api/me/ingredients/100")
+				.contentType(MediaType.APPLICATION_JSON).content(BODY))
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.success").value(false))
+			.andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+		flush();
+		assertQuantity("10", "10");
+		assertThat(jdbcTemplate.queryForObject("select custom_name from inventory_items where id=100", String.class))
+			.isEqualTo("기존 재료");
+		assertThat(jdbcTemplate.queryForObject("select count(*) from consumption_events", Long.class)).isZero();
+	}
+
+	private MockHttpServletRequestBuilder authenticatedPatch(String url) {
+		return patch(url).header("Authorization", "Bearer " + tokenService.issue(1L).accessToken());
+	}
 
 	private void flush() { entityManager.flush(); entityManager.clear(); }
 

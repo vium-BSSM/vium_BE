@@ -14,7 +14,7 @@ import jakarta.validation.constraints.NotNull;
  *   "ingredientCatalogId": 5,
  *   "customName": null,
  *   "suggestedQuantity": 1000,
- *   "unitId": 1,
+ *   "unitId": 4,
  *   "reason": "낭비 이력 기반 재구매 제안"
  * }
  *
