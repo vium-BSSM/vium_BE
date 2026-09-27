@@ -152,22 +152,11 @@
       "post": {
         "summary": "로그아웃",
         "deprecated": false,
-        "description": "",
+        "description": "유효한 Access Token으로 인증한 사용자의 Refresh Token 세션 하나를 폐기한다. 토큰 해시로 세션 행을 잠그고 소유권을 확인한다. 미존재 토큰과 이미 폐기된 본인 토큰은 200으로 처리하며, 만료된 본인 Refresh Token도 폐기할 수 있다. 다른 사용자 세션은 403으로 거부한다. 기존 Access Token은 만료까지 유효하며 다른 세션에는 영향이 없다. 클라이언트는 로그아웃 후 로컬 토큰을 삭제하고 재발급과 로그아웃을 직렬화해야 한다. 재발급이 먼저 완료됐다면 이전 토큰으로 로그아웃해도 새 세션은 폐기되지 않으므로 최신 Refresh Token을 제출해야 한다.",
         "tags": [
           "user"
         ],
-        "parameters": [
-          {
-            "name": "Authorization: Bearer {{token}}",
-            "in": "header",
-            "description": "",
-            "required": false,
-            "example": "",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "requestBody": {
           "content": {
             "application/json": {
@@ -175,7 +164,10 @@
                 "type": "object",
                 "properties": {
                   "refreshToken": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512,
+                    "description": "로그인 또는 직전 재발급에서 받은 불투명 Refresh Token 원문. 공백만인 값은 허용하지 않는다."
                   }
                 },
                 "required": [
@@ -183,7 +175,7 @@
                 ]
               },
               "example": {
-                "refreshToken": "eyJhbGciOiJIUzI1NiJ9.refresh"
+                "refreshToken": "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG"
               }
             }
           },
@@ -191,7 +183,7 @@
         },
         "responses": {
           "200": {
-            "description": "",
+            "description": "로그아웃 성공. 세션이 없거나 이미 폐기된 본인 세션인 경우에도 성공으로 처리한다.",
             "content": {
               "application/json": {
                 "schema": {
@@ -221,6 +213,36 @@
               }
             },
             "headers": {}
+          },
+          "400": {
+            "description": "본문 누락·형식 오류 또는 Refresh Token 누락·공백·길이 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access Token 누락·만료·무효",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "다른 사용자 소유의 Refresh Token 세션",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         },
         "security": [

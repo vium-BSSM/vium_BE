@@ -2,6 +2,7 @@ package com.vium.auth.service;
 
 import com.vium.auth.dto.LoginRequest;
 import com.vium.auth.dto.LoginResponse;
+import com.vium.auth.dto.LogoutRequest;
 import com.vium.auth.dto.RefreshRequest;
 import com.vium.auth.dto.RefreshResponse;
 import com.vium.auth.dto.RegisterRequest;
@@ -28,6 +29,18 @@ public class AuthService {
 	private final UserSessionRepository userSessionRepository;
 	private final Clock authClock;
 	private final JwtProperties jwtProperties;
+
+	@Transactional
+	public void logout(Long userId, LogoutRequest request) {
+		var session = userSessionRepository.findByRefreshTokenHash(UserSession.hashToken(request.refreshToken()));
+		if (session.isEmpty()) {
+			return;
+		}
+		if (!session.get().getUserId().equals(userId)) {
+			throw new BusinessException(ErrorCode.FORBIDDEN, "다른 사용자의 세션은 로그아웃할 수 없습니다");
+		}
+		session.get().revoke(authClock.instant());
+	}
 
 	@Transactional
 	public RefreshResponse refresh(RefreshRequest request) {
