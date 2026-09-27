@@ -3,9 +3,10 @@ package com.vium.auth;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -28,8 +29,8 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -53,7 +54,7 @@ class RefreshIntegrationTest {
 	@Autowired private JdbcTemplate jdbcTemplate;
 	@Autowired private TokenService tokenService;
 	@Autowired private PasswordEncoder passwordEncoder;
-	@Autowired private JwtDecoder jwtDecoder;
+	@MockitoSpyBean private JwtDecoder jwtDecoder;
 	@Autowired private JsonMapper mapper;
 	@MockitoBean private Clock authClock;
 	@MockitoSpyBean private UserSessionRepository userSessionRepository;
@@ -219,13 +220,25 @@ class RefreshIntegrationTest {
 		when(authClock.instant()).thenReturn(NOW);
 		mockMvc.perform(get(path).header("Authorization", "Bearer " + access))
 			.andExpect(status().isUnauthorized());
+		verify(jwtDecoder).decode(access);
+	}
+
+	@Test
+	void protectedPostAuthenticatesValidBearerBeforeValidatingBody() throws Exception {
+		String access = tokenService.issue(42L).accessToken();
+		mockMvc.perform(post("/api/me/ingredients").header("Authorization", "Bearer " + access)
+				.contentType(MediaType.APPLICATION_JSON).content("{}"))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+		verify(jwtDecoder).decode(access);
 	}
 
 	@Test
 	void protectedPostStillRequiresValidBearer() throws Exception {
-		mockMvc.perform(post("/api/me/ingredients").header("Authorization", "Bearer invalid token")
+		mockMvc.perform(post("/api/me/ingredients").header("Authorization", "Bearer invalid-token")
 				.contentType(MediaType.APPLICATION_JSON).content("{}"))
 			.andExpect(status().isUnauthorized());
+		verify(jwtDecoder).decode("invalid-token");
 	}
 
 	@Test
