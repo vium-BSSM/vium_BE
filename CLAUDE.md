@@ -66,7 +66,7 @@
       **요청 시점에 집계**해서 반환한다. 자주 버리는 위험 품목도 이 집계에서 자동 발견.
 5. **장보기 도우미 / 구매량 제안** — shopping-helper, purchase-suggestions, shopping-list-items
 6. **알림** — notifications (서버 배치가 생성)
-7. **인증** — 이메일 회원가입·로그인, Access Token 인증 및 토큰 갱신 구현 완료. 로그아웃은 후속 작업이다. (아래 5항 참고)
+7. **인증** — 이메일 회원가입·로그인, Access Token 인증, 토큰 갱신 및 로그아웃 구현 완료. (아래 5항 참고)
 8. **확장** — 영수증 OCR(scan, `purchases`에 저장), 레시피 추천, 대시보드/절약금액.
 
 ---
@@ -86,7 +86,8 @@
 - 세션의 기존 `timestamp` 컬럼에는 UTC 기준 `LocalDateTime`을 저장하고, 만료 비교는 `UserSession.isExpired(Instant)`를 사용한다. 기존 재고·소진 이벤트의 서버 기본 시간대 사용까지 통일한 상태는 아니다.
 - 로그인·회원가입·토큰 갱신의 POST 경로는 동일한 RequestMatcher로 공개 허용 및 Bearer 검증 생략을 적용한다. 만료되거나 잘못된 Authorization 헤더가 붙어도 요청 본문을 검증한다. 다른 메서드와 보호 경로의 Bearer 검증은 유지한다.
 - `POST /api/auth/token/refresh`는 Refresh Token을 본문으로 받아 새 토큰 쌍과 `expiresIn`(Access Token 유효기간 초)을 반환한다. 세션 행의 비관적 쓰기 잠금으로 동시 재사용을 막고, 만료·폐기·탈퇴 사용자 토큰을 거부한다. 기존 세션 폐기와 새 세션 저장은 동일 트랜잭션이다. 새 Refresh Token 만료는 재발급 시점부터 계산하며 기존 Access Token은 만료까지 유지된다. 재사용 시 요청만 거부하고 토큰 계보 전체 폐기는 지원하지 않는다. 교체 커밋 후 응답이 유실되면 다시 로그인해야 한다.
-- **미구현:** 로그아웃, 토큰 계보 기반 재사용 탐지·일괄 폐기 및 만료 세션 정리.
+- `POST /api/auth/logout`은 유효한 Access Token 인증이 필요하며 본문으로 받은 본인 Refresh Token 세션 하나만 잠금 후 폐기한다. 미존재 토큰·이미 폐기된 본인 토큰은 200, 다른 사용자 세션은 403이다. 만료된 본인 Refresh Token도 폐기 가능하다. 기존 Access Token과 다른 세션은 유지된다. 재발급과 로그아웃은 클라이언트에서 직렬화하고 최신 Refresh Token으로 로그아웃한 뒤 로컬 토큰을 삭제한다.
+- **미구현:** 토큰 계보 기반 재사용 탐지·일괄 폐기 및 만료 세션 정리.
 
 ---
 
