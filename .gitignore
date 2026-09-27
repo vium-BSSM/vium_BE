@@ -9,6 +9,8 @@ build/
 .env
 .env.*
 !.env.example
+!.env.prod.example
+deploy/certs/
 
 ### STS ###
 .apt_generated

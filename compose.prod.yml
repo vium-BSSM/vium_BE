@@ -1,0 +1,41 @@
+name: vium-prod
+services:
+  app:
+    image: vium-be:${IMAGE_TAG:?Set IMAGE_TAG to the release commit SHA}
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SERVER_PORT: "8080"
+      DB_URL: ${DB_URL:?Set DB_URL}
+      DB_USERNAME: ${DB_USERNAME:?Set DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET}
+      JWT_ISSUER: ${JWT_ISSUER:-vium}
+      JWT_ACCESS_TOKEN_SECONDS: ${JWT_ACCESS_TOKEN_SECONDS:-3600}
+      JWT_REFRESH_TOKEN_SECONDS: ${JWT_REFRESH_TOKEN_SECONDS:-1209600}
+      JWT_CLOCK_SKEW_SECONDS: ${JWT_CLOCK_SKEW_SECONDS:-60}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+      # Calendar-date business rules currently use the JVM default timezone.
+      JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Seoul -XX:MaxRAMPercentage=70.0"
+    volumes:
+      - ./deploy/certs:/app/certs:ro
+    mem_limit: 1g
+    stop_grace_period: 40s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--max-time", "5", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 6s
+      start_period: 90s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -3,6 +3,9 @@ package com.vium.global.security;
 import com.vium.global.common.ApiResponse;
 import com.vium.global.exception.ErrorCode;
 import jakarta.servlet.DispatcherType;
+import java.util.Arrays;
+import java.util.List;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -16,10 +19,31 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 import org.springframework.security.web.util.matcher.OrRequestMatcher;
 import tools.jackson.databind.json.JsonMapper;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
+	@Bean
+	public UrlBasedCorsConfigurationSource corsConfigurationSource(
+			@Value("${CORS_ALLOWED_ORIGINS:}") String allowedOrigins) {
+		var configuration = new CorsConfiguration();
+		var origins = Arrays.stream(allowedOrigins.split(","))
+			.map(String::strip).filter(origin -> !origin.isEmpty()).toList();
+		if (origins.stream().anyMatch(origin -> origin.contains("*"))) {
+			throw new IllegalArgumentException("CORS_ALLOWED_ORIGINS must contain exact origins, not wildcards");
+		}
+		configuration.setAllowedOrigins(origins);
+		configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+		configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept"));
+		configuration.setAllowCredentials(false);
+		configuration.setMaxAge(3600L);
+		var source = new UrlBasedCorsConfigurationSource();
+		source.registerCorsConfiguration("/api/**", configuration);
+		return source;
+	}
+
 	@Bean
 	public SecurityFilterChain securityFilterChain(HttpSecurity http, JsonMapper mapper) throws Exception {
 		var paths = PathPatternRequestMatcher.withDefaults();
@@ -36,6 +60,7 @@ public class SecurityConfig {
 				new ApiResponse.ErrorObject(ErrorCode.UNAUTHORIZED.name(), ErrorCode.UNAUTHORIZED.getDefaultMessage()))));
 		};
 		return http
+			.cors(Customizer.withDefaults())
 			.csrf(csrf -> csrf.disable())
 			.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 			.requestCache(cache -> cache.disable())
