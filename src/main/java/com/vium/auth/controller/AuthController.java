@@ -2,6 +2,8 @@ package com.vium.auth.controller;
 
 import com.vium.auth.dto.LoginRequest;
 import com.vium.auth.dto.LoginResponse;
+import com.vium.auth.dto.RefreshRequest;
+import com.vium.auth.dto.RefreshResponse;
 import com.vium.auth.dto.RegisterRequest;
 import com.vium.auth.dto.RegisterResponse;
 import com.vium.auth.service.AuthService;
@@ -20,6 +22,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class AuthController {
 	private final AuthService authService;
+
+	@PostMapping("/token/refresh")
+	public ResponseEntity<ApiResponse<RefreshResponse>> refresh(@Valid @RequestBody RefreshRequest request) {
+		return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+			.body(ApiResponse.ok(authService.refresh(request)));
+	}
 
 	@PostMapping("/register")
 	public ResponseEntity<ApiResponse<RegisterResponse>> register(@Valid @RequestBody RegisterRequest request) {

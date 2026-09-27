@@ -23,6 +23,11 @@ public class UserLoginService {
 	}
 
 	@Transactional(readOnly = true)
+	public boolean isActiveUser(Long userId) {
+		return userCredentialRepository.existsActiveById(userId);
+	}
+
+	@Transactional(readOnly = true)
 	public UserIdentity authenticate(String email, String password) {
 		if (password.getBytes(StandardCharsets.UTF_8).length > 72) {
 			throw new BusinessException(ErrorCode.INVALID_REQUEST, "비밀번호는 UTF-8 기준 72바이트 이하여야 합니다");

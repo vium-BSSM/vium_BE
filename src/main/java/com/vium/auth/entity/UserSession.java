@@ -56,7 +56,13 @@ public class UserSession {
 		return !now.isBefore(expiresAt.toInstant(ZoneOffset.UTC));
 	}
 
-	private static String hashToken(String token) {
+	public void revoke(Instant now) {
+		if (revokedAt == null) {
+			revokedAt = LocalDateTime.ofInstant(now, ZoneOffset.UTC);
+		}
+	}
+
+	public static String hashToken(String token) {
 		try {
 			return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
 				.digest(token.getBytes(StandardCharsets.UTF_8)));

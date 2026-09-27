@@ -40,6 +40,12 @@ public class UserCredentialRepository {
 				rs.getString("display_name"), rs.getString("password_hash")), email).stream().findFirst();
 	}
 
+	public boolean existsActiveById(Long userId) {
+		return Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+			"select exists (select 1 from users where id = ? and deleted_at is null)",
+			Boolean.class, userId));
+	}
+
 	public record Credentials(Long id, String email, String displayName, String passwordHash) {
 		@Override
 		public String toString() { return "Credentials[REDACTED]"; }
