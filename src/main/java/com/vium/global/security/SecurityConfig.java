@@ -18,16 +18,16 @@ import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 import org.springframework.security.web.util.matcher.OrRequestMatcher;
-import tools.jackson.databind.json.JsonMapper;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import tools.jackson.databind.json.JsonMapper;
 
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
 	@Bean
 	public UrlBasedCorsConfigurationSource corsConfigurationSource(
-			@Value("${CORS_ALLOWED_ORIGINS:}") String allowedOrigins) {
+			@Value("${security.cors.allowed-origins:}") String allowedOrigins) {
 		var configuration = new CorsConfiguration();
 		var origins = Arrays.stream(allowedOrigins.split(","))
 			.map(String::strip).filter(origin -> !origin.isEmpty()).toList();

@@ -11,7 +11,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.web.servlet.MockMvc;
 
-@SpringBootTest(properties = "CORS_ALLOWED_ORIGINS=https://app.example.com")
+@SpringBootTest(properties = "security.cors.allowed-origins=https://app.example.com")
 @AutoConfigureMockMvc
 class CorsIntegrationTest {
 	@Autowired private MockMvc mockMvc;

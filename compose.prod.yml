@@ -2,7 +2,7 @@ name: vium-prod
 services:
   app:
     image: vium-be:${IMAGE_TAG:?Set IMAGE_TAG to the release commit SHA}
-    build: .
+    pull_policy: never
     restart: unless-stopped
     ports:
       - "127.0.0.1:8080:8080"

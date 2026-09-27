@@ -4,7 +4,7 @@
 
 ## 사전 준비
 
-- EC2: Docker Engine과 Compose v2 설치. 빌드까지 수행하므로 메모리 여유가 필요하다. 앱 컨테이너 제한은 1 GiB이며 부하를 보며 조정한다.
+- EC2: Docker Engine과 Compose v2 설치. 이미지는 로컬 또는 별도 빌드 머신에서 만들고 EC2에서는 실행만 한다. 앱 컨테이너 제한은 1 GiB이며 부하를 보며 조정한다.
 - RDS: PostgreSQL 16, 데이터베이스 `vium` 생성, public access 비활성화. 같은 VPC의 EC2 보안 그룹에서만 5432 접근 허용. 자동 백업 활성화.
 - EC2: 공개 포트는 HTTPS 443, 인증서 발급·리다이렉트용 80. SSH가 필요하면 관리자 IP만 22 허용. 8080과 5432는 공개하지 않는다.
 - 도메인: 운영 API 주소를 EC2에 연결하고 호스트 Nginx에 유효한 TLS 인증서를 설치한다.
@@ -22,21 +22,70 @@ curl --fail --show-error --location https://truststore.pki.rds.amazonaws.com/glo
 openssl rand -base64 32
 ```
 
-`.env.prod`의 모든 예시 값을 실제 값으로 교체한다. 위에서 생성한 키를 `JWT_SECRET`에 넣고 재배포 때 유지한다. `IMAGE_TAG`는 배포할 커밋 SHA를 사용한다. 비밀번호에 `$` 등이 있으면 작은따옴표로 감싸 Compose의 변수 치환을 막는다. `.env.prod`는 커밋하지 않으며 Docker 빌드 컨텍스트에도 포함되지 않는다.
+`.env.prod`의 모든 예시 값을 실제 값으로 교체한다. 위에서 생성한 키를 `JWT_SECRET`에 넣고 재배포 때 유지한다. `IMAGE_TAG`는 이 파일에 저장하지 않고 아래 절차에서 셸 환경변수로 지정한다. 기존 파일에 있다면 삭제한다. 비밀번호에 `$` 등이 있으면 작은따옴표로 감싸 Compose의 변수 치환을 막는다. `.env.prod`는 커밋하지 않으며 Docker 빌드 컨텍스트에도 포함되지 않는다.
 
 RDS URL의 `sslmode=verify-full`은 인증서와 호스트를 검증한다. 인증서 파일은 컨테이너 사용자도 읽을 수 있어야 한다. 인증서 번들 갱신도 운영 시 관리한다.
 
 `CORS_ALLOWED_ORIGINS`에는 실제 프론트 주소를 쉼표로 구분해 입력한다. 예: `https://app.example.com,https://www.example.com`. 경로·끝 슬래시·와일드카드는 넣지 않는다. 비워 두면 교차 출처 요청을 허용하지 않는다. 현재 인증은 Bearer 헤더 방식이므로 쿠키 credentials는 허용하지 않는다. 로컬 프론트 연동에는 로컬 환경변수로 별도 주소를 설정한다.
 
-## 빌드 및 실행
+## 릴리스 이미지 빌드 — 로컬 또는 별도 빌드 머신
 
-```sh
+운영 EC2에서는 빌드하지 않는다. Gradle과 테스트 JVM이 운영 앱과 메모리를 경쟁하는 것을 피한다. Dockerfile의 BuildKit 캐시 마운트는 Gradle 배포판과 의존성을 다음 빌드에서도 재사용한다. 캐시가 삭제되거나 다른 빌드 머신을 쓰면 다시 다운로드한다.
+
+먼저 아래 변경을 커밋·병합한 뒤 배포할 main 커밋을 선택한다. 최초에는 저장소를 clone한다. 이후 명령은 저장소 루트의 Bash에서 실행한다. 작업 트리가 변경된 상태면 중단하며, 실제 checkout된 전체 SHA를 태그로 사용한다.
+
+```bash
+set -euo pipefail
+git clone https://github.com/vium-BSSM/vium_BE.git
+cd vium_BE
+# 기존 clone을 쓰는 경우 위 두 줄은 생략
+RELEASE_SHA='<배포할-main-커밋-SHA>'
+test -z "$(git status --porcelain)"
+git fetch origin
+git checkout --detach "$RELEASE_SHA"
+git merge-base --is-ancestor HEAD origin/main
+test -z "$(git status --porcelain)"
+export IMAGE_TAG="$(git rev-parse HEAD)"
+# t3 계열은 linux/amd64, t4g 계열은 linux/arm64
+TARGET_PLATFORM=linux/amd64
+# 같은 태그가 이미 있으면 재빌드하지 않고 기존 산출물을 재사용
+if ! docker image inspect "vium-be:$IMAGE_TAG" >/dev/null 2>&1; then
+    docker buildx build --platform "$TARGET_PLATFORM" --load -t "vium-be:$IMAGE_TAG" .
+fi
+docker image inspect "vium-be:$IMAGE_TAG" --format '{{.Os}}/{{.Architecture}} {{.Id}}'
+docker save -o "/tmp/vium-be-$IMAGE_TAG.tar" "vium-be:$IMAGE_TAG"
+scp "/tmp/vium-be-$IMAGE_TAG.tar" '<SSH사용자>@<EC2주소>:/tmp/'
+```
+
+출력한 아키텍처가 대상 EC2와 일치하는지 확인한다. 같은 SHA 이미지를 덮어쓰지 말고 배포한 이미지의 ID와 아카이브를 보관한다. 기본 이미지·외부 의존성까지 고정한 재현 빌드는 아니므로 같은 SHA의 재빌드가 같은 이미지임을 보장하지 않는다. 향후 CI/CD에서는 레지스트리의 불변 태그와 digest로 관리한다.
+
+## EC2에서 이미지 로드 및 실행
+
+최초에는 위 저장소를 EC2에도 clone한다. 저장소 루트에서 아래 명령으로 같은 커밋의 Compose를 준비한다. 환경변수·인증서는 앞 절차대로 설정한다. 재배포 때 `.env.prod`를 예시 파일로 덮어쓰지 않는다.
+
+```bash
+set -euo pipefail
+RELEASE_SHA='<전송한-이미지의-전체-커밋-SHA>'
+test -z "$(git status --porcelain)"
+git fetch origin
+git checkout --detach "$RELEASE_SHA"
+git merge-base --is-ancestor HEAD origin/main
+test -z "$(git status --porcelain)"
+export IMAGE_TAG="$(git rev-parse HEAD)"
+docker load -i "/tmp/vium-be-$IMAGE_TAG.tar"
+docker image inspect "vium-be:$IMAGE_TAG" --format '{{.Id}}'
 docker compose --env-file .env.prod -f compose.prod.yml config --quiet
-docker compose --env-file .env.prod -f compose.prod.yml build app
+# 기존 배포가 있다면 출력된 이전 이미지 태그를 기록한다
+CURRENT_CONTAINER=$(docker compose --env-file .env.prod -f compose.prod.yml ps -q app)
+if [ -n "$CURRENT_CONTAINER" ]; then
+    docker inspect "$CURRENT_CONTAINER" --format '{{.Config.Image}}'
+fi
 docker compose --env-file .env.prod -f compose.prod.yml up -d --no-build --wait --wait-timeout 180
 docker compose --env-file .env.prod -f compose.prod.yml ps
 curl --fail http://127.0.0.1:8080/actuator/health
 ```
+
+빌드 머신의 이미지 ID와 EC2에 로드된 이미지 ID가 같아야 한다. Compose에는 `build`가 없고 `pull_policy: never`이므로 로드한 이미지가 없으면 실패한다. 새 SSH 세션에서는 배포한 SHA로 `IMAGE_TAG`를 다시 export해야 한다.
 
 Docker 빌드에서 기존 테스트와 bootJar를 실행한다. 테스트는 H2 기반이므로 운영 전 별도의 빈 PostgreSQL에서 Flyway V1~V4 및 앱 시작을 검증해야 한다. 앱 시작 시 Flyway가 적용되며 기존 DB의 V4 이메일 정규화 충돌은 배포를 중단시킬 수 있다. 적용된 마이그레이션은 수정하지 않는다.
 
@@ -44,17 +93,32 @@ Docker 빌드에서 기존 테스트와 bootJar를 실행한다. 테스트는 H2
 
 ## Nginx / HTTPS 연결
 
-앱은 EC2의 `127.0.0.1:8080`에만 노출된다. Nginx는 컨테이너가 아닌 EC2 호스트에서 실행한다. 인증서를 설정한 HTTPS server 블록에 다음 location을 넣는다.
+앱은 EC2의 `127.0.0.1:8080`에만 노출된다. Nginx는 EC2 호스트에서 실행한다. 다음은 인증서를 발급받은 후 적용할 최소 server 설정이다. `api.example.com`과 인증서 경로를 실제 값으로 바꾼다. 인증서가 없는 상태에서 이 설정을 먼저 활성화하면 Nginx 검증이 실패한다. 최초 발급은 DNS 인증이나 80번 포트 임시 설정을 사용하고 자동 갱신을 설정한다.
 
 ```nginx
-location / {
-    proxy_pass http://127.0.0.1:8080;
-    proxy_set_header Host $host;
-    proxy_set_header X-Forwarded-Host $host;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header X-Forwarded-Port $server_port;
-    proxy_set_header X-Forwarded-For $remote_addr;
-    proxy_set_header Forwarded "";
+server {
+    listen 80;
+    server_name api.example.com;
+    return 301 https://api.example.com$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name api.example.com;
+    ssl_certificate /etc/letsencrypt/live/api.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/api.example.com/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Port $server_port;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Prefix "";
+        proxy_set_header Forwarded "";
+    }
 }
 ```
 
@@ -73,6 +137,19 @@ docker compose --env-file .env.prod -f compose.prod.yml logs --tail 100 app
 
 로그에는 비밀번호·토큰·환경변수 전체를 출력하지 않는다. 로그 파일은 10 MB × 3개로 회전한다. JVM의 업무 날짜 기준은 Asia/Seoul로 고정하며 인증 세션은 기존 코드대로 UTC를 사용한다. 전체 DB 시간을 일괄 변환하지 않는다.
 
-단일 앱 재생성 시 짧은 중단이 있다. 배포 전 이전 이미지 태그를 기록하고 이미지를 보관한다. 실패하면 `.env.prod`의 `IMAGE_TAG`를 이전 값으로 바꾼 뒤 위 `up --no-build` 명령으로 되돌린다. 이때 이미지를 다시 빌드하지 않는다. DB 마이그레이션은 이미지 롤백으로 되돌아가지 않으므로 이전 앱과의 호환성 및 RDS 백업 복원 절차를 별도로 확인한다.
+단일 앱 재생성 시 짧은 중단이 있다. 배포 전 이전 이미지 태그를 기록하고 이미지를 보관한다. 실패하면 다음과 같이 이전 커밋의 Compose와 보관한 이미지를 함께 사용한다. 이전 릴리스가 이 배포 방식을 지원하는지 먼저 확인한다.
+
+```bash
+set -euo pipefail
+ROLLBACK_SHA='<이전에-배포한-전체-커밋-SHA>'
+test -z "$(git status --porcelain)"
+git checkout --detach "$ROLLBACK_SHA"
+export IMAGE_TAG="$(git rev-parse HEAD)"
+# 이미지가 없다면 보관한 아카이브를 docker load -i로 먼저 복원
+docker image inspect "vium-be:$IMAGE_TAG" >/dev/null
+docker compose --env-file .env.prod -f compose.prod.yml up -d --no-build --wait --wait-timeout 180
+```
+
+이때 이미지를 다시 빌드하지 않는다. DB 마이그레이션은 이미지 롤백으로 되돌아가지 않으므로 이전 앱과의 호환성 및 RDS 백업 복원 절차를 별도로 확인한다.
 
 참고: [Spring Security CORS](https://docs.spring.io/spring-security/reference/servlet/integrations/cors.html), [Compose 환경변수](https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/).
