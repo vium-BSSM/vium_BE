@@ -1,10 +1,14 @@
 package com.vium.shopping.service;
 
+import com.vium.global.exception.BusinessException;
+import com.vium.global.exception.ErrorCode;
+import com.vium.shopping.dto.request.ShoppingListItemCreateRequest;
 import com.vium.shopping.dto.response.ShoppingListItemResponse;
 import com.vium.shopping.dto.response.ShoppingListResponse;
 import com.vium.shopping.entity.ShoppingListItem;
 import com.vium.shopping.repository.ShoppingListItemQueryRepository;
 import com.vium.shopping.repository.ShoppingListItemRepository;
+import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -81,10 +85,89 @@ public class ShoppingListService {
 		return new ShoppingListResponse(responses);
 	}
 
+	/**
+	 * 장보기 리스트에 항목 추가
+	 *
+	 * API: POST /api/me/shopping-list-items
+	 *
+	 * 역할:
+	 * 1. 요청 검증 (ingredientCatalogId 또는 customName 필수)
+	 * 2. 중복 확인 (같은 재료가 이미 있는가?)
+	 * 3. Entity 생성 및 저장
+	 * 4. DTO로 변환해서 응답
+	 *
+	 * 흐름 다이어그램:
+	 * Controller(userId, request)
+	 *   ↓
+	 * addItem(userId, request)
+	 *   ↓
+	 * 1. request.validate() → 요청 검증 및 정규화
+	 *   ↓
+	 * 2. queryRepository.countByUserIdAndIngredientCatalogId() → 중복 확인
+	 *   ↓ (중복이면 예외 발생)
+	 * 3. ShoppingListItem.builder() → Entity 생성
+	 *   ↓
+	 * 4. repository.save() → DB에 저장
+	 *   ↓
+	 * 5. ShoppingListItemResponse.from() → DTO 변환
+	 *   ↓
+	 * Controller → JSON 응답
+	 *
+	 * @param userId 현재 사용자 ID
+	 * @param request 항목 추가 요청
+	 * @return 추가된 항목의 응답
+	 * @throws BusinessException 검증 실패 또는 중복 시
+	 *
+	 * @Transactional
+	 * - 저장 작업이므로 트랜잭션 필수
+	 * - 검증과 저장이 함께 성공하거나 모두 실패
+	 */
+	@Transactional
+	public ShoppingListItemResponse addItem(Long userId, ShoppingListItemCreateRequest request) {
+		// Step 1: 요청 검증 및 정규화
+		// - ingredientCatalogId 또는 customName 중 하나는 필수
+		// - customName의 공백 제거
+		ShoppingListItemCreateRequest validatedRequest = request.validate();
+
+		// Step 2: 중복 확인
+		// 같은 ingredient_catalog_id로 이미 항목이 있으면 추가하지 않음
+		// 예: 우유(id=5)가 이미 리스트에 있는데 또 추가하려는 경우
+		if (validatedRequest.ingredientCatalogId() != null) {
+			long existingCount = shoppingListItemQueryRepository
+				.countByUserIdAndIngredientCatalogId(userId, validatedRequest.ingredientCatalogId());
+
+			if (existingCount > 0) {
+				throw new BusinessException(
+					ErrorCode.CONFLICT,
+					"이미 장보기 리스트에 있는 항목입니다"
+				);
+			}
+		}
+
+		// Step 3: Entity 생성
+		// Builder 패턴으로 필드별로 값 설정
+		ShoppingListItem item = ShoppingListItem.builder()
+			.userId(userId)
+			.ingredientCatalogId(validatedRequest.ingredientCatalogId())
+			.customName(validatedRequest.customName())
+			.suggestedQuantity(validatedRequest.suggestedQuantity())
+			.unitId(validatedRequest.unitId())
+			.reason(validatedRequest.reason())
+			.isChecked(false)  // 새로 추가되는 항목은 항상 미완료 상태
+			.createdAt(LocalDateTime.now())  // 현재 시간으로 생성
+			.build();
+
+		// Step 4: DB에 저장
+		// Repository가 INSERT 쿼리 실행
+		ShoppingListItem saved = shoppingListItemRepository.save(item);
+
+		// Step 5: Entity를 DTO로 변환해서 응답
+		return ShoppingListItemResponse.from(saved);
+	}
+
 	// ============================================
-	// 추후 구현 예정 메서드들 (지금은 취소)
+	// 추후 구현 예정 메서드들
 	// ============================================
-	// - addItem()
 	// - updateCheckStatus()
 	// - deleteItem()
 	// - PurchaseSuggestionService와의 통합
