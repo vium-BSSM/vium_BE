@@ -36,7 +36,7 @@
       "post": {
         "summary": "로그인",
         "deprecated": false,
-        "description": "",
+        "description": "이메일은 앞뒤 공백 제거 후 소문자로 정규화하여 비교한다. 비밀번호는 변환하지 않으며 UTF-8 기준 최대 72바이트다. 기존 계정 호환을 위해 로그인에는 신규 가입 최소 길이 제한을 적용하지 않는다.",
         "tags": [
           "user"
         ],
@@ -234,7 +234,7 @@
       "post": {
         "summary": "회원가입",
         "deprecated": false,
-        "description": "이메일/비밀번호로 신규 계정을 생성한다. users, user_auth_accounts 테이블과 관련.",
+        "description": "이메일/비밀번호로 신규 계정을 생성한다. 비밀번호는 BCrypt로 users.password_hash에 저장하며 가입 시 토큰은 발급하지 않는다. 이메일은 정규화 후 DB 유니크 제약으로 중복을 방지하며 탈퇴 계정 이메일도 재사용할 수 없다.",
         "tags": [
           "user"
         ],
@@ -252,14 +252,23 @@
                 "properties": {
                   "email": {
                     "type": "string",
+                    "format": "email",
+                    "maxLength": 255,
+                    "description": "앞뒤 공백 제거 후 Locale.ROOT 기준 소문자로 정규화한다. 대소문자 차이만 있는 이메일은 동일 계정으로 취급한다.",
                     "example": "user@example.com"
                   },
                   "password": {
                     "type": "string",
+                    "writeOnly": true,
+                    "minLength": 8,
+                    "maxLength": 72,
+                    "description": "최소 8자(유니코드 코드 포인트 기준), UTF-8 기준 최대 72바이트. 문자 종류 조합은 강제하지 않으며 공백만으로 구성할 수 없다. 공백 제거·대소문자 변환·SHA-256 전처리는 하지 않는다.",
                     "example": "P@ssw0rd123"
                   },
                   "displayName": {
                     "type": "string",
+                    "maxLength": 80,
+                    "description": "앞뒤 공백을 제거한 후 1~80자. 공백만으로 구성할 수 없다.",
                     "example": "홍길동"
                   }
                 }
@@ -314,7 +323,7 @@
             "headers": {}
           },
           "409": {
-            "description": "이메일 중복",
+            "description": "이메일 중복 (탈퇴 계정 포함)",
             "content": {
               "application/json": {
                 "schema": {
@@ -323,6 +332,16 @@
               }
             },
             "headers": {}
+          },
+          "400": {
+            "description": "필수값 누락, 이메일 형식 오류 또는 입력 길이 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         },
         "security": []
