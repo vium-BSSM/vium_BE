@@ -1,5 +1,9 @@
 자취생·1인 가구의 식재료 낭비를 줄이기 위한 서비스 PickDo(비움)의 백엔드 API.
 
+## 운영 배포
+
+Java 21 / Spring Boot 4.1.1 기반이며 EC2 + RDS 운영 배포 절차는 [배포 안내](docs/deployment.md)를 참고한다.
+
 ## 커밋 컨벤션
 
 ```
