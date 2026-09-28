@@ -1,10 +1,10 @@
 # EC2 운영 배포
 
-로컬에서 개발하고, 검증된 main 커밋을 운영 EC2에 배포한다. 이번 구성은 EC2 호스트의 Nginx → 앱 컨테이너 → RDS PostgreSQL을 전제로 한다. S3, CI/CD, AWS 리소스 생성은 별도 단계다.
+로컬에서 개발하고, 검증된 main 커밋을 운영 EC2에 배포한다. 이번 구성은 EC2 호스트의 Nginx → 앱 컨테이너 → RDS PostgreSQL을 전제로 한다. CI는 GitHub Actions로 실행한다([CI 안내](ci.md)). CD, S3, AWS 리소스 생성은 별도 단계다.
 
 ## 사전 준비
 
-- EC2: Docker Engine과 Compose v2 설치. 이미지는 로컬 또는 별도 빌드 머신에서 만들고 EC2에서는 실행만 한다. 앱 컨테이너 제한은 1 GiB이며 부하를 보며 조정한다.
+- EC2: Docker Engine과 Compose v2 설치. 이미지는 로컬 또는 별도 빌드 머신에서 만들고 EC2에서는 실행만 한다. 이 문서의 실행 명령은 t3.micro 기준으로 RAM 512 MiB, RAM과 스왑 합계 768 MiB 제한을 적용하며 부하를 보며 조정한다.
 - RDS: PostgreSQL 16, 데이터베이스 `vium` 생성, public access 비활성화. 같은 VPC의 EC2 보안 그룹에서만 5432 접근 허용. 자동 백업 활성화.
 - EC2: 공개 포트는 HTTPS 443, 인증서 발급·리다이렉트용 80. SSH가 필요하면 관리자 IP만 22 허용. 8080과 5432는 공개하지 않는다.
 - 도메인: 운영 API 주소를 EC2에 연결하고 호스트 Nginx에 유효한 TLS 인증서를 설치한다.
@@ -96,14 +96,14 @@ test -z "$(git status --porcelain)"
 export IMAGE_TAG="$(git rev-parse HEAD)"
 docker load -i "$HOME/vium-releases/vium-be-$IMAGE_TAG.tar"
 docker image inspect "vium-be:$IMAGE_TAG" --format '{{.Id}}'
-docker compose --env-file .env.prod -f compose.prod.yml config --quiet
+docker compose --env-file .env.prod -f compose.prod.yml -f compose.micro.yml config --quiet
 # 기존 배포가 있다면 출력된 이전 이미지 태그를 기록한다
-CURRENT_CONTAINER=$(docker compose --env-file .env.prod -f compose.prod.yml ps -q app)
+CURRENT_CONTAINER=$(docker compose --env-file .env.prod -f compose.prod.yml -f compose.micro.yml ps -q app)
 if [ -n "$CURRENT_CONTAINER" ]; then
     docker inspect "$CURRENT_CONTAINER" --format '{{.Config.Image}}'
 fi
-docker compose --env-file .env.prod -f compose.prod.yml up -d --no-build --wait --wait-timeout 180
-docker compose --env-file .env.prod -f compose.prod.yml ps
+docker compose --env-file .env.prod -f compose.prod.yml -f compose.micro.yml up -d --no-build --wait --wait-timeout 180
+docker compose --env-file .env.prod -f compose.prod.yml -f compose.micro.yml ps
 curl --fail http://127.0.0.1:8080/actuator/health
 )
 ```
@@ -155,12 +155,12 @@ server {
 4. 컨테이너 재시작 후에도 기존 계정과 데이터가 유지되는지 확인.
 
 ```sh
-IMAGE_TAG='<현재-배포한-전체-커밋-SHA>' docker compose --env-file .env.prod -f compose.prod.yml logs --tail 100 app
+IMAGE_TAG='<현재-배포한-전체-커밋-SHA>' docker compose --env-file .env.prod -f compose.prod.yml -f compose.micro.yml logs --tail 100 app
 ```
 
 로그에는 비밀번호·토큰·환경변수 전체를 출력하지 않는다. 로그 파일은 10 MB × 3개로 회전한다. JVM의 업무 날짜 기준은 Asia/Seoul로 고정하며 인증 세션은 기존 코드대로 UTC를 사용한다. 전체 DB 시간을 일괄 변환하지 않는다.
 
-단일 앱 재생성 시 짧은 중단이 있다. 배포 전 이전 이미지 태그를 기록하고 이미지를 보관한다. 실패하면 다음과 같이 이전 커밋의 Compose와 보관한 이미지를 함께 사용한다. 이전 릴리스가 이 배포 방식을 지원하는지 먼저 확인한다.
+단일 앱 재생성 시 짧은 중단이 있다. 배포 전 이전 이미지 태그를 기록하고 이미지를 보관한다. 실패하면 다음과 같이 이전 커밋의 Compose와 보관한 이미지를 함께 사용한다. 이전 릴리스가 이 배포 방식을 지원하는지 먼저 확인한다. `compose.micro.yml`이 없는 초기 릴리스는 아래 블록으로 롤백할 수 없다. 해당 릴리스 배포 시 보관한 두 Compose 파일과 이미지를 함께 사용하며, micro 설정을 생략하지 않는다.
 
 ```bash
 (
@@ -170,11 +170,12 @@ ROLLBACK_SHA='<이전에-배포한-전체-커밋-SHA>'
 test -z "$(git status --porcelain)"
 git checkout --detach "$ROLLBACK_SHA"
 export IMAGE_TAG="$(git rev-parse HEAD)"
+test -f compose.micro.yml
 if ! docker image inspect "vium-be:$IMAGE_TAG" >/dev/null 2>&1; then
     docker load -i "$HOME/vium-releases/vium-be-$IMAGE_TAG.tar"
 fi
 docker image inspect "vium-be:$IMAGE_TAG" >/dev/null
-docker compose --env-file .env.prod -f compose.prod.yml up -d --no-build --wait --wait-timeout 180
+docker compose --env-file .env.prod -f compose.prod.yml -f compose.micro.yml up -d --no-build --wait --wait-timeout 180
 curl --fail http://127.0.0.1:8080/actuator/health
 )
 ```

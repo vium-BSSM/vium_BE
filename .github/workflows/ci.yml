@@ -11,8 +11,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   docker-build:
@@ -26,8 +26,8 @@ jobs:
           persist-credentials: false
 
       # Dockerfile runs Gradle test and bootJar with Java 21.
-      # Disable layer reuse so tests execute on every run.
+      # Fresh hosted runners do not restore Docker build caches.
       - name: Test and build production image
         run: >-
-          docker build --no-cache --platform linux/amd64
+          docker build --platform linux/amd64
           --progress plain --tag "vium-be:ci-${GITHUB_SHA}" .
