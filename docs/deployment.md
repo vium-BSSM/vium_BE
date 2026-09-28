@@ -186,11 +186,33 @@ if ! docker image inspect "vium-be:$IMAGE_TAG" >/dev/null 2>&1; then
     docker load -i "$IMAGE_ARCHIVE"
 fi
 docker image inspect "vium-be:$IMAGE_TAG" >/dev/null
+printf '롤백 IMAGE_TAG=%s\n롤백 MICRO_OVERRIDE=%s\n' "$IMAGE_TAG" "$MICRO_OVERRIDE"
 docker compose --env-file .env.prod -f compose.prod.yml -f "$MICRO_OVERRIDE" config --quiet
 docker compose --env-file .env.prod -f compose.prod.yml -f "$MICRO_OVERRIDE" up -d --no-build --wait --wait-timeout 180
 curl --fail http://127.0.0.1:8080/actuator/health
 )
 ```
+
+롤백 블록이 출력한 `IMAGE_TAG`와 `MICRO_OVERRIDE` 경로를 기록한다. 두 변수는
+서브셸 종료 후 유지되지 않는다. 초기 릴리스로 롤백한 뒤에는 위의 일반 로그
+명령 대신 아래처럼 출력된 복사본의 절대경로를 지정한다. 같은 checkout의
+저장소 루트에서 실행하며, `ps`, `logs`, 재시작 등 후속 Compose 명령 모두에
+동일한 파일을 사용한다.
+
+```bash
+(
+set -euo pipefail
+export IMAGE_TAG='<롤백-블록에서-출력한-전체-SHA>'
+MICRO_OVERRIDE='<롤백-블록에서-출력한-micro-파일-절대경로>'
+test -f "$MICRO_OVERRIDE"
+docker compose --env-file .env.prod -f compose.prod.yml -f "$MICRO_OVERRIDE" ps
+docker compose --env-file .env.prod -f compose.prod.yml -f "$MICRO_OVERRIDE" logs --tail 100 app
+)
+```
+
+`~/vium-releases/compose.micro.rollback.*` 복사본은 롤백할 때마다 남는다.
+다음 정상 배포와 health 확인을 마친 뒤, 현재 실행 및 보관 중인 롤백 절차가
+참조하지 않는 복사본만 수동 정리한다. 사용 중인 복사본은 삭제하지 않는다.
 
 이때 이미지를 다시 빌드하지 않는다. DB 마이그레이션은 이미지 롤백으로 되돌아가지 않으므로 이전 앱과의 호환성 및 RDS 백업 복원 절차를 별도로 확인한다.
 
