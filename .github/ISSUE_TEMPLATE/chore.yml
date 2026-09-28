@@ -1,0 +1,11 @@
+name: " 리팩토링 / 기타"
+description: "리팩토링, 설정, 문서, 테스트 보강 등"
+title: "[CHORE] "
+labels: ["chore"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: 작업 내용
+    validations:
+      required: true

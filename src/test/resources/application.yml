@@ -11,3 +11,12 @@ spring:
 
   flyway:
     enabled: false
+
+security:
+  jwt:
+    # Public test-only key. Never use outside tests.
+    secret: dml1bS10ZXN0LW9ubHktc2lnbmluZy1rZXktMzItYnl0ZXM=
+    issuer: vium-test
+    access-token-seconds: 3600
+    refresh-token-seconds: 1209600
+    clock-skew-seconds: 60

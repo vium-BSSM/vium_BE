@@ -5,6 +5,13 @@ build/
 !**/src/main/**/build/
 !**/src/test/**/build/
 
+### Environment ###
+.env
+.env.*
+!.env.example
+!.env.prod.example
+deploy/certs/
+
 ### STS ###
 .apt_generated
 .classpath
