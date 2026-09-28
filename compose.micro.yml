@@ -1,0 +1,6 @@
+services:
+  app:
+    mem_limit: 512m
+    memswap_limit: 768m
+    environment:
+      JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Seoul -XX:MaxRAMPercentage=50.0"

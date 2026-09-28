@@ -69,6 +69,16 @@ scp "$RELEASE_DIR/vium-be-$IMAGE_TAG.tar" '<SSH사용자>@<EC2주소>:vium-relea
 
 `docker image prune -a`는 태그가 있어도 컨테이너에서 참조하지 않는 롤백 이미지를 삭제할 수 있다. 실행 전 보관 아카이브를 확인하며, 이번 절차에서는 자동 prune을 하지 않는다.
 
+## t3.micro 메모리 설정
+
+1 GiB EC2에서는 모든 Compose 명령에 `-f compose.prod.yml -f compose.micro.yml`을
+함께 사용한다. `compose.micro.yml`은 컨테이너 RAM을 512 MiB, RAM과 스왑의
+합계를 768 MiB, JVM 최대 힙을 RAM 제한의 50%로 설정한다. 호스트 스왑은
+별도로 설정해야 한다. 스왑은 RAM을 대체하지 않으며, 지속적인 메모리 압박이
+있으면 인스턴스 사양을 높인다. 이 설정의 기동 검증은 부하 테스트를 대신하지 않는다.
+
+CI 실행과 적용 범위는 [ci.md](ci.md)를 참고한다.
+
 ## EC2에서 이미지 로드 및 실행
 
 최초에는 위 저장소를 EC2에도 clone한다. 비공개 저장소라면 읽기 전용 deploy key 등 읽기 권한을 준비한다. Deploy key를 사용하면 HTTPS 대신 `git@github.com:vium-BSSM/vium_BE.git` SSH URL로 clone한다. 저장소 루트에서 아래 명령으로 같은 커밋의 Compose를 준비한다. 환경변수·인증서는 앞 절차대로 설정한다. 재배포 때 `.env.prod`를 예시 파일로 덮어쓰지 않는다.
