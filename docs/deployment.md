@@ -71,11 +71,13 @@ scp "$RELEASE_DIR/vium-be-$IMAGE_TAG.tar" '<SSH사용자>@<EC2주소>:vium-relea
 
 ## t3.micro 메모리 설정
 
-1 GiB EC2에서는 모든 Compose 명령에 `-f compose.prod.yml -f compose.micro.yml`을
+이 문서는 t3.micro(1 GiB RAM) 기준이며 모든 Compose 명령에 `-f compose.prod.yml -f compose.micro.yml`을
 함께 사용한다. `compose.micro.yml`은 컨테이너 RAM을 512 MiB, RAM과 스왑의
 합계를 768 MiB, JVM 최대 힙을 RAM 제한의 50%로 설정한다. 호스트 스왑은
 별도로 설정해야 한다. 스왑은 RAM을 대체하지 않으며, 지속적인 메모리 압박이
 있으면 인스턴스 사양을 높인다. 이 설정의 기동 검증은 부하 테스트를 대신하지 않는다.
+
+더 큰 인스턴스에서 기본 1 GiB 컨테이너 제한을 사용하려면 배포·로그·롤백 명령 모두에서 micro 파일의 `-f` 옵션을 뺀다. 인스턴스를 키우는 것만으로 앱 제한이 자동 변경되지는 않는다.
 
 CI 실행과 적용 범위는 [ci.md](ci.md)를 참고한다.
 
@@ -160,22 +162,32 @@ IMAGE_TAG='<현재-배포한-전체-커밋-SHA>' docker compose --env-file .env.
 
 로그에는 비밀번호·토큰·환경변수 전체를 출력하지 않는다. 로그 파일은 10 MB × 3개로 회전한다. JVM의 업무 날짜 기준은 Asia/Seoul로 고정하며 인증 세션은 기존 코드대로 UTC를 사용한다. 전체 DB 시간을 일괄 변환하지 않는다.
 
-단일 앱 재생성 시 짧은 중단이 있다. 배포 전 이전 이미지 태그를 기록하고 이미지를 보관한다. 실패하면 다음과 같이 이전 커밋의 Compose와 보관한 이미지를 함께 사용한다. 이전 릴리스가 이 배포 방식을 지원하는지 먼저 확인한다. `compose.micro.yml`이 없는 초기 릴리스는 아래 블록으로 롤백할 수 없다. 해당 릴리스 배포 시 보관한 두 Compose 파일과 이미지를 함께 사용하며, micro 설정을 생략하지 않는다.
+단일 앱 재생성 시 짧은 중단이 있다. 배포 전 이전 이미지 태그를 기록하고 이미지를 보관한다. 실패하면 다음과 같이 이전 커밋의 Compose와 보관한 이미지를 함께 사용한다. 이전 릴리스가 이 배포 방식을 지원하는지 먼저 확인한다. 초기 릴리스에는 `compose.micro.yml`이 없으므로, checkout 전에 현재 검증된 micro 파일을 작업 트리 밖에 복사한다. 대상 커밋에 micro 파일이 있으면 해당 파일을 우선 사용하고, 없으면 복사본을 사용한다. 이 대체 절차는 대상 `compose.prod.yml`도 `app` 서비스와 동일한 환경변수·인증서 경로를 사용하는 경우에 적용한다.
+
+초기 운영 커밋 `3fb558204c2d7ece23db64d8c6af1987666a6c1d`의 아카이브는 실제 EC2의 `~/vium-releases/3fb5582/vium-be.tar`에 있다. 아래 `IMAGE_ARCHIVE`에 이 경로를 지정한다. 이후 릴리스는 `~/vium-releases/vium-be-<전체-SHA>.tar` 경로를 사용한다. 이 블록은 `.env.prod`와 `deploy/certs`가 준비된 EC2 저장소 checkout에서 실행한다.
 
 ```bash
 (
 set -euo pipefail
 trap 'printf "배포 절차가 %s행에서 중단됐습니다. 위 오류를 확인하세요.\n" "$LINENO" >&2' ERR
 ROLLBACK_SHA='<이전에-배포한-전체-커밋-SHA>'
+IMAGE_ARCHIVE='<해당-릴리스의-아카이브-절대경로>'
 test -z "$(git status --porcelain)"
+test -f compose.micro.yml
+mkdir -p "$HOME/vium-releases"
+MICRO_OVERRIDE=$(mktemp "$HOME/vium-releases/compose.micro.rollback.XXXXXX")
+cp compose.micro.yml "$MICRO_OVERRIDE"
 git checkout --detach "$ROLLBACK_SHA"
 export IMAGE_TAG="$(git rev-parse HEAD)"
-test -f compose.micro.yml
+if [ -f compose.micro.yml ]; then
+    MICRO_OVERRIDE="$PWD/compose.micro.yml"
+fi
 if ! docker image inspect "vium-be:$IMAGE_TAG" >/dev/null 2>&1; then
-    docker load -i "$HOME/vium-releases/vium-be-$IMAGE_TAG.tar"
+    docker load -i "$IMAGE_ARCHIVE"
 fi
 docker image inspect "vium-be:$IMAGE_TAG" >/dev/null
-docker compose --env-file .env.prod -f compose.prod.yml -f compose.micro.yml up -d --no-build --wait --wait-timeout 180
+docker compose --env-file .env.prod -f compose.prod.yml -f "$MICRO_OVERRIDE" config --quiet
+docker compose --env-file .env.prod -f compose.prod.yml -f "$MICRO_OVERRIDE" up -d --no-build --wait --wait-timeout 180
 curl --fail http://127.0.0.1:8080/actuator/health
 )
 ```
