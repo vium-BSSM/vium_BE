@@ -1,6 +1,7 @@
 package com.vium.inventory.repository;
 
 import com.vium.inventory.dto.IngredientListResponse;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -38,18 +39,21 @@ public class InventoryQueryRepository {
 			parameters = new Object[] {userId, "active", expiresThrough};
 		}
 		sql += " order by i.expires_on asc nulls last, i.id asc";
-		return jdbcTemplate.query(sql, (rs, rowNum) -> new IngredientListResponse.Item(
-			rs.getLong("id"),
-			rs.getObject("ingredient_catalog_id", Long.class),
-			rs.getString("name"),
-			rs.getString("category_name"),
-			rs.getBigDecimal("initial_quantity"),
-			rs.getBigDecimal("remaining_quantity"),
-			rs.getObject("amount", Long.class),
-			rs.getShort("unit_id"),
-			rs.getString("unit"),
-			rs.getString("status_code"),
-			rs.getObject("purchased_on", LocalDate.class),
-			rs.getObject("expires_on", LocalDate.class)), parameters);
+		return jdbcTemplate.query(sql, (rs, rowNum) -> {
+			var amount = rs.getBigDecimal("amount");
+			return new IngredientListResponse.Item(
+				rs.getLong("id"),
+				rs.getObject("ingredient_catalog_id", Long.class),
+				rs.getString("name"),
+				rs.getString("category_name"),
+				rs.getBigDecimal("initial_quantity"),
+				rs.getBigDecimal("remaining_quantity"),
+				amount == null ? null : amount.setScale(0, RoundingMode.HALF_UP).longValueExact(),
+				rs.getShort("unit_id"),
+				rs.getString("unit"),
+				rs.getString("status_code"),
+				rs.getObject("purchased_on", LocalDate.class),
+				rs.getObject("expires_on", LocalDate.class));
+		}, parameters);
 	}
 }
