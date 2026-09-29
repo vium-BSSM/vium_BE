@@ -40,6 +40,14 @@ public class UserCredentialRepository {
 				rs.getString("display_name"), rs.getString("password_hash")), email).stream().findFirst();
 	}
 
+	public Optional<UserIdentity> findActiveIdentityById(Long userId) {
+		return jdbcTemplate.query("""
+			select id, email, display_name from users
+			where id = ? and deleted_at is null
+			""", (rs, rowNum) -> new UserIdentity(rs.getLong("id"), rs.getString("email"),
+				rs.getString("display_name")), userId).stream().findFirst();
+	}
+
 	public boolean existsActiveById(Long userId) {
 		return Boolean.TRUE.equals(jdbcTemplate.queryForObject(
 			"select exists (select 1 from users where id = ? and deleted_at is null)",
