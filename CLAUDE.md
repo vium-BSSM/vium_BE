@@ -73,6 +73,7 @@
 
 ## 5. 인증 구조와 현재 구현 범위
 
+- `GET /api/me`는 Access Token의 사용자 ID로 DB의 최신 `id`, `email`, `displayName`을 조회한다. 미존재·탈퇴 계정은 401이며, 성공 응답은 `Cache-Control: no-store`를 적용한다.
 - `POST /api/auth/login`에서 이메일·BCrypt 비밀번호를 검증하고 Access Token과 Refresh Token을 발급한다.
 - `POST /api/auth/register`는 users에 이메일 계정을 생성하고 사용자 정보를 반환한다. 비밀번호는 최소 8자(유니코드 코드 포인트), 최대 UTF-8 72바이트이며 문자 종류 조합은 강제하지 않는다. BCrypt로 저장하고 원문을 변환하지 않으며 가입 시 토큰은 발급하지 않는다. 기존 계정의 로그인에는 최소 길이 제한을 새로 적용하지 않는다.
 - 가입·로그인 이메일은 검증 전에 `strip().toLowerCase(Locale.ROOT)`로 정규화한다. V4는 기존 이메일을 정규화하고 DB 제약으로 중복을 방지한다. 정규화 후 충돌하는 기존 계정이 있으면 마이그레이션을 중단한다. 탈퇴 계정 이메일도 재사용할 수 없다. 닉네임은 앞뒤 공백 제거 후 검증·저장한다.
@@ -149,8 +150,9 @@ com.vium
 │   ├── entity           UserSession
 │   └── repository       UserSessionRepository
 ├── user
+│   ├── controller       UserController
 │   ├── dto              UserIdentity
-│   ├── service          UserSettingsService, UserLoginService
+│   ├── service          UserSettingsService, UserLoginService, UserProfileService
 │   └── repository       UserSettingsRepository, UserCredentialRepository
 └── global
     ├── common           ApiResponse
