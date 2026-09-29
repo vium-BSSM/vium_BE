@@ -31,3 +31,8 @@ jobs:
         run: >-
           docker build --platform linux/amd64
           --progress plain --tag "vium-be:ci-${GITHUB_SHA}" .
+
+      - name: Check deployment scripts
+        run: |
+          bash -n scripts/deploy/remote.sh
+          python3 -m unittest discover -s scripts/deploy -p 'test_*.py'
