@@ -739,7 +739,7 @@
                                 "type": "integer",
                                 "format": "int64",
                                 "nullable": true,
-                                "description": "등록된 재료의 취득 금액(원). 미입력 시 null이며 잔여 수량에 따라 차감하지 않습니다."
+                                "description": "등록된 재료의 취득 금액(원). 소수 금액은 HALF_UP 방식으로 원 단위 반올림하여 반환합니다(2500.49 → 2500, 2500.50 → 2501). DB 원본 금액은 변경하지 않습니다. 미입력 시 null이며 잔여 수량에 따라 차감하지 않습니다."
                               },
                               "unitId": {
                                 "type": "integer",
