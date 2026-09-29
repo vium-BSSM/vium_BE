@@ -1,6 +1,6 @@
 # EC2 운영 배포
 
-로컬에서 개발하고, 검증된 main 커밋을 운영 EC2에 배포한다. 이번 구성은 EC2 호스트의 Nginx → 앱 컨테이너 → RDS PostgreSQL을 전제로 한다. CI는 GitHub Actions로 실행한다([CI 안내](ci.md)). CD, S3, AWS 리소스 생성은 별도 단계다.
+로컬에서 개발하고, 검증된 main 커밋을 운영 EC2에 배포한다. 이번 구성은 EC2 호스트의 Nginx → 앱 컨테이너 → RDS PostgreSQL을 전제로 한다. CI는 GitHub Actions로 실행한다([CI 안내](ci.md)). 자동 배포 전환은 [CD 안내](cd.md)를 따른다. 아래는 전환 전 수동 배포 절차이며, CD 전환 후 운영 설정과 롤백은 `/opt/vium`의 릴리스 파일을 사용한다. S3와 AWS 리소스 생성은 별도 단계다.
 
 ## 사전 준비
 
