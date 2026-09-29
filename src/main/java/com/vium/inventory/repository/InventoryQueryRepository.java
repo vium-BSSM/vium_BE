@@ -38,18 +38,21 @@ public class InventoryQueryRepository {
 			parameters = new Object[] {userId, "active", expiresThrough};
 		}
 		sql += " order by i.expires_on asc nulls last, i.id asc";
-		return jdbcTemplate.query(sql, (rs, rowNum) -> new IngredientListResponse.Item(
-			rs.getLong("id"),
-			rs.getObject("ingredient_catalog_id", Long.class),
-			rs.getString("name"),
-			rs.getString("category_name"),
-			rs.getBigDecimal("initial_quantity"),
-			rs.getBigDecimal("remaining_quantity"),
-			rs.getObject("amount", Long.class),
-			rs.getShort("unit_id"),
-			rs.getString("unit"),
-			rs.getString("status_code"),
-			rs.getObject("purchased_on", LocalDate.class),
-			rs.getObject("expires_on", LocalDate.class)), parameters);
+		return jdbcTemplate.query(sql, (rs, rowNum) -> {
+			var amount = rs.getBigDecimal("amount");
+			return new IngredientListResponse.Item(
+				rs.getLong("id"),
+				rs.getObject("ingredient_catalog_id", Long.class),
+				rs.getString("name"),
+				rs.getString("category_name"),
+				rs.getBigDecimal("initial_quantity"),
+				rs.getBigDecimal("remaining_quantity"),
+				amount == null ? null : amount.longValueExact(),
+				rs.getShort("unit_id"),
+				rs.getString("unit"),
+				rs.getString("status_code"),
+				rs.getObject("purchased_on", LocalDate.class),
+				rs.getObject("expires_on", LocalDate.class));
+		}, parameters);
 	}
 }
