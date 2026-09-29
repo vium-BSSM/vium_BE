@@ -10,13 +10,24 @@ image=${2:?ECR digest reference required}
 region=${3:?AWS region required}
 [[ $revision =~ ^[0-9a-f]{40}$ ]]
 [[ $region =~ ^[a-z]{2}-[a-z]+-[0-9]+$ ]]
-[[ $image =~ ^[0-9]{12}\.dkr\.ecr\.$region\.amazonaws\.com/[a-z0-9/_-]+@sha256:[0-9a-f]{64}$ ]]
+[[ $image =~ ^[0-9]{12}\.dkr\.ecr\.$region\.amazonaws\.com/[a-z0-9]+([._/-][a-z0-9]+)*@sha256:[0-9a-f]{64}$ ]]
 bundle=$(cd "$(dirname "$0")" && pwd)
 root=/opt/vium
 legacy=/home/ubuntu/vium-releases/3fb5582
 mkdir -p "$root/releases"
 exec 9>"$root/deploy.lock"
 flock -n 9 || { echo 'Another deployment is still running.' >&2; exit 1; }
+
+# Check both filesystems: Docker may use a separate data disk.
+docker_root=$(docker info --format '{{.DockerRootDir}}')
+for directory in "$root" "$docker_root"; do
+  available_kib=$(df -Pk "$directory" | awk 'END {print $4}')
+  [[ $available_kib =~ ^[0-9]+$ ]]
+  if (( available_kib < 2 * 1024 * 1024 )); then
+    echo "Less than 2 GiB free on $directory; clean unused releases/images before deploying." >&2
+    exit 1
+  fi
+done
 
 compose() {
   local directory=$1
@@ -41,6 +52,7 @@ if [[ ! -L "$root/current" ]]; then
   test -f "$legacy/.env.prod"
   test -f "$legacy/deploy/certs/global-bundle.pem"
   test -f "$legacy/compose.micro.yml"
+  test -f "$legacy/compose.prod.yml"
   health
   old_image=$(docker inspect --format '{{.Image}}' vium-prod-app-1)
   [[ $old_image =~ ^sha256:[0-9a-f]{64}$ ]]
@@ -61,12 +73,17 @@ if [[ ! -L "$root/current" ]]; then
   printf '%s\n' '3fb558204c2d7ece23db64d8c6af1987666a6c1d' > "$baseline/revision"
   printf 'services:\n  app:\n    image: "%s"\n' "$old_image" > "$baseline/compose.image.yml"
   compose "$baseline" config --quiet
+  touch "$baseline/succeeded"
   ln -s "$baseline" "$root/current"
 fi
 
 previous=$(readlink -f "$root/current")
 test -d "$previous"
-health
+previous_healthy=true
+if ! health; then
+  previous_healthy=false
+  echo 'Previous application is unhealthy; continuing with the repair deployment.' >&2
+fi
 compose "$previous" config --quiet
 
 # Docker credentials only live in a temporary directory for this invocation.
@@ -90,6 +107,9 @@ compose "$release" config --quiet
 rollback() {
   trap - ERR
   echo 'Deployment failed; restoring previous application (database is unchanged).' >&2
+  if [[ $previous_healthy == false ]]; then
+    echo 'Previous application was already unhealthy before this deployment; rollback may not restore service.' >&2
+  fi
   if compose "$previous" up -d --no-build --wait --wait-timeout 240 && health; then
     echo 'Previous application restored.' >&2
   else
@@ -100,6 +120,7 @@ rollback() {
 trap rollback ERR
 compose "$release" up -d --no-build --wait --wait-timeout 240
 health
+touch "$release/succeeded"
 ln -sfn "$release" "$root/current.next"
 mv -Tf "$root/current.next" "$root/current"
 trap - ERR

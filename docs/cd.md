@@ -50,11 +50,15 @@ IMAGE_TAG도 각 릴리스 revision 파일을 통해 제공한다.
 프로젝트 이름 vium-prod, localhost:8080, micro의 RAM 512 MiB / RAM+swap
 768 MiB 제한을 유지한다. Nginx와 RDS 설정은 기존 것을 사용한다.
 단일 컨테이너를 교체하므로 배포 중 짧은 요청 중단이 발생할 수 있다.
+일반 배포에서 기존 앱이 비정상이면 경고만 기록하고 수정본 배포를 계속한다.
+최초 bootstrap만 기존 앱의 정상 health를 요구한다.
 
 ## 실패와 복구
 
 새 Compose의 up/health 실패 시 직전 성공 릴리스의 이미지와 두 Compose 파일,
 이미지 override로 복구한다. 복구가 성공해도 CD는 실패로 표시한다.
+배포 전부터 기존 앱이 비정상이었다면 해당 사실도 출력한다. 이전 설정 복원을
+시도하지만 정상 서비스 복구를 보장하지 않으며, 복구 실패를 별도로 표시한다.
 DB 마이그레이션은 되돌리지 않는다. 이전 앱과 호환되는 마이그레이션이
 필요하며 호환되지 않으면 자동 복구도 실패할 수 있다.
 
@@ -108,7 +112,64 @@ Git checkout 방식 대신 이 릴리스 경로를 사용한다. 서버 애플�
 보존하고 디스크/ECR 용량을 확인한다. 단순히 ECR 최신 이미지 3개만 남기면
 실패한 이미지 때문에 정상 롤백 이미지가 삭제될 수 있다.
 
+배포 시작 시 `/opt/vium`과 Docker data root 파일시스템 각각의 여유 공간을
+확인한다. 하나라도 2 GiB 미만이면 pull/컨테이너 교체 전에 중단한다. 2 GiB는
+현재 소형 이미지 기준의 최소 안전 여유이며 다운로드·압축 해제 공간을 보장하는
+계산값은 아니다. 이미지 크기가 커지면 기준을 높인다.
+
+### 디스크 확인 및 수동 정리
+
+SSM에서 아래를 실행해 현재 릴리스, 최근 성공 기록, 이미지 용량을 확인한다.
+`succeeded` 파일은 bootstrap 또는 새 배포의 health 통과 후 기록된다.
+
+```bash
+sudo readlink -f /opt/vium/current
+sudo find /opt/vium/releases -mindepth 2 -maxdepth 2 -name succeeded -printf '%T@ %h\n' | sort -nr
+sudo docker system df
+sudo docker image ls --digests --no-trunc
+df -h /opt/vium
+```
+
+현재 릴리스와 성공 기록 상위 3개(중복 이미지면 더 많은 성공 릴리스를 보존해
+서로 다른 정상 이미지 3개 확보)는 정리 대상에서 제외한다. 각 보존 디렉터리의
+`compose.image.yml`에서 이미지 참조를 확인한다. 실패·미사용 릴리스도 필요한
+조사를 마친 후에만 지운다. 아래 placeholder는 보존 목록에 없는 **정확한
+단일 경로와 이미지 참조**로 바꾼다. 와일드카드나 `docker image prune -a`는
+사용하지 않는다. 기존 초기 수동 릴리스는 첫 CD 검증이 끝날 때까지 보존한다.
+
+```bash
+sudo bash <<'CLEANUP'
+set -euo pipefail
+exec 9>/opt/vium/deploy.lock
+flock -n 9
+obsolete=/opt/vium/releases/REPLACE_WITH_VERIFIED_UNUSED_DIRECTORY
+case "$obsolete" in /opt/vium/releases/*) ;; *) exit 1 ;; esac
+test -d "$obsolete"
+test "$(readlink -f "$obsolete")" != "$(readlink -f /opt/vium/current)"
+# 위에서 최근 정상 릴리스 3개와 그 이미지가 아님을 확인한 대상만 지정한다.
+docker image rm 'REPLACE_WITH_VERIFIED_UNUSED_IMAGE_REFERENCE'
+rm -r -- "$obsolete"
+CLEANUP
+```
+
+`docker image rm`에는 `--force`를 붙이지 않는다. 실행/정지 컨테이너가 사용하는
+이미지라 삭제가 거부되면 원인을 확인한다. ECR 원격 이미지 정리는 별개이며,
+동일한 정상 릴리스 보존 목록을 기준으로 수행해야 한다.
+
 ## 최초 검증
+
+첫 실행 전에 EC2의 SSM 터미널에서 파일 **존재만** 검사한다. 비밀값을 출력하지 않는다.
+
+```bash
+sudo bash -c '
+set -eu
+cd /home/ubuntu/vium-releases/3fb5582
+for file in .env.prod deploy/certs/global-bundle.pem compose.prod.yml compose.micro.yml; do
+  test -s "$file" || { printf "Missing or empty: %s\n" "$file"; exit 1; }
+done
+printf "Bootstrap files present\n"
+'
+```
 
 1. PR의 CI와 배포 스크립트 검사를 통과시킨다.
 2. develop에서 검토 후 main으로 병합하면 CD가 시작된다.
