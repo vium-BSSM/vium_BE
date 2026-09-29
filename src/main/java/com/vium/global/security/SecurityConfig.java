@@ -1,6 +1,5 @@
 package com.vium.global.security;
 
-<<<<<<< HEAD
 import com.vium.global.common.ApiResponse;
 import com.vium.global.exception.ErrorCode;
 import jakarta.servlet.DispatcherType;
