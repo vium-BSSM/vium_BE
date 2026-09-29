@@ -36,7 +36,7 @@
       "post": {
         "summary": "로그인",
         "deprecated": false,
-        "description": "",
+        "description": "이메일은 앞뒤 공백 제거 후 소문자로 정규화하여 비교한다. 비밀번호는 변환하지 않으며 UTF-8 기준 최대 72바이트다. 기존 계정 호환을 위해 로그인에는 신규 가입 최소 길이 제한을 적용하지 않는다. 이 POST 경로에서는 Authorization 헤더가 있어도 Bearer 검증을 생략하고 요청 본문을 검증한다.",
         "tags": [
           "user"
         ],
@@ -152,22 +152,11 @@
       "post": {
         "summary": "로그아웃",
         "deprecated": false,
-        "description": "",
+        "description": "유효한 Access Token으로 인증한 사용자의 Refresh Token 세션 하나를 폐기한다. 토큰 해시로 세션 행을 잠그고 소유권을 확인한다. 미존재 토큰과 이미 폐기된 본인 토큰은 200으로 처리하며, 만료된 본인 Refresh Token도 폐기할 수 있다. 다른 사용자 세션은 403으로 거부한다. 기존 Access Token은 만료까지 유효하며 다른 세션에는 영향이 없다. 클라이언트는 로그아웃 후 로컬 토큰을 삭제하고 재발급과 로그아웃을 직렬화해야 한다. 재발급이 먼저 완료됐다면 이전 토큰으로 로그아웃해도 새 세션은 폐기되지 않으므로 최신 Refresh Token을 제출해야 한다.",
         "tags": [
           "user"
         ],
-        "parameters": [
-          {
-            "name": "Authorization: Bearer {{token}}",
-            "in": "header",
-            "description": "",
-            "required": false,
-            "example": "",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "requestBody": {
           "content": {
             "application/json": {
@@ -175,7 +164,10 @@
                 "type": "object",
                 "properties": {
                   "refreshToken": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512,
+                    "description": "로그인 또는 직전 재발급에서 받은 불투명 Refresh Token 원문. 공백만인 값은 허용하지 않는다."
                   }
                 },
                 "required": [
@@ -183,7 +175,7 @@
                 ]
               },
               "example": {
-                "refreshToken": "eyJhbGciOiJIUzI1NiJ9.refresh"
+                "refreshToken": "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG"
               }
             }
           },
@@ -191,7 +183,7 @@
         },
         "responses": {
           "200": {
-            "description": "",
+            "description": "로그아웃 성공. 세션이 없거나 이미 폐기된 본인 세션인 경우에도 성공으로 처리한다.",
             "content": {
               "application/json": {
                 "schema": {
@@ -221,6 +213,36 @@
               }
             },
             "headers": {}
+          },
+          "400": {
+            "description": "본문 누락·형식 오류 또는 Refresh Token 누락·공백·길이 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access Token 누락·만료·무효",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "다른 사용자 소유의 Refresh Token 세션",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -234,7 +256,7 @@
       "post": {
         "summary": "회원가입",
         "deprecated": false,
-        "description": "이메일/비밀번호로 신규 계정을 생성한다. users, user_auth_accounts 테이블과 관련.",
+        "description": "이메일/비밀번호로 신규 계정을 생성한다. 비밀번호는 BCrypt로 users.password_hash에 저장하며 가입 시 토큰은 발급하지 않는다. 이메일은 정규화 후 DB 유니크 제약으로 중복을 방지하며 탈퇴 계정 이메일도 재사용할 수 없다. 이 POST 경로에서는 Authorization 헤더가 있어도 Bearer 검증을 생략하고 요청 본문을 검증한다.",
         "tags": [
           "user"
         ],
@@ -252,14 +274,23 @@
                 "properties": {
                   "email": {
                     "type": "string",
+                    "format": "email",
+                    "maxLength": 255,
+                    "description": "앞뒤 공백 제거 후 Locale.ROOT 기준 소문자로 정규화한다. 대소문자 차이만 있는 이메일은 동일 계정으로 취급한다.",
                     "example": "user@example.com"
                   },
                   "password": {
                     "type": "string",
+                    "writeOnly": true,
+                    "minLength": 8,
+                    "maxLength": 72,
+                    "description": "최소 8자(유니코드 코드 포인트 기준), UTF-8 기준 최대 72바이트. 문자 종류 조합은 강제하지 않으며 공백만으로 구성할 수 없다. 공백 제거·대소문자 변환·SHA-256 전처리는 하지 않는다.",
                     "example": "P@ssw0rd123"
                   },
                   "displayName": {
                     "type": "string",
+                    "maxLength": 80,
+                    "description": "앞뒤 공백을 제거한 후 1~80자. 공백만으로 구성할 수 없다.",
                     "example": "홍길동"
                   }
                 }
@@ -314,7 +345,7 @@
             "headers": {}
           },
           "409": {
-            "description": "이메일 중복",
+            "description": "이메일 중복 (탈퇴 계정 포함)",
             "content": {
               "application/json": {
                 "schema": {
@@ -323,6 +354,16 @@
               }
             },
             "headers": {}
+          },
+          "400": {
+            "description": "필수값 누락, 이메일 형식 오류 또는 입력 길이 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         },
         "security": []
@@ -332,7 +373,7 @@
       "post": {
         "summary": "리프레시 토큰 재발급",
         "deprecated": false,
-        "description": "refreshToken으로 accessToken을 재발급한다. user_sessions 테이블과 관련.",
+        "description": "Refresh Token 원문을 본문으로 받아 새 Access Token과 Refresh Token을 발급한다. Authorization 헤더는 필요하지 않으며, 헤더가 있더라도 이 POST 경로에서는 Bearer 검증을 생략하고 본문의 Refresh Token으로 인증한다. 기존 Refresh Token은 즉시 폐기되며 동시 요청 중 하나만 성공한다. 클라이언트는 재발급 요청을 직렬화하고 새 토큰 쌍을 함께 교체해야 한다. 새 세션 저장 실패 시 기존 토큰 폐기도 롤백된다. 새 Refresh Token 만료는 재발급 시점부터 설정된 유효기간(기본 14일)이다. 기존 Access Token은 만료까지 유지된다. 재사용 시 해당 요청만 거부하며 토큰 계보 전체 폐기는 지원하지 않는다. 토큰 교체가 커밋된 후 응답이 유실되면 기존 Refresh Token을 재사용할 수 없으므로 다시 로그인해야 한다.",
         "tags": [
           "user"
         ],
@@ -348,7 +389,10 @@
                 "properties": {
                   "refreshToken": {
                     "type": "string",
-                    "example": "eyJhbGciOiJIUzI1NiJ9.refresh"
+                    "example": "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG",
+                    "maxLength": 512,
+                    "minLength": 1,
+                    "description": "로그인 또는 직전 재발급에서 받은 불투명 토큰 원문. 공백만인 값은 허용하지 않으며 JWT가 아니다."
                   }
                 }
               }
@@ -363,13 +407,53 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "properties": {}
+                  "required": [
+                    "success",
+                    "data",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "accessToken",
+                        "refreshToken",
+                        "expiresIn"
+                      ],
+                      "properties": {
+                        "accessToken": {
+                          "type": "string",
+                          "description": "새 Access Token(JWT)"
+                        },
+                        "refreshToken": {
+                          "type": "string",
+                          "description": "새 불투명 Refresh Token"
+                        },
+                        "expiresIn": {
+                          "type": "integer",
+                          "format": "int64",
+                          "description": "새 Access Token의 발급 시점 기준 유효기간(초)",
+                          "example": 3600
+                        }
+                      }
+                    },
+                    "error": {
+                      "type": "object",
+                      "nullable": true
+                    }
+                  }
                 },
                 "example": {
                   "success": true,
                   "data": {
                     "accessToken": "eyJhbGciOiJIUzI1NiJ9.access",
-                    "refreshToken": "eyJhbGciOiJIUzI1NiJ9.refresh2",
+                    "refreshToken": "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefg",
                     "expiresIn": 3600
                   },
                   "error": null
@@ -378,8 +462,18 @@
             },
             "headers": {}
           },
+          "400": {
+            "description": "요청 본문 또는 필수 Refresh Token 누락·공백·길이 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "401": {
-            "description": "리프레시 토큰 만료/무효",
+            "description": "Refresh Token 미존재·만료·폐기·재사용 또는 탈퇴 사용자",
             "content": {
               "application/json": {
                 "schema": {
@@ -507,7 +601,20 @@
                           "type": "number"
                         },
                         "unitId": {
-                          "type": "integer"
+                          "type": "integer",
+                          "description": "고정 단위 ID: 1=개, 2=g, 3=kg, 4=ml, 5=L, 6=팩, 7=봉, 8=병, 9=캔, 10=통. 포장 단위는 무게·부피로 자동 환산하지 않습니다.",
+                          "enum": [
+                            1,
+                            2,
+                            3,
+                            4,
+                            5,
+                            6,
+                            7,
+                            8,
+                            9,
+                            10
+                          ]
                         },
                         "storageMethodId": {
                           "type": "integer"
@@ -553,7 +660,7 @@
                     "customName": "우유",
                     "initialQuantity": 1000,
                     "remainingQuantity": 1000,
-                    "unitId": 1,
+                    "unitId": 4,
                     "storageMethodId": 1,
                     "statusCode": "active",
                     "purchasedOn": "2026-08-20",
@@ -628,8 +735,27 @@
                               "remainingQuantity": {
                                 "type": "number"
                               },
+                              "amount": {
+                                "type": "integer",
+                                "format": "int64",
+                                "nullable": true,
+                                "description": "등록된 재료의 취득 금액(원). 소수 금액은 HALF_UP 방식으로 원 단위 반올림하여 반환합니다(2500.49 → 2500, 2500.50 → 2501). DB 원본 금액은 변경하지 않습니다. 미입력 시 null이며 잔여 수량에 따라 차감하지 않습니다."
+                              },
                               "unitId": {
-                                "type": "integer"
+                                "type": "integer",
+                                "description": "고정 단위 ID: 1=개, 2=g, 3=kg, 4=ml, 5=L, 6=팩, 7=봉, 8=병, 9=캔, 10=통. 포장 단위는 무게·부피로 자동 환산하지 않습니다.",
+                                "enum": [
+                                  1,
+                                  2,
+                                  3,
+                                  4,
+                                  5,
+                                  6,
+                                  7,
+                                  8,
+                                  9,
+                                  10
+                                ]
                               },
                               "unit": {
                                 "type": "string"
@@ -672,6 +798,7 @@
                         "categoryName": "dairy",
                         "initialQuantity": 1,
                         "remainingQuantity": 1,
+                        "amount": 2500,
                         "unitId": 1,
                         "unit": "개",
                         "statusCode": "active",
@@ -776,7 +903,20 @@
                                 "type": "number"
                               },
                               "unitId": {
-                                "type": "integer"
+                                "type": "integer",
+                                "description": "고정 단위 ID: 1=개, 2=g, 3=kg, 4=ml, 5=L, 6=팩, 7=봉, 8=병, 9=캔, 10=통. 포장 단위는 무게·부피로 자동 환산하지 않습니다.",
+                                "enum": [
+                                  1,
+                                  2,
+                                  3,
+                                  4,
+                                  5,
+                                  6,
+                                  7,
+                                  8,
+                                  9,
+                                  10
+                                ]
                               },
                               "unit": {
                                 "type": "string"
@@ -819,7 +959,7 @@
                         "categoryName": "dairy",
                         "initialQuantity": 10,
                         "remainingQuantity": 10,
-                        "unitId": 2,
+                        "unitId": 1,
                         "unit": "개",
                         "expiresOn": "2026-09-10"
                       }
@@ -884,7 +1024,20 @@
                     "type": "number"
                   },
                   "unitId": {
-                    "type": "integer"
+                    "type": "integer",
+                    "description": "고정 단위 ID: 1=개, 2=g, 3=kg, 4=ml, 5=L, 6=팩, 7=봉, 8=병, 9=캔, 10=통. 포장 단위는 무게·부피로 자동 환산하지 않습니다.",
+                    "enum": [
+                      1,
+                      2,
+                      3,
+                      4,
+                      5,
+                      6,
+                      7,
+                      8,
+                      9,
+                      10
+                    ]
                   },
                   "storageMethodId": {
                     "type": "integer"
@@ -908,7 +1061,7 @@
               "example": {
                 "customName": "우유",
                 "quantity": 500,
-                "unitId": 1,
+                "unitId": 4,
                 "storageMethodId": 1,
                 "purchasedOn": "2026-08-20",
                 "expiresOn": "2026-08-27"
@@ -942,7 +1095,20 @@
                           "type": "number"
                         },
                         "unitId": {
-                          "type": "integer"
+                          "type": "integer",
+                          "description": "고정 단위 ID: 1=개, 2=g, 3=kg, 4=ml, 5=L, 6=팩, 7=봉, 8=병, 9=캔, 10=통. 포장 단위는 무게·부피로 자동 환산하지 않습니다.",
+                          "enum": [
+                            1,
+                            2,
+                            3,
+                            4,
+                            5,
+                            6,
+                            7,
+                            8,
+                            9,
+                            10
+                          ]
                         },
                         "storageMethodId": {
                           "type": "integer"
@@ -984,7 +1150,7 @@
                     "inventoryItemId": 1,
                     "customName": "우유",
                     "quantity": 500,
-                    "unitId": 1,
+                    "unitId": 4,
                     "storageMethodId": 1,
                     "purchasedOn": "2026-08-20",
                     "expiresOn": "2026-08-27",
@@ -1161,7 +1327,7 @@
                         "name": "우유",
                         "categoryId": 3,
                         "categoryName": "dairy",
-                        "defaultUnitId": 1,
+                        "defaultUnitId": 4,
                         "defaultUnitName": "ml"
                       }
                     ]
@@ -2065,11 +2231,49 @@
         "security": []
       }
     },
+    "/api/me/purchase-suggestions": {
+      "get": {
+        "summary": "다음 구매량 제안",
+        "deprecated": false,
+        "description": "[MVP] 낭비 이력을 바탕으로 '이번엔 절반만 사세요' 등 다음 장보기 구매량을 제안한다. 품목별 최근 낭비 비율(폐기량/구매량)을 분석하여 추천 구매 수량 또는 구매 조정 메시지를 반환한다.",
+        "tags": [
+          "logic"
+        ],
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {}
+              },
+              "examples": {}
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {}
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
     "/api/me/shopping-helper": {
       "get": {
         "summary": "장보기 도우미 뷰",
         "deprecated": false,
-        "description": "최신 리포트의 품목별 낭비 비율을 바탕으로 구매량 제안을 포함한 장보기 리스트를 제공한다",
+        "description": "[MVP] 장보기 전 '이미 있는 것 / 사야 할 것'을 정리해 보여줘 과잉구매를 막는다. 반성 도구가 아닌 실용 도구로 만드는 핵심 차별점. 현재 보유 재료 목록과 다음 구매량 제안 결과를 결합해 장보기 리스트 형태로 제공한다.",
         "tags": [
           "logic",
           "user"
@@ -2082,78 +2286,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "properties": {
-                    "available": {
-                      "type": "boolean",
-                      "description": "최신 리포트 존재 여부에 따른 사용 가능 여부"
-                    },
-                    "reason": {
-                      "type": "string",
-                      "description": "available=false일 때 사유",
-                      "nullable": true
-                    },
-                    "basedOnReportMonth": {
-                      "type": "string",
-                      "description": "이 제안이 기준으로 삼은 리포트 월 (YYYY-MM)",
-                      "example": "2026-08"
-                    },
-                    "alreadyHave": {
-                      "type": "array",
-                      "description": "이미 보유 중이라 구매 불필요한 품목",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "ingredientName": {
-                            "type": "string",
-                            "description": "품목명"
-                          },
-                          "quantity": {
-                            "type": "number",
-                            "description": "현재 보유 수량"
-                          },
-                          "unit": {
-                            "type": "string",
-                            "description": "단위"
-                          }
-                        },
-                        "required": [
-                          "ingredientName"
-                        ]
-                      }
-                    },
-                    "toBuy": {
-                      "type": "array",
-                      "description": "구매 제안 품목 및 제안 수량",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "ingredientName": {
-                            "type": "string",
-                            "description": "품목명"
-                          },
-                          "suggestedQuantity": {
-                            "type": "number",
-                            "description": "제안 구매 수량"
-                          },
-                          "unit": {
-                            "type": "string",
-                            "description": "단위"
-                          }
-                        },
-                        "required": [
-                          "ingredientName",
-                          "suggestedQuantity"
-                        ]
-                      }
-                    }
-                  },
-                  "required": [
-                    "available",
-                    "reason",
-                    "basedOnReportMonth",
-                    "alreadyHave",
-                    "toBuy"
-                  ]
+                  "properties": {}
                 }
               }
             },
@@ -2194,7 +2327,20 @@
                   },
                   "unitId": {
                     "type": "integer",
-                    "example": 1
+                    "example": 4,
+                    "description": "고정 단위 ID: 1=개, 2=g, 3=kg, 4=ml, 5=L, 6=팩, 7=봉, 8=병, 9=캔, 10=통. 포장 단위는 무게·부피로 자동 환산하지 않습니다.",
+                    "enum": [
+                      1,
+                      2,
+                      3,
+                      4,
+                      5,
+                      6,
+                      7,
+                      8,
+                      9,
+                      10
+                    ]
                   },
                   "reason": {
                     "type": "string",
@@ -2224,7 +2370,7 @@
                     "shoppingListItemId": 1,
                     "customName": "우유",
                     "suggestedQuantity": 1000,
-                    "unitId": 1,
+                    "unitId": 4,
                     "isChecked": false
                   },
                   "error": null
@@ -2262,7 +2408,7 @@
                         "ingredientCatalogId": 5,
                         "customName": "우유",
                         "suggestedQuantity": 1000,
-                        "unitId": 1,
+                        "unitId": 4,
                         "reason": "낭비 이력 기반 재구매 제안",
                         "isChecked": false
                       }
