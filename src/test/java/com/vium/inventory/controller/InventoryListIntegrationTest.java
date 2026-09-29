@@ -1,11 +1,13 @@
 package com.vium.inventory.controller;
 
 import com.vium.auth.service.TokenService;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -92,6 +94,28 @@ class InventoryListIntegrationTest {
 			.andExpect(jsonPath("$.data.ingredients[0]").value(org.hamcrest.Matchers.hasKey("amount")))
 			.andExpect(jsonPath("$.data.ingredients[0].amount").value(nullValue()))
 			.andExpect(jsonPath("$.data.ingredients[1].amount").value(0));
+	}
+
+	@Test
+	void list_returnsMixedAmountsWithoutFailingOnFractionalValues() throws Exception {
+		for (long id = 10; id <= 13; id++) {
+			insertItem(id, 1, 1, null, "재료", LocalDate.now());
+		}
+		jdbcTemplate.update("update inventory_items set amount = 0 where id = 11");
+		jdbcTemplate.update("update inventory_items set amount = 2500.49 where id = 12");
+		jdbcTemplate.update("update inventory_items set amount = 2500.50 where id = 13");
+
+		mockMvc.perform(get("/api/me/ingredients")
+				.header("Authorization", "Bearer " + tokenService.issue(1L).accessToken()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.ingredients.length()").value(4))
+			.andExpect(jsonPath("$.data.ingredients[0].amount").value(nullValue()))
+			.andExpect(jsonPath("$.data.ingredients[1].amount").value(0))
+			.andExpect(jsonPath("$.data.ingredients[2].amount").value(2500))
+			.andExpect(jsonPath("$.data.ingredients[3].amount").value(2501));
+		assertThat(jdbcTemplate.queryForObject(
+			"select amount from inventory_items where id = 13", BigDecimal.class))
+			.isEqualByComparingTo("2500.50");
 	}
 
 	@Test

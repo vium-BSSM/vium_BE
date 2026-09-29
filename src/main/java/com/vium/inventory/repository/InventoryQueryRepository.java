@@ -1,6 +1,7 @@
 package com.vium.inventory.repository;
 
 import com.vium.inventory.dto.IngredientListResponse;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -47,7 +48,7 @@ public class InventoryQueryRepository {
 				rs.getString("category_name"),
 				rs.getBigDecimal("initial_quantity"),
 				rs.getBigDecimal("remaining_quantity"),
-				amount == null ? null : amount.longValueExact(),
+				amount == null ? null : amount.setScale(0, RoundingMode.HALF_UP).longValueExact(),
 				rs.getShort("unit_id"),
 				rs.getString("unit"),
 				rs.getString("status_code"),

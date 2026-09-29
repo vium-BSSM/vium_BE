@@ -1,7 +1,6 @@
 package com.vium.inventory.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -15,6 +14,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -39,14 +39,15 @@ class InventoryQueryRepositoryTest {
 	}
 
 	@ParameterizedTest
-	@ValueSource(strings = {"2500.50", "9223372036854775808"})
-	void doesNotSilentlyTruncateOrOverflowAmount(String value) throws Exception {
+	@CsvSource({"2500.49,2500", "2500.50,2501", "2500.51,2501",
+		"0.49,0", "0.50,1", "9999999999.99,10000000000"})
+	void roundsFractionalAmountToWholeWon(String value, long expected) throws Exception {
 		var resultSet = mock(ResultSet.class);
 		when(resultSet.getBigDecimal("amount")).thenReturn(new BigDecimal(value));
 		var repository = repositoryWithRow(resultSet);
 
-		assertThatThrownBy(() -> repository.findActiveIngredients(1L, null))
-			.isInstanceOf(ArithmeticException.class);
+		assertThat(repository.findActiveIngredients(1L, null)).singleElement()
+			.satisfies(item -> assertThat(item.amount()).isEqualTo(expected));
 	}
 
 	private InventoryQueryRepository repositoryWithRow(ResultSet resultSet) throws Exception {
