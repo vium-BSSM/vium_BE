@@ -1,10 +1,10 @@
 # EC2 운영 배포
 
-로컬에서 개발하고, 검증된 main 커밋을 운영 EC2에 배포한다. 이번 구성은 EC2 호스트의 Nginx → 앱 컨테이너 → RDS PostgreSQL을 전제로 한다. S3, CI/CD, AWS 리소스 생성은 별도 단계다.
+로컬에서 개발하고, 검증된 main 커밋을 운영 EC2에 배포한다. 이번 구성은 EC2 호스트의 Nginx → 앱 컨테이너 → RDS PostgreSQL을 전제로 한다. CI는 GitHub Actions로 실행한다([CI 안내](ci.md)). 자동 배포 전환은 [CD 안내](cd.md)를 따른다. 아래는 전환 전 수동 배포 절차이며, CD 전환 후 운영 설정과 롤백은 `/opt/vium`의 릴리스 파일을 사용한다. S3와 AWS 리소스 생성은 별도 단계다.
 
 ## 사전 준비
 
-- EC2: Docker Engine과 Compose v2 설치. 이미지는 로컬 또는 별도 빌드 머신에서 만들고 EC2에서는 실행만 한다. 앱 컨테이너 제한은 1 GiB이며 부하를 보며 조정한다.
+- EC2: Docker Engine과 Compose v2 설치. 이미지는 로컬 또는 별도 빌드 머신에서 만들고 EC2에서는 실행만 한다. 이 문서의 실행 명령은 t3.micro 기준으로 RAM 512 MiB, RAM과 스왑 합계 768 MiB 제한을 적용하며 부하를 보며 조정한다.
 - RDS: PostgreSQL 16, 데이터베이스 `vium` 생성, public access 비활성화. 같은 VPC의 EC2 보안 그룹에서만 5432 접근 허용. 자동 백업 활성화.
 - EC2: 공개 포트는 HTTPS 443, 인증서 발급·리다이렉트용 80. SSH가 필요하면 관리자 IP만 22 허용. 8080과 5432는 공개하지 않는다.
 - 도메인: 운영 API 주소를 EC2에 연결하고 호스트 Nginx에 유효한 TLS 인증서를 설치한다.
@@ -69,6 +69,18 @@ scp "$RELEASE_DIR/vium-be-$IMAGE_TAG.tar" '<SSH사용자>@<EC2주소>:vium-relea
 
 `docker image prune -a`는 태그가 있어도 컨테이너에서 참조하지 않는 롤백 이미지를 삭제할 수 있다. 실행 전 보관 아카이브를 확인하며, 이번 절차에서는 자동 prune을 하지 않는다.
 
+## t3.micro 메모리 설정
+
+이 문서는 t3.micro(1 GiB RAM) 기준이며 모든 Compose 명령에 `-f compose.prod.yml -f compose.micro.yml`을
+함께 사용한다. `compose.micro.yml`은 컨테이너 RAM을 512 MiB, RAM과 스왑의
+합계를 768 MiB, JVM 최대 힙을 RAM 제한의 50%로 설정한다. 호스트 스왑은
+별도로 설정해야 한다. 스왑은 RAM을 대체하지 않으며, 지속적인 메모리 압박이
+있으면 인스턴스 사양을 높인다. 이 설정의 기동 검증은 부하 테스트를 대신하지 않는다.
+
+더 큰 인스턴스에서 기본 1 GiB 컨테이너 제한을 사용하려면 배포·로그·롤백 명령 모두에서 micro 파일의 `-f` 옵션을 뺀다. 인스턴스를 키우는 것만으로 앱 제한이 자동 변경되지는 않는다.
+
+CI 실행과 적용 범위는 [ci.md](ci.md)를 참고한다.
+
 ## EC2에서 이미지 로드 및 실행
 
 최초에는 위 저장소를 EC2에도 clone한다. 비공개 저장소라면 읽기 전용 deploy key 등 읽기 권한을 준비한다. Deploy key를 사용하면 HTTPS 대신 `git@github.com:vium-BSSM/vium_BE.git` SSH URL로 clone한다. 저장소 루트에서 아래 명령으로 같은 커밋의 Compose를 준비한다. 환경변수·인증서는 앞 절차대로 설정한다. 재배포 때 `.env.prod`를 예시 파일로 덮어쓰지 않는다.
@@ -86,14 +98,14 @@ test -z "$(git status --porcelain)"
 export IMAGE_TAG="$(git rev-parse HEAD)"
 docker load -i "$HOME/vium-releases/vium-be-$IMAGE_TAG.tar"
 docker image inspect "vium-be:$IMAGE_TAG" --format '{{.Id}}'
-docker compose --env-file .env.prod -f compose.prod.yml config --quiet
+docker compose --env-file .env.prod -f compose.prod.yml -f compose.micro.yml config --quiet
 # 기존 배포가 있다면 출력된 이전 이미지 태그를 기록한다
-CURRENT_CONTAINER=$(docker compose --env-file .env.prod -f compose.prod.yml ps -q app)
+CURRENT_CONTAINER=$(docker compose --env-file .env.prod -f compose.prod.yml -f compose.micro.yml ps -q app)
 if [ -n "$CURRENT_CONTAINER" ]; then
     docker inspect "$CURRENT_CONTAINER" --format '{{.Config.Image}}'
 fi
-docker compose --env-file .env.prod -f compose.prod.yml up -d --no-build --wait --wait-timeout 180
-docker compose --env-file .env.prod -f compose.prod.yml ps
+docker compose --env-file .env.prod -f compose.prod.yml -f compose.micro.yml up -d --no-build --wait --wait-timeout 180
+docker compose --env-file .env.prod -f compose.prod.yml -f compose.micro.yml ps
 curl --fail http://127.0.0.1:8080/actuator/health
 )
 ```
@@ -145,29 +157,62 @@ server {
 4. 컨테이너 재시작 후에도 기존 계정과 데이터가 유지되는지 확인.
 
 ```sh
-IMAGE_TAG='<현재-배포한-전체-커밋-SHA>' docker compose --env-file .env.prod -f compose.prod.yml logs --tail 100 app
+IMAGE_TAG='<현재-배포한-전체-커밋-SHA>' docker compose --env-file .env.prod -f compose.prod.yml -f compose.micro.yml logs --tail 100 app
 ```
 
 로그에는 비밀번호·토큰·환경변수 전체를 출력하지 않는다. 로그 파일은 10 MB × 3개로 회전한다. JVM의 업무 날짜 기준은 Asia/Seoul로 고정하며 인증 세션은 기존 코드대로 UTC를 사용한다. 전체 DB 시간을 일괄 변환하지 않는다.
 
-단일 앱 재생성 시 짧은 중단이 있다. 배포 전 이전 이미지 태그를 기록하고 이미지를 보관한다. 실패하면 다음과 같이 이전 커밋의 Compose와 보관한 이미지를 함께 사용한다. 이전 릴리스가 이 배포 방식을 지원하는지 먼저 확인한다.
+단일 앱 재생성 시 짧은 중단이 있다. 배포 전 이전 이미지 태그를 기록하고 이미지를 보관한다. 실패하면 다음과 같이 이전 커밋의 Compose와 보관한 이미지를 함께 사용한다. 이전 릴리스가 이 배포 방식을 지원하는지 먼저 확인한다. 초기 릴리스에는 `compose.micro.yml`이 없으므로, checkout 전에 현재 검증된 micro 파일을 작업 트리 밖에 복사한다. 대상 커밋에 micro 파일이 있으면 해당 파일을 우선 사용하고, 없으면 복사본을 사용한다. 이 대체 절차는 대상 `compose.prod.yml`도 `app` 서비스와 동일한 환경변수·인증서 경로를 사용하는 경우에 적용한다.
+
+초기 운영 커밋 `3fb558204c2d7ece23db64d8c6af1987666a6c1d`의 아카이브는 실제 EC2의 `~/vium-releases/3fb5582/vium-be.tar`에 있다. 아래 `IMAGE_ARCHIVE`에 이 경로를 지정한다. 이후 릴리스는 `~/vium-releases/vium-be-<전체-SHA>.tar` 경로를 사용한다. 이 블록은 `.env.prod`와 `deploy/certs`가 준비된 EC2 저장소 checkout에서 실행한다.
 
 ```bash
 (
 set -euo pipefail
 trap 'printf "배포 절차가 %s행에서 중단됐습니다. 위 오류를 확인하세요.\n" "$LINENO" >&2' ERR
 ROLLBACK_SHA='<이전에-배포한-전체-커밋-SHA>'
+IMAGE_ARCHIVE='<해당-릴리스의-아카이브-절대경로>'
 test -z "$(git status --porcelain)"
+test -f compose.micro.yml
+mkdir -p "$HOME/vium-releases"
+MICRO_OVERRIDE=$(mktemp "$HOME/vium-releases/compose.micro.rollback.XXXXXX")
+cp compose.micro.yml "$MICRO_OVERRIDE"
 git checkout --detach "$ROLLBACK_SHA"
 export IMAGE_TAG="$(git rev-parse HEAD)"
+if [ -f compose.micro.yml ]; then
+    MICRO_OVERRIDE="$PWD/compose.micro.yml"
+fi
 if ! docker image inspect "vium-be:$IMAGE_TAG" >/dev/null 2>&1; then
-    docker load -i "$HOME/vium-releases/vium-be-$IMAGE_TAG.tar"
+    docker load -i "$IMAGE_ARCHIVE"
 fi
 docker image inspect "vium-be:$IMAGE_TAG" >/dev/null
-docker compose --env-file .env.prod -f compose.prod.yml up -d --no-build --wait --wait-timeout 180
+printf '롤백 IMAGE_TAG=%s\n롤백 MICRO_OVERRIDE=%s\n' "$IMAGE_TAG" "$MICRO_OVERRIDE"
+docker compose --env-file .env.prod -f compose.prod.yml -f "$MICRO_OVERRIDE" config --quiet
+docker compose --env-file .env.prod -f compose.prod.yml -f "$MICRO_OVERRIDE" up -d --no-build --wait --wait-timeout 180
 curl --fail http://127.0.0.1:8080/actuator/health
 )
 ```
+
+롤백 블록이 출력한 `IMAGE_TAG`와 `MICRO_OVERRIDE` 경로를 기록한다. 두 변수는
+서브셸 종료 후 유지되지 않는다. 초기 릴리스로 롤백한 뒤에는 위의 일반 로그
+명령 대신 아래처럼 출력된 복사본의 절대경로를 지정한다. 같은 checkout의
+저장소 루트에서 실행하며, `ps`, `logs`, 재시작 등 후속 Compose 명령 모두에
+동일한 파일을 사용한다.
+
+```bash
+(
+set -euo pipefail
+export IMAGE_TAG='<롤백-블록에서-출력한-전체-SHA>'
+MICRO_OVERRIDE='<롤백-블록에서-출력한-micro-파일-절대경로>'
+test -f "$MICRO_OVERRIDE"
+docker compose --env-file .env.prod -f compose.prod.yml -f "$MICRO_OVERRIDE" ps
+docker compose --env-file .env.prod -f compose.prod.yml -f "$MICRO_OVERRIDE" logs --tail 100 app
+)
+```
+
+`~/vium-releases/compose.micro.rollback.*` 복사본은 롤백할 때마다 남는다.
+다음 정상 배포와 health 확인을 마친 뒤, 현재 실행 및 보관 중인 롤백 절차가
+참조하지 않는 복사본만 수동 정리한다. 사용 중인 복사본은 삭제하지 않는다.
 
 이때 이미지를 다시 빌드하지 않는다. DB 마이그레이션은 이미지 롤백으로 되돌아가지 않으므로 이전 앱과의 호환성 및 RDS 백업 복원 절차를 별도로 확인한다.
 

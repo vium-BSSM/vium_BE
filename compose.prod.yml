@@ -19,6 +19,7 @@ services:
       JWT_CLOCK_SKEW_SECONDS: ${JWT_CLOCK_SKEW_SECONDS:-60}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
       # Calendar-date business rules currently use the JVM default timezone.
+      # compose.micro.yml replaces this entire string; mirror shared JVM options there.
       JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Seoul -XX:MaxRAMPercentage=70.0"
     volumes:
       - ./deploy/certs:/app/certs:ro
