@@ -120,4 +120,14 @@ public class InventoryItem {
 		this.purchasedOn = purchasedOn;
 		this.expiresOn = expiresOn;
 	}
+
+	public void decreaseRemainingQuantity(BigDecimal quantity) {
+		if (quantity.compareTo(BigDecimal.ZERO) <= 0) {
+			throw new IllegalArgumentException("차감할 수량은 0보다 커야 합니다");
+		}
+		if (quantity.compareTo(this.remainingQuantity) >= 0) {
+			throw new IllegalArgumentException("차감할 수량은 남은 양보다 작아야 합니다");
+		}
+		this.remainingQuantity = this.remainingQuantity.subtract(quantity);
+	}
 }
