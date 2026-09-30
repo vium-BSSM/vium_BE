@@ -2,13 +2,13 @@ package com.vium.recipe.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import com.vium.recipe.entity.Recipe;
-import com.vium.recipe.entity.RecipeCategory;
+import com.vium.recipe.dto.GeneratedRecipe;
+import com.vium.recipe.dto.ImageSearchResult;
+import com.vium.recipe.dto.LlmRecipeResponse.RecipeDto;
 import com.vium.recipe.entity.RecipeSuggestion;
 import com.vium.recipe.repository.RecipeRepository;
 import com.vium.recipe.repository.RecipeSuggestionRepository;
 import java.time.LocalDateTime;
-import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -37,22 +37,19 @@ class RecipeRecommendationWriterTest {
 		String inventoryHash = "test_hash";
 		LocalDateTime suggestedAt = LocalDateTime.now();
 
-		Recipe recipe = Recipe.builder()
-			.title("당근 크림 파스타")
-			.category(RecipeCategory.WESTERN)
-			.cookTime(20)
-			.source("AI")
-			.imageUrl("https://images.unsplash.com/...")
-			.build();
-
-		List<Recipe> recipes = Arrays.asList(recipe);
-		recipeWriter.saveRecommendations(userId, recipes, batchId, inventoryHash, suggestedAt);
+		recipeWriter.saveRecommendations(userId, List.of(), List.of(new GeneratedRecipe(
+			new RecipeDto("당근 크림 파스타", "WESTERN", 20, List.of(1), List.of("Cook"), "pasta", "reason"),
+			new ImageSearchResult("https://images.unsplash.com/test", "author", "https://example.com", null))),
+			batchId, inventoryHash, suggestedAt);
 
 		List<RecipeSuggestion> suggestions = recipeSuggestionRepository.findByUserIdAndBatchIdOrderByRecipeIdAsc(
 			userId, batchId);
 		assertEquals(1, suggestions.size());
 		assertEquals(userId, suggestions.get(0).getUserId());
 		assertEquals(batchId, suggestions.get(0).getBatchId());
+		var saved = recipeRepository.findById(suggestions.get(0).getRecipeId()).orElseThrow();
+		assertEquals("https://images.unsplash.com/test", saved.getImageUrl());
+		assertEquals("author", saved.getImageAuthorName());
 	}
 
 	@Test
@@ -64,15 +61,9 @@ class RecipeRecommendationWriterTest {
 		String inventoryHash = "test_hash_2";
 		LocalDateTime suggestedAt = LocalDateTime.now();
 
-		Recipe recipe = Recipe.builder()
-			.title("감자 수프")
-			.category(RecipeCategory.KOREAN)
-			.cookTime(30)
-			.source("AI")
-			.build();
-
-		List<Recipe> recipes = Arrays.asList(recipe);
-		recipeWriter.saveRecommendations(userId, recipes, batchId, inventoryHash, suggestedAt);
+		recipeWriter.saveRecommendations(userId, List.of(), List.of(new GeneratedRecipe(
+			new RecipeDto("감자 수프", "KOREAN", 30, List.of(1), List.of("Cook"), "soup", null), null)),
+			batchId, inventoryHash, suggestedAt);
 
 		List<RecipeSuggestion> suggestions = recipeSuggestionRepository.findByUserIdAndBatchIdOrderByRecipeIdAsc(
 			userId, batchId);

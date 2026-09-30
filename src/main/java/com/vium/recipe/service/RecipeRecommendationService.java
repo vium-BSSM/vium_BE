@@ -8,6 +8,7 @@ import com.vium.inventory.entity.InventoryItem;
 import com.vium.inventory.repository.InventoryItemRepository;
 import com.vium.recipe.client.ImageSearchClient;
 import com.vium.recipe.client.LlmRecipeClient;
+import com.vium.recipe.dto.GeneratedRecipe;
 import com.vium.recipe.dto.ImageSearchResult;
 import com.vium.recipe.dto.LlmRecipeRequest;
 import com.vium.recipe.dto.LlmRecipeRequest.IngredientInfo;
@@ -18,16 +19,13 @@ import com.vium.recipe.dto.RecommendedRecipesResponse.RecipeCard;
 import com.vium.recipe.entity.Recipe;
 import com.vium.recipe.entity.RecipeCategory;
 import com.vium.recipe.entity.RecipeIngredient;
-import com.vium.recipe.entity.RecipeStep;
 import com.vium.recipe.entity.RecipeSuggestion;
 import com.vium.recipe.repository.RecipeIngredientRepository;
 import com.vium.recipe.repository.RecipeQueryRepository;
 import com.vium.recipe.repository.RecipeRepository;
-import com.vium.recipe.repository.RecipeStepRepository;
 import com.vium.recipe.repository.RecipeSuggestionRepository;
 import com.vium.recipe.util.InventoryHashCalculator;
 import com.vium.recipe.util.LlmRecipeValidator;
-import com.vium.recipe.util.RecipeMapper;
 import com.vium.recipe.util.RecipeUrgencyScorer;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -44,7 +42,6 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -55,13 +52,11 @@ public class RecipeRecommendationService {
 	private final RecipeQueryRepository recipeQueryRepository;
 	private final RecipeRepository recipeRepository;
 	private final RecipeIngredientRepository recipeIngredientRepository;
-	private final RecipeStepRepository recipeStepRepository;
 	private final RecipeSuggestionRepository recipeSuggestionRepository;
 	private final LlmRecipeClient llmRecipeClient;
 	private final ImageSearchClient imageSearchClient;
 	private final RecipeUrgencyScorer urgencyScorer;
 	private final LlmRecipeValidator llmRecipeValidator;
-	private final RecipeMapper recipeMapper;
 	private final ItemStatusRepository itemStatusRepository;
 	private final IngredientCatalogService ingredientCatalogService;
 	private final RecipeRecommendationWriter recipeWriter;
@@ -92,7 +87,12 @@ public class RecipeRecommendationService {
 
 		if (latestSuggestion.isPresent() && latestSuggestion.get().getInventoryHash().equals(inventoryHash)) {
 			UUID batchId = latestSuggestion.get().getBatchId();
-			return buildResponse(userId, batchId, categoryParam);
+			List<RecipeSuggestion> cached = recipeSuggestionRepository
+				.findByUserIdAndBatchIdOrderByRecipeIdAsc(userId, batchId);
+			if (recipeQueryRepository.hasCompleteDetails(cached.stream().map(RecipeSuggestion::getRecipeId).toList())) {
+				return buildResponse(userId, batchId, categoryParam);
+			}
+			log.warn("상세 데이터가 누락된 추천 캐시를 무시합니다: batchId={}", batchId);
 		}
 
 		Map<Long, LocalDate> inventoryMap = buildInventoryMap(activeInventory);
@@ -104,14 +104,13 @@ public class RecipeRecommendationService {
 			reusableRecipes.values().stream().flatMap(List::stream).collect(Collectors.toList())
 		);
 
-		List<Recipe> llmRecipes = callLlmIfNeeded(userId, reusableRecipes, userCatalogIds, inventoryMap);
-		allRecipes.addAll(llmRecipes);
+		List<GeneratedRecipe> llmRecipes = callLlmIfNeeded(userId, reusableRecipes, userCatalogIds, inventoryMap);
 
-		if (allRecipes.isEmpty()) {
+		if (allRecipes.isEmpty() && llmRecipes.isEmpty()) {
 			throw new BusinessException(ErrorCode.RECIPE_GENERATION_FAILED);
 		}
 
-		recipeWriter.saveRecommendations(userId, allRecipes, newBatchId, inventoryHash, suggestedAt);
+		recipeWriter.saveRecommendations(userId, allRecipes, llmRecipes, newBatchId, inventoryHash, suggestedAt);
 
 		return buildResponse(userId, newBatchId, categoryParam);
 	}
@@ -157,7 +156,7 @@ public class RecipeRecommendationService {
 		return result;
 	}
 
-	private List<Recipe> callLlmIfNeeded(Long userId, Map<RecipeCategory, List<Recipe>> reusableRecipes,
+	private List<GeneratedRecipe> callLlmIfNeeded(Long userId, Map<RecipeCategory, List<Recipe>> reusableRecipes,
 		List<Long> userCatalogIds, Map<Long, LocalDate> inventoryMap) {
 
 		Map<String, Integer> need = new HashMap<>();
@@ -189,14 +188,13 @@ public class RecipeRecommendationService {
 			LlmRecipeResponse response = callLlmWithRetry(request);
 			List<RecipeDto> validatedDtos = llmRecipeValidator.validate(response.recipes(), userCatalogIds, need);
 
-			List<Recipe> recipes = new ArrayList<>();
+			if (validatedDtos.isEmpty()) {
+				log.warn("LLM 응답에 유효한 레시피가 없습니다");
+			}
+			List<GeneratedRecipe> recipes = new ArrayList<>();
 			for (RecipeDto dto : validatedDtos) {
 				ImageSearchResult imageResult = searchImage(dto.imageKeyword(), dto.category());
-				Recipe recipe = recipeMapper.toRecipeEntity(dto, imageResult);
-				List<RecipeIngredient> ingredients = recipeMapper.toRecipeIngredients(recipe, dto);
-				List<RecipeStep> steps = recipeMapper.toRecipeSteps(recipe, dto);
-
-				recipes.add(recipe);
+				recipes.add(new GeneratedRecipe(dto, imageResult));
 			}
 
 			return recipes;
