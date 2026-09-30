@@ -8,8 +8,8 @@ import com.vium.inventory.entity.InventoryItem;
 import com.vium.inventory.repository.InventoryItemRepository;
 import com.vium.recipe.client.ImageSearchClient;
 import com.vium.recipe.client.LlmRecipeClient;
-import com.vium.recipe.dto.ImageSearchResult;
 import com.vium.recipe.dto.GeneratedRecipe;
+import com.vium.recipe.dto.ImageSearchResult;
 import com.vium.recipe.dto.LlmRecipeRequest;
 import com.vium.recipe.dto.LlmRecipeRequest.IngredientInfo;
 import com.vium.recipe.dto.LlmRecipeResponse;
@@ -23,7 +23,6 @@ import com.vium.recipe.entity.RecipeSuggestion;
 import com.vium.recipe.repository.RecipeIngredientRepository;
 import com.vium.recipe.repository.RecipeQueryRepository;
 import com.vium.recipe.repository.RecipeRepository;
-import com.vium.recipe.repository.RecipeStepRepository;
 import com.vium.recipe.repository.RecipeSuggestionRepository;
 import com.vium.recipe.util.InventoryHashCalculator;
 import com.vium.recipe.util.LlmRecipeValidator;
@@ -53,7 +52,6 @@ public class RecipeRecommendationService {
 	private final RecipeQueryRepository recipeQueryRepository;
 	private final RecipeRepository recipeRepository;
 	private final RecipeIngredientRepository recipeIngredientRepository;
-	private final RecipeStepRepository recipeStepRepository;
 	private final RecipeSuggestionRepository recipeSuggestionRepository;
 	private final LlmRecipeClient llmRecipeClient;
 	private final ImageSearchClient imageSearchClient;
@@ -91,9 +89,7 @@ public class RecipeRecommendationService {
 			UUID batchId = latestSuggestion.get().getBatchId();
 			List<RecipeSuggestion> cached = recipeSuggestionRepository
 				.findByUserIdAndBatchIdOrderByRecipeIdAsc(userId, batchId);
-			if (!cached.isEmpty() && cached.stream().allMatch(suggestion ->
-				recipeIngredientRepository.existsByRecipeId(suggestion.getRecipeId())
-					&& recipeStepRepository.existsByRecipeId(suggestion.getRecipeId()))) {
+			if (recipeQueryRepository.hasCompleteDetails(cached.stream().map(RecipeSuggestion::getRecipeId).toList())) {
 				return buildResponse(userId, batchId, categoryParam);
 			}
 			log.warn("상세 데이터가 누락된 추천 캐시를 무시합니다: batchId={}", batchId);

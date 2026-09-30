@@ -114,6 +114,22 @@ class RecipeGenerationIntegrationTest {
 	}
 
 	@Test
+	void checksCompleteDetailsForWholeBatch() {
+		assertThat(query.hasCompleteDetails(List.of())).isFalse();
+		writer.saveRecommendations(42L, List.of(), List.of(new GeneratedRecipe(recipe, null),
+			new GeneratedRecipe(recipe, null)), UUID.randomUUID(), "hash", LocalDateTime.now());
+		var ids = recipes.findAll().stream().map(r -> r.getId()).toList();
+		assertThat(query.hasCompleteDetails(ids)).isTrue();
+		assertThat(query.hasCompleteDetails(List.of(ids.getFirst(), ids.getFirst()))).isTrue();
+		assertThat(query.hasCompleteDetails(List.of(ids.getFirst(), Long.MAX_VALUE))).isFalse();
+		jdbc.update("delete from recipe_steps where recipe_id = ?", ids.getLast());
+		assertThat(query.hasCompleteDetails(ids)).isFalse();
+		assertThat(query.hasCompleteDetails(List.of(ids.getFirst()))).isTrue();
+		jdbc.update("delete from recipe_ingredients where recipe_id = ?", ids.getFirst());
+		assertThat(query.hasCompleteDetails(List.of(ids.getFirst()))).isFalse();
+	}
+
+	@Test
 	void excludesRecipesWithoutIngredientsOrSteps() {
 		writer.saveRecommendations(42L, List.of(), List.of(new GeneratedRecipe(recipe, null)),
 			UUID.randomUUID(), "hash", LocalDateTime.now());

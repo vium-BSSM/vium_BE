@@ -1,13 +1,13 @@
 package com.vium.recipe.service;
 
-import com.vium.recipe.entity.Recipe;
 import com.vium.recipe.dto.GeneratedRecipe;
+import com.vium.recipe.entity.Recipe;
 import com.vium.recipe.entity.RecipeSuggestion;
 import com.vium.recipe.repository.RecipeIngredientRepository;
-import com.vium.recipe.repository.RecipeStepRepository;
-import com.vium.recipe.util.RecipeMapper;
 import com.vium.recipe.repository.RecipeRepository;
+import com.vium.recipe.repository.RecipeStepRepository;
 import com.vium.recipe.repository.RecipeSuggestionRepository;
+import com.vium.recipe.util.RecipeMapper;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;

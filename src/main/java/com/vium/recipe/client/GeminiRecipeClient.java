@@ -5,21 +5,33 @@ import com.vium.recipe.dto.LlmRecipeRequest;
 import com.vium.recipe.dto.LlmRecipeResponse;
 import java.util.List;
 import java.util.Map;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 import tools.jackson.databind.json.JsonMapper;
 
 @Component
-@RequiredArgsConstructor
 @Slf4j
 public class GeminiRecipeClient implements LlmRecipeClient {
 
 	private final LlmProperties properties;
 	private final JsonMapper jsonMapper;
+	private final RestClient restClient;
+
+	@Autowired
+	public GeminiRecipeClient(LlmProperties properties, JsonMapper jsonMapper) {
+		this(properties, jsonMapper, RestClient.builder().build());
+	}
+
+	GeminiRecipeClient(LlmProperties properties, JsonMapper jsonMapper, RestClient restClient) {
+		this.properties = properties;
+		this.jsonMapper = jsonMapper;
+		this.restClient = restClient;
+	}
 
 	private static final String GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent";
 	private static final int MAX_OUTPUT_TOKENS = 8192;
@@ -34,10 +46,9 @@ public class GeminiRecipeClient implements LlmRecipeClient {
 
 			String url = GEMINI_API_URL.replace("{model}", properties.getModel());
 
-			RestClient restClient = RestClient.builder().build();
-
 			Map<String, Object> responseMap = restClient.post()
-				.uri(url + "?key=" + properties.getApiKey())
+				.uri(url)
+				.header("x-goog-api-key", properties.getApiKey())
 				.header("Content-Type", "application/json")
 				.body(requestBody)
 				.retrieve()
@@ -45,11 +56,10 @@ public class GeminiRecipeClient implements LlmRecipeClient {
 
 			return parseGeminiResponse(responseMap);
 		} catch (RestClientException e) {
-			log.warn("Gemini API 호출 실패 (재시도 대상): {}", e.getMessage());
-			throw new RuntimeException("LLM 호출 실패: " + e.getMessage(), e);
-		} catch (Exception e) {
-			log.error("Gemini 응답 처리 실패", e);
-			throw new RuntimeException("LLM 응답 처리 실패: " + e.getMessage(), e);
+			Integer status = e instanceof RestClientResponseException response ? response.getStatusCode().value() : null;
+			log.warn("Gemini API 호출 실패: type={}, status={}", e.getClass().getSimpleName(), status);
+			// HTTP 예외의 메시지와 cause에는 요청 URL이나 응답 원문이 포함될 수 있다.
+			throw new RuntimeException("LLM 호출 실패");
 		}
 	}
 
@@ -137,12 +147,20 @@ public class GeminiRecipeClient implements LlmRecipeClient {
 	}
 
 	LlmRecipeResponse parseGeminiResponse(Map<String, Object> responseMap) {
+		String stage = "envelope";
+		String finishReason = "MISSING";
+		StringBuilder text = new StringBuilder();
 		try {
 			var candidates = jsonMapper.valueToTree(responseMap).path("candidates");
 			if (!candidates.isArray() || candidates.isEmpty()) {
 				throw new IllegalArgumentException("Gemini 응답에 candidates가 없습니다");
 			}
 			var candidate = candidates.get(0);
+			String rawFinishReason = candidate.path("finishReason").asText();
+			if (candidate.has("finishReason")) {
+				finishReason = List.of("STOP", "MAX_TOKENS", "SAFETY", "RECITATION", "OTHER")
+					.contains(rawFinishReason) ? rawFinishReason : "OTHER";
+			}
 			if (candidate.has("finishReason") && !"STOP".equals(candidate.path("finishReason").asText())) {
 				throw new IllegalArgumentException("Gemini 응답이 정상적으로 완료되지 않았습니다");
 			}
@@ -150,20 +168,22 @@ public class GeminiRecipeClient implements LlmRecipeClient {
 			if (!parts.isArray()) {
 				throw new IllegalArgumentException("Gemini 응답에 parts가 없습니다");
 			}
-			StringBuilder text = new StringBuilder();
 			for (var part : parts) {
 				if (!part.path("thought").asBoolean(false) && part.path("text").isString()) {
 					text.append(part.path("text").asText());
 				}
 			}
+			stage = "json";
 			var root = jsonMapper.readTree(text.toString());
 			if (root == null || !root.path("recipes").isArray()) {
 				throw new IllegalArgumentException("Gemini 응답에 recipes 배열이 없습니다");
 			}
+			stage = "mapping";
 			return jsonMapper.treeToValue(root, LlmRecipeResponse.class);
 		} catch (Exception e) {
-			log.error("Gemini 응답 파싱 실패", e);
-			throw new RuntimeException("응답 파싱 실패", e);
+			log.warn("Gemini 응답 파싱 실패: stage={}, finishReason={}, textLength={}, type={}",
+				stage, finishReason, text.length(), e.getClass().getSimpleName());
+			throw new RuntimeException("응답 파싱 실패");
 		}
 	}
 }
