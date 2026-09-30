@@ -67,4 +67,16 @@ public class Recipe {
 		this.source = source;
 		this.createdAt = LocalDateTime.now();
 	}
+
+	public void setImageUrl(String imageUrl) {
+		this.imageUrl = imageUrl;
+	}
+
+	public void setImageAuthorName(String imageAuthorName) {
+		this.imageAuthorName = imageAuthorName;
+	}
+
+	public void setImageAuthorUrl(String imageAuthorUrl) {
+		this.imageAuthorUrl = imageAuthorUrl;
+	}
 }

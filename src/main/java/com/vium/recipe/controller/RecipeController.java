@@ -4,8 +4,10 @@ import com.vium.global.common.ApiResponse;
 import com.vium.global.security.CurrentUserProvider;
 import com.vium.recipe.dto.RecipeCompleteRequest;
 import com.vium.recipe.dto.RecipeDetailResponse;
+import com.vium.recipe.dto.RecommendedRecipesResponse;
 import com.vium.recipe.service.RecipeCompletionService;
 import com.vium.recipe.service.RecipeQueryService;
+import com.vium.recipe.service.RecipeRecommendationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -13,6 +15,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -22,6 +25,7 @@ public class RecipeController {
 
 	private final RecipeQueryService recipeQueryService;
 	private final RecipeCompletionService recipeCompletionService;
+	private final RecipeRecommendationService recipeRecommendationService;
 	private final CurrentUserProvider currentUserProvider;
 
 	/**
@@ -32,6 +36,19 @@ public class RecipeController {
 	public ApiResponse<RecipeDetailResponse> getRecipeDetail(@PathVariable Long recipeId) {
 		Long userId = currentUserProvider.getCurrentUserId();
 		RecipeDetailResponse response = recipeQueryService.getRecipeDetail(userId, recipeId);
+		return ApiResponse.ok(response);
+	}
+
+	/**
+	 * API ① 맞춤 레시피 목록 (AI 추천)
+	 * GET /api/me/recipes/recommended?category=ALL
+	 */
+	@GetMapping("/recommended")
+	public ApiResponse<RecommendedRecipesResponse> getRecommendedRecipes(
+		@RequestParam(defaultValue = "ALL") String category
+	) {
+		Long userId = currentUserProvider.getCurrentUserId();
+		RecommendedRecipesResponse response = recipeRecommendationService.getRecommendedRecipes(userId, category);
 		return ApiResponse.ok(response);
 	}
 

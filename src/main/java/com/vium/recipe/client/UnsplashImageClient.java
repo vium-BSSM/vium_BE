@@ -46,16 +46,35 @@ public class UnsplashImageClient implements ImageSearchClient {
 			String imageUrl = photo.urls().regular();
 			String authorName = photo.user() != null ? photo.user().name() : null;
 			String authorUrl = photo.user() != null && photo.user().links() != null
-				? photo.user().links().html() + "?utm_source=pickdo&utm_medium=referral"
+				? photo.user().links().html()
 				: null;
 
-			return new ImageSearchResult(imageUrl, authorName, authorUrl);
+			return new ImageSearchResult(imageUrl, authorName, authorUrl, null);
 		} catch (RestClientException e) {
 			log.warn("Unsplash API 호출 실패 (query='{}'): {}", query, e.getMessage());
 			return null;
 		} catch (Exception e) {
 			log.warn("Unsplash 응답 처리 실패 (query='{}'): {}", query, e.getMessage());
 			return null;
+		}
+	}
+
+	@Override
+	public void recordDownload(String downloadUrl) {
+		if (downloadUrl == null || downloadUrl.isBlank()) {
+			return;
+		}
+
+		try {
+			RestClient restClient = RestClient.builder().build();
+			restClient.get()
+				.uri(downloadUrl)
+				.header("Authorization", "Client-ID " + properties.getAccessKey())
+				.retrieve()
+				.toBodilessEntity();
+			log.debug("Unsplash 다운로드 기록 호출 성공");
+		} catch (Exception e) {
+			log.debug("Unsplash 다운로드 기록 호출 실패 (무시): {}", e.getMessage());
 		}
 	}
 }
