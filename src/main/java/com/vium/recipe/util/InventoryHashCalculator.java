@@ -15,6 +15,7 @@ public class InventoryHashCalculator {
 	 */
 	public static String calculateHash(Collection<Long> ingredientCatalogIds) {
 		String sortedIds = ingredientCatalogIds.stream()
+			.distinct()
 			.sorted()
 			.map(String::valueOf)
 			.collect(Collectors.joining(","));

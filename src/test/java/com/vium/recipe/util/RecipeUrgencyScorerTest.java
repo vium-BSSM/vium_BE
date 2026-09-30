@@ -64,4 +64,70 @@ class RecipeUrgencyScorerTest {
 		int score = scorer.calculateScore(ingredientIds, inventory);
 		assertEquals(0, score);
 	}
+
+	@Test
+	void testBoundaryD1() {
+		LocalDate today = LocalDate.now();
+		List<Long> ingredientIds = Arrays.asList(1L);
+		Map<Long, LocalDate> inventory = new HashMap<>();
+		inventory.put(1L, today.plusDays(1));
+
+		int score = scorer.calculateScore(ingredientIds, inventory);
+		assertEquals(3, score);
+	}
+
+	@Test
+	void testBoundaryD2() {
+		LocalDate today = LocalDate.now();
+		List<Long> ingredientIds = Arrays.asList(1L);
+		Map<Long, LocalDate> inventory = new HashMap<>();
+		inventory.put(1L, today.plusDays(2));
+
+		int score = scorer.calculateScore(ingredientIds, inventory);
+		assertEquals(2, score);
+	}
+
+	@Test
+	void testBoundaryD3() {
+		LocalDate today = LocalDate.now();
+		List<Long> ingredientIds = Arrays.asList(1L);
+		Map<Long, LocalDate> inventory = new HashMap<>();
+		inventory.put(1L, today.plusDays(3));
+
+		int score = scorer.calculateScore(ingredientIds, inventory);
+		assertEquals(2, score);
+	}
+
+	@Test
+	void testBoundaryD4() {
+		LocalDate today = LocalDate.now();
+		List<Long> ingredientIds = Arrays.asList(1L);
+		Map<Long, LocalDate> inventory = new HashMap<>();
+		inventory.put(1L, today.plusDays(4));
+
+		int score = scorer.calculateScore(ingredientIds, inventory);
+		assertEquals(1, score);
+	}
+
+	@Test
+	void testBoundaryD7() {
+		LocalDate today = LocalDate.now();
+		List<Long> ingredientIds = Arrays.asList(1L);
+		Map<Long, LocalDate> inventory = new HashMap<>();
+		inventory.put(1L, today.plusDays(7));
+
+		int score = scorer.calculateScore(ingredientIds, inventory);
+		assertEquals(1, score);
+	}
+
+	@Test
+	void testBoundaryD8() {
+		LocalDate today = LocalDate.now();
+		List<Long> ingredientIds = Arrays.asList(1L);
+		Map<Long, LocalDate> inventory = new HashMap<>();
+		inventory.put(1L, today.plusDays(8));
+
+		int score = scorer.calculateScore(ingredientIds, inventory);
+		assertEquals(0, score);
+	}
 }

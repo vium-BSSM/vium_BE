@@ -81,8 +81,6 @@ public class RecipeQueryService {
 			recipe.getCategory().name(),
 			recipe.getCookTime(),
 			recipe.getImageUrl(),
-			null,  // imageAuthorName (DB에 저장되지 않음)
-			null,  // imageAuthorUrl (DB에 저장되지 않음)
 			ingredientResponses,
 			stepResponses
 		);

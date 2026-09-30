@@ -126,4 +126,115 @@ class LlmRecipeValidatorTest {
 
 		assertEquals(2, result.size());
 	}
+
+	@Test
+	void testDuplicateIngredientIdsAreRemoved() {
+		RecipeDto recipe = new RecipeDto(
+			"중복 테스트",
+			"WESTERN",
+			20,
+			Arrays.asList(1, 2, 1, 3, 2),
+			Arrays.asList("단계1"),
+			"test",
+			null
+		);
+
+		Map<String, Integer> need = new HashMap<>();
+		need.put("WESTERN", 1);
+		List<Long> userIds = Arrays.asList(1L, 2L, 3L);
+
+		List<RecipeDto> result = validator.validate(Arrays.asList(recipe), userIds, need);
+
+		assertEquals(1, result.size());
+		assertEquals(3, result.get(0).ingredientCatalogIds().size());
+	}
+
+	@Test
+	void testCookTimeZeroRejected() {
+		RecipeDto recipe = new RecipeDto(
+			"조리시간 0",
+			"WESTERN",
+			0,
+			Arrays.asList(1),
+			Arrays.asList("단계"),
+			"test",
+			null
+		);
+
+		Map<String, Integer> need = new HashMap<>();
+		need.put("WESTERN", 1);
+		List<Long> userIds = Arrays.asList(1L);
+
+		List<RecipeDto> result = validator.validate(Arrays.asList(recipe), userIds, need);
+
+		assertEquals(0, result.size());
+	}
+
+	@Test
+	void testCookTime181Rejected() {
+		RecipeDto recipe = new RecipeDto(
+			"조리시간 181",
+			"WESTERN",
+			181,
+			Arrays.asList(1),
+			Arrays.asList("단계"),
+			"test",
+			null
+		);
+
+		Map<String, Integer> need = new HashMap<>();
+		need.put("WESTERN", 1);
+		List<Long> userIds = Arrays.asList(1L);
+
+		List<RecipeDto> result = validator.validate(Arrays.asList(recipe), userIds, need);
+
+		assertEquals(0, result.size());
+	}
+
+	@Test
+	void testEmptyStepsRejected() {
+		RecipeDto recipe = new RecipeDto(
+			"빈 단계",
+			"WESTERN",
+			20,
+			Arrays.asList(1),
+			Arrays.asList(),
+			"test",
+			null
+		);
+
+		Map<String, Integer> need = new HashMap<>();
+		need.put("WESTERN", 1);
+		List<Long> userIds = Arrays.asList(1L);
+
+		List<RecipeDto> result = validator.validate(Arrays.asList(recipe), userIds, need);
+
+		assertEquals(0, result.size());
+	}
+
+	@Test
+	void testTitle101CharsRejected() {
+		StringBuilder title = new StringBuilder();
+		for (int i = 0; i < 101; i++) {
+			title.append("a");
+		}
+
+		RecipeDto recipe = new RecipeDto(
+			title.toString(),
+			"WESTERN",
+			20,
+			Arrays.asList(1),
+			Arrays.asList("단계"),
+			"test",
+			null
+		);
+
+		Map<String, Integer> need = new HashMap<>();
+		need.put("WESTERN", 1);
+		List<Long> userIds = Arrays.asList(1L);
+
+		List<RecipeDto> result = validator.validate(Arrays.asList(recipe), userIds, need);
+
+		assertEquals(0, result.size());
+	}
 }

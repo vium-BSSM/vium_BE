@@ -30,6 +30,7 @@ public class LlmRecipeValidator {
 
 		Map<String, List<RecipeDto>> byCategory = recipes.stream()
 			.filter(recipe -> validateRecipe(recipe, validCatalogIds, validCategories))
+			.map(this::removeDuplicateIngredients)
 			.map(this::trimReasonTo200Chars)
 			.collect(Collectors.groupingBy(RecipeDto::category));
 
@@ -38,6 +39,27 @@ public class LlmRecipeValidator {
 			.flatMap(entry -> entry.getValue().stream()
 				.limit(need.getOrDefault(entry.getKey(), 0)))
 			.collect(Collectors.toList());
+	}
+
+	private RecipeDto removeDuplicateIngredients(RecipeDto recipe) {
+		if (recipe.ingredientCatalogIds() == null) {
+			return recipe;
+		}
+		List<Integer> deduped = recipe.ingredientCatalogIds().stream()
+			.distinct()
+			.collect(Collectors.toList());
+		if (deduped.size() == recipe.ingredientCatalogIds().size()) {
+			return recipe;
+		}
+		return new RecipeDto(
+			recipe.title(),
+			recipe.category(),
+			recipe.cookTime(),
+			deduped,
+			recipe.steps(),
+			recipe.imageKeyword(),
+			recipe.reason()
+		);
 	}
 
 	private RecipeDto trimReasonTo200Chars(RecipeDto recipe) {

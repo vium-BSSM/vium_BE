@@ -8,8 +8,6 @@ public record RecipeDetailResponse(
 	String category,
 	Integer cookTime,
 	String imageUrl,
-	String imageAuthorName,
-	String imageAuthorUrl,
 	List<IngredientResponse> ingredients,
 	List<StepResponse> steps
 ) {

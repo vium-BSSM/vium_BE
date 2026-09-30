@@ -51,4 +51,15 @@ class InventoryHashCalculatorTest {
 
 		assertTrue(hash.matches("[0-9a-f]{64}"));
 	}
+
+	@Test
+	void testDuplicateIdsProduceSameHashAsWithoutDuplicates() {
+		List<Long> ids1 = Arrays.asList(1L, 2L, 3L);
+		List<Long> ids2 = Arrays.asList(1L, 2L, 3L, 2L, 3L);
+
+		String hash1 = InventoryHashCalculator.calculateHash(ids1);
+		String hash2 = InventoryHashCalculator.calculateHash(ids2);
+
+		assertEquals(hash1, hash2);
+	}
 }
