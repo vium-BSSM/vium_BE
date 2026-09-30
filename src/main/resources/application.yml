@@ -38,6 +38,15 @@ logging:
   level:
     org.hibernate.SQL: debug
 
+gemini:
+  api-key: ${GEMINI_API_KEY}
+  model: ${GEMINI_MODEL:gemini-2.5-flash}
+  timeout-seconds: 60
+
+unsplash:
+  access-key: ${UNSPLASH_ACCESS_KEY}
+  timeout-seconds: 3
+
 security:
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:}

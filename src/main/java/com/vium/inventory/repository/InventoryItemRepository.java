@@ -10,6 +10,8 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, Lo
 
 	Optional<InventoryItem> findByIdAndUserId(Long id, Long userId);
 
+	List<InventoryItem> findByUserIdAndIngredientCatalogId(Long userId, Long ingredientCatalogId);
+
 	List<InventoryItem> findAllByUserIdAndStatusIdNotAndExpiresOnBefore(Long userId, Short statusId,
 			LocalDate expiresOn);
 
