@@ -15,4 +15,11 @@ public class IngredientCatalogService {
 	public boolean existsById(Long ingredientCatalogId) {
 		return ingredientCatalogRepository.existsById(ingredientCatalogId);
 	}
+
+	@Transactional(readOnly = true)
+	public String getNameById(Long ingredientCatalogId) {
+		return ingredientCatalogRepository.findById(ingredientCatalogId)
+			.map(catalog -> catalog.getName())
+			.orElse(null);
+	}
 }
