@@ -12,6 +12,7 @@ public enum ErrorCode {
 	INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "서버 오류가 발생했습니다."),
 	RECIPE_NOT_FOUND(HttpStatus.NOT_FOUND, "레시피를 찾을 수 없습니다."),
 	RECIPE_GENERATION_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "레시피 생성에 실패했습니다."),
+	NO_CATALOG_INGREDIENTS(HttpStatus.BAD_REQUEST, "카탈로그에서 재료를 선택해 등록해 주세요."),
 	EMPTY_USAGES(HttpStatus.BAD_REQUEST, "사용 재료 목록이 비어있거나 50개를 초과합니다."),
 	INVALID_USAGE_RATE(HttpStatus.BAD_REQUEST, "사용률은 0~100 범위여야 합니다."),
 	DUPLICATE_INVENTORY(HttpStatus.BAD_REQUEST, "중복된 재고 ID가 있습니다."),

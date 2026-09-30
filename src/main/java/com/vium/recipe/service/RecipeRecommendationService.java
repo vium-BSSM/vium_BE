@@ -81,6 +81,10 @@ public class RecipeRecommendationService {
 			.distinct()
 			.toList();
 
+		if (userCatalogIds.isEmpty()) {
+			throw new BusinessException(ErrorCode.NO_CATALOG_INGREDIENTS);
+		}
+
 		String inventoryHash = InventoryHashCalculator.calculateHash(userCatalogIds);
 
 		Optional<RecipeSuggestion> latestSuggestion = recipeSuggestionRepository

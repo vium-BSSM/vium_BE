@@ -102,10 +102,12 @@ public class InventoryService {
 		ItemStatus activeStatus = itemStatusRepository.findByCode(ACTIVE_STATUS_CODE)
 			.orElseThrow(() -> new BusinessException(ErrorCode.INTERNAL_ERROR, "item_statuses 시드 데이터가 없습니다"));
 
+		String customName = resolveCustomName(request.ingredientCatalogId(), request.customName());
+
 		InventoryItem inventoryItem = InventoryItem.builder()
 			.userId(userId)
 			.ingredientCatalogId(request.ingredientCatalogId())
-			.customName(normalizeCustomName(request.customName()))
+			.customName(customName)
 			.statusId(activeStatus.getId())
 			.storageMethodId(request.storageMethodId())
 			.unitId(request.unitId())
@@ -136,7 +138,7 @@ public class InventoryService {
 			throw new BusinessException(ErrorCode.INVALID_REQUEST, "ingredientCatalogId 또는 customName 중 하나는 필요합니다");
 		}
 		if (request.ingredientCatalogId() != null && !ingredientCatalogService.existsById(request.ingredientCatalogId())) {
-			throw new BusinessException(ErrorCode.INVALID_REQUEST, "존재하지 않는 ingredientCatalogId 입니다");
+			throw new NotFoundException("존재하지 않는 ingredientCatalogId 입니다");
 		}
 		if (!unitRepository.existsById(request.unitId())) {
 			throw new BusinessException(ErrorCode.INVALID_REQUEST, "존재하지 않는 unitId 입니다");
@@ -166,5 +168,16 @@ public class InventoryService {
 
 	private String normalizeCustomName(String customName) {
 		return StringUtils.hasText(customName) ? customName.trim() : null;
+	}
+
+	private String resolveCustomName(Long ingredientCatalogId, String customName) {
+		String normalized = normalizeCustomName(customName);
+		if (normalized != null) {
+			return normalized;
+		}
+		if (ingredientCatalogId != null) {
+			return ingredientCatalogService.getNameById(ingredientCatalogId);
+		}
+		return null;
 	}
 }
