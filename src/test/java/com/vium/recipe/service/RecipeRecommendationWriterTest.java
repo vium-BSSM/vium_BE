@@ -3,12 +3,14 @@ package com.vium.recipe.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.vium.recipe.entity.Recipe;
+import com.vium.recipe.dto.GeneratedRecipe;
+import com.vium.recipe.dto.ImageSearchResult;
+import com.vium.recipe.dto.LlmRecipeResponse.RecipeDto;
 import com.vium.recipe.entity.RecipeCategory;
 import com.vium.recipe.entity.RecipeSuggestion;
 import com.vium.recipe.repository.RecipeRepository;
 import com.vium.recipe.repository.RecipeSuggestionRepository;
 import java.time.LocalDateTime;
-import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -45,8 +47,10 @@ class RecipeRecommendationWriterTest {
 			.imageUrl("https://images.unsplash.com/...")
 			.build();
 
-		List<Recipe> recipes = Arrays.asList(recipe);
-		recipeWriter.saveRecommendations(userId, recipes, batchId, inventoryHash, suggestedAt);
+		recipeWriter.saveRecommendations(userId, List.of(), List.of(new GeneratedRecipe(
+			new RecipeDto(recipe.getTitle(), "WESTERN", 20, List.of(1), List.of("Cook"), "pasta", "reason"),
+			new ImageSearchResult(recipe.getImageUrl(), "author", "https://example.com", null))),
+			batchId, inventoryHash, suggestedAt);
 
 		List<RecipeSuggestion> suggestions = recipeSuggestionRepository.findByUserIdAndBatchIdOrderByRecipeIdAsc(
 			userId, batchId);
@@ -71,8 +75,9 @@ class RecipeRecommendationWriterTest {
 			.source("AI")
 			.build();
 
-		List<Recipe> recipes = Arrays.asList(recipe);
-		recipeWriter.saveRecommendations(userId, recipes, batchId, inventoryHash, suggestedAt);
+		recipeWriter.saveRecommendations(userId, List.of(), List.of(new GeneratedRecipe(
+			new RecipeDto(recipe.getTitle(), "KOREAN", 30, List.of(1), List.of("Cook"), "soup", null), null)),
+			batchId, inventoryHash, suggestedAt);
 
 		List<RecipeSuggestion> suggestions = recipeSuggestionRepository.findByUserIdAndBatchIdOrderByRecipeIdAsc(
 			userId, batchId);

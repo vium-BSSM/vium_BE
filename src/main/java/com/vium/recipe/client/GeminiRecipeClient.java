@@ -11,6 +11,7 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import tools.jackson.databind.json.JsonMapper;
 
 @Component
 @RequiredArgsConstructor
@@ -18,6 +19,7 @@ import org.springframework.web.client.RestClientException;
 public class GeminiRecipeClient implements LlmRecipeClient {
 
 	private final LlmProperties properties;
+	private final JsonMapper jsonMapper;
 
 	private static final String GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent";
 	private static final int MAX_OUTPUT_TOKENS = 8192;
@@ -134,25 +136,31 @@ public class GeminiRecipeClient implements LlmRecipeClient {
 		);
 	}
 
-	@SuppressWarnings("unchecked")
-	private LlmRecipeResponse parseGeminiResponse(Map<String, Object> responseMap) {
+	LlmRecipeResponse parseGeminiResponse(Map<String, Object> responseMap) {
 		try {
-			List<Map<String, Object>> candidates = (List<Map<String, Object>>) responseMap.get("candidates");
-			if (candidates == null || candidates.isEmpty()) {
-				throw new RuntimeException("Gemini 응답에 candidates가 없습니다");
+			var candidates = jsonMapper.valueToTree(responseMap).path("candidates");
+			if (!candidates.isArray() || candidates.isEmpty()) {
+				throw new IllegalArgumentException("Gemini 응답에 candidates가 없습니다");
 			}
-
-			Map<String, Object> candidate = candidates.get(0);
-			Map<String, Object> content = (Map<String, Object>) candidate.get("content");
-			List<Map<String, Object>> parts = (List<Map<String, Object>>) content.get("parts");
-			String jsonText = (String) parts.get(0).get("text");
-
-			// 간단한 JSON 파싱 (RestClient의 자동 역직렬화 사용)
-			// 실제 구현에서는 Record의 fromJson 또는 다른 방식 사용
-			log.debug("LLM 응답 JSON: {}", jsonText);
-			// TODO: jsonText를 LlmRecipeResponse로 변환
-			// 여기서는 임시로 빈 응답 반환
-			return new LlmRecipeResponse(List.of());
+			var candidate = candidates.get(0);
+			if (candidate.has("finishReason") && !"STOP".equals(candidate.path("finishReason").asText())) {
+				throw new IllegalArgumentException("Gemini 응답이 정상적으로 완료되지 않았습니다");
+			}
+			var parts = candidate.path("content").path("parts");
+			if (!parts.isArray()) {
+				throw new IllegalArgumentException("Gemini 응답에 parts가 없습니다");
+			}
+			StringBuilder text = new StringBuilder();
+			for (var part : parts) {
+				if (!part.path("thought").asBoolean(false) && part.path("text").isString()) {
+					text.append(part.path("text").asText());
+				}
+			}
+			var root = jsonMapper.readTree(text.toString());
+			if (root == null || !root.path("recipes").isArray()) {
+				throw new IllegalArgumentException("Gemini 응답에 recipes 배열이 없습니다");
+			}
+			return jsonMapper.treeToValue(root, LlmRecipeResponse.class);
 		} catch (Exception e) {
 			log.error("Gemini 응답 파싱 실패", e);
 			throw new RuntimeException("응답 파싱 실패", e);

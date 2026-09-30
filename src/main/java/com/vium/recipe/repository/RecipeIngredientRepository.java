@@ -5,6 +5,7 @@ import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface RecipeIngredientRepository extends JpaRepository<RecipeIngredient, Long> {
+	boolean existsByRecipeId(Long recipeId);
 
 	List<RecipeIngredient> findByRecipeIdOrderByIdAsc(Long recipeId);
 
