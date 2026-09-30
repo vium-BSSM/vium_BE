@@ -1,6 +1,8 @@
 package com.vium.ingredient.service;
 
+import com.vium.ingredient.entity.IngredientCatalog;
 import com.vium.ingredient.repository.IngredientCatalogRepository;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,5 +23,10 @@ public class IngredientCatalogService {
 		return ingredientCatalogRepository.findById(ingredientCatalogId)
 			.map(catalog -> catalog.getName())
 			.orElse(null);
+	}
+
+	@Transactional(readOnly = true)
+	public List<IngredientCatalog> searchByKeyword(String keyword) {
+		return ingredientCatalogRepository.searchByKeyword(keyword);
 	}
 }
