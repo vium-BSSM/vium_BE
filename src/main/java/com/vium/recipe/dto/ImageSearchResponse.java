@@ -9,7 +9,13 @@ public record ImageSearchResponse(
 		String id,
 		String description,
 		Urls urls,
-		User user
+		User user,
+		Links links
+	) {
+	}
+
+	public record PhotoLinks(
+		String download_location
 	) {
 	}
 
