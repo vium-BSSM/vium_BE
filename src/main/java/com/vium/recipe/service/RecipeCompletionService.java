@@ -36,8 +36,9 @@ public class RecipeCompletionService {
 		validateNoDuplicateInventory(request.usages());
 
 		// 2. 레시피 접근 권한 확인
-		recipeSuggestionRepository.findByUserIdAndRecipeId(userId, recipeId)
-			.orElseThrow(() -> new NotFoundException(ErrorCode.RECIPE_NOT_FOUND.getDefaultMessage()));
+		if (!recipeSuggestionRepository.existsByUserIdAndRecipeId(userId, recipeId)) {
+			throw new NotFoundException(ErrorCode.RECIPE_NOT_FOUND.getDefaultMessage());
+		}
 
 		// 3. 모든 재고를 한 번에 조회하고 검사
 		List<Long> inventoryIds = request.usages().stream()

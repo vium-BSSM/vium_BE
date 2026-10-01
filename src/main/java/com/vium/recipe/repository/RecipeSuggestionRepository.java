@@ -15,5 +15,5 @@ public interface RecipeSuggestionRepository extends JpaRepository<RecipeSuggesti
 	List<RecipeSuggestion> findByUserIdAndBatchIdOrderByRecipeIdAsc(Long userId, UUID batchId);
 
 	// 사용자가 추천받은 레시피 확인 (3-4의 1, 5-4의 2)
-	Optional<RecipeSuggestion> findByUserIdAndRecipeId(Long userId, Long recipeId);
+	boolean existsByUserIdAndRecipeId(Long userId, Long recipeId);
 }
