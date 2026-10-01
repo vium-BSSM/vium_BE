@@ -5,7 +5,6 @@ import com.vium.dispose.dto.UpdateInventoryItemStatusRequest;
 import com.vium.global.code.ItemStatusRepository;
 import com.vium.global.exception.BusinessException;
 import com.vium.global.exception.ErrorCode;
-import com.vium.global.exception.NotFoundException;
 import com.vium.inventory.entity.InventoryItem;
 import com.vium.inventory.repository.InventoryItemRepository;
 import com.vium.recipe.dto.RecipeCompleteRequest;
@@ -36,8 +35,9 @@ public class RecipeCompletionService {
 		validateNoDuplicateInventory(request.usages());
 
 		// 2. 레시피 접근 권한 확인
-		recipeSuggestionRepository.findByUserIdAndRecipeId(userId, recipeId)
-			.orElseThrow(() -> new NotFoundException(ErrorCode.RECIPE_NOT_FOUND.getDefaultMessage()));
+		if (!recipeSuggestionRepository.existsByUserIdAndRecipeId(userId, recipeId)) {
+			throw new BusinessException(ErrorCode.RECIPE_NOT_FOUND);
+		}
 
 		// 3. 모든 재고를 한 번에 조회하고 검사
 		List<Long> inventoryIds = request.usages().stream()
@@ -94,7 +94,7 @@ public class RecipeCompletionService {
 	private void validateInventoryItems(Long userId, List<Long> inventoryIds, List<InventoryItem> inventoryItems) {
 		// 조회된 재고가 요청한 개수와 일치하지 않으면 없는 것이 있음
 		if (inventoryItems.size() != inventoryIds.size()) {
-			throw new NotFoundException(ErrorCode.INVENTORY_NOT_FOUND.getDefaultMessage());
+			throw new BusinessException(ErrorCode.INVENTORY_NOT_FOUND);
 		}
 
 		Short activeStatusId = getActiveStatusId();
