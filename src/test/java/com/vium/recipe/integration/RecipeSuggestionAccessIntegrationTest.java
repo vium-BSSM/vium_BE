@@ -11,6 +11,7 @@ import jakarta.persistence.EntityManager;
 import java.math.BigDecimal;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -90,7 +91,21 @@ class RecipeSuggestionAccessIntegrationTest {
 		mvc.perform(post("/api/me/recipes/1/complete").header("Authorization", bearer())
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{\"usages\":[{\"inventoryId\":1,\"usageRate\":50}]}"))
-			.andExpect(status().isNotFound());
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.error.code").value("RECIPE_NOT_FOUND"));
+		assertThat(remaining()).isEqualByComparingTo("4");
+	}
+
+	@Test
+	void completionRejectsMissingInventoryWithoutChangingExistingInventory() throws Exception {
+		addSuggestions(42, 1, 1);
+		mvc.perform(post("/api/me/recipes/1/complete").header("Authorization", bearer())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{"usages":[{"inventoryId":1,"usageRate":50},{"inventoryId":999,"usageRate":50}]}
+					"""))
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.error.code").value("INVENTORY_NOT_FOUND"));
 		assertThat(remaining()).isEqualByComparingTo("4");
 	}
 

@@ -44,17 +44,17 @@ public class RecipeQueryService {
 	 * @param userId 현재 사용자 ID
 	 * @param recipeId 레시피 ID
 	 * @return 레시피 상세 정보
-	 * @throws NotFoundException 레시피 없음 또는 추천받지 않은 레시피
+	 * @throws BusinessException 레시피 없음 또는 추천받지 않은 레시피
 	 */
 	public RecipeDetailResponse getRecipeDetail(Long userId, Long recipeId) {
 		// 1. 사용자가 추천받은 레시피인지 확인 (3-4의 1)
 		if (!recipeSuggestionRepository.existsByUserIdAndRecipeId(userId, recipeId)) {
-			throw new BusinessException(ErrorCode.RECIPE_NOT_FOUND, "레시피를 찾을 수 없습니다");
+			throw new BusinessException(ErrorCode.RECIPE_NOT_FOUND);
 		}
 
 		// 2. 레시피, 재료, 조리법 조회 (3-4의 2)
 		Recipe recipe = recipeRepository.findById(recipeId)
-			.orElseThrow(() -> new BusinessException(ErrorCode.RECIPE_NOT_FOUND, "레시피를 찾을 수 없습니다"));
+			.orElseThrow(() -> new BusinessException(ErrorCode.RECIPE_NOT_FOUND));
 
 		List<RecipeIngredient> ingredients = recipeIngredientRepository.findByRecipeIdOrderByIdAsc(
 			recipeId);
