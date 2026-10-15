@@ -4,6 +4,11 @@ import org.springframework.http.HttpStatus;
 
 public enum ErrorCode {
 
+	INVALID_IMAGE(HttpStatus.BAD_REQUEST, "이미지 또는 업로드 요청이 올바르지 않습니다."),
+	IMAGE_TOO_LARGE(HttpStatus.PAYLOAD_TOO_LARGE, "이미지는 최대 5MiB까지 업로드할 수 있습니다."),
+	UNSUPPORTED_IMAGE_TYPE(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "JPEG 또는 PNG 이미지 파일만 업로드할 수 있습니다."),
+	IMAGE_NOT_FOUND(HttpStatus.NOT_FOUND, "이미지를 찾을 수 없습니다."),
+	IMAGE_STORAGE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "이미지 저장소를 사용할 수 없습니다. 잠시 후 다시 시도해주세요."),
 	INVALID_REQUEST(HttpStatus.BAD_REQUEST, "요청이 올바르지 않습니다."),
 	NOT_FOUND(HttpStatus.NOT_FOUND, "리소스를 찾을 수 없습니다."),
 	CONFLICT(HttpStatus.CONFLICT, "이미 존재하는 리소스입니다."),
