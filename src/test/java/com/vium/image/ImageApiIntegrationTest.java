@@ -109,6 +109,26 @@ class ImageApiIntegrationTest {
 		verify(storage).put(any(), eq(png));
 	}
 
+	@Test void boundsConcurrentUploadsWhileStorageIsSlow() throws Exception {
+		var entered = new java.util.concurrent.CountDownLatch(4);
+		var release = new java.util.concurrent.CountDownLatch(1);
+		doAnswer(i -> { entered.countDown(); release.await(); return null; }).when(storage).put(any(), any());
+		var pool = java.util.concurrent.Executors.newFixedThreadPool(4);
+		try {
+			var uploads = new java.util.ArrayList<java.util.concurrent.Future<Long>>();
+			for (int i = 0; i < 4; i++) uploads.add(pool.submit(() -> upload("PROFILE")));
+			assertThat(entered.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+			mvc.perform(multipart("/api/me/images").file(file()).param("purpose", "PROFILE").header("Authorization", bearer(42)))
+				.andExpect(status().isServiceUnavailable()).andExpect(jsonPath("$.error.code").value("IMAGE_STORAGE_UNAVAILABLE"));
+			release.countDown();
+			for (var upload : uploads) assertThat(upload.get(10, java.util.concurrent.TimeUnit.SECONDS)).isPositive();
+		} finally {
+			release.countDown();
+			pool.shutdownNow();
+		}
+		upload("PROFILE");
+	}
+
 	@Test void issuesPrivateUrlOnlyToOwnerWithNoCache() throws Exception {
 		long id = upload("RECEIPT");
 		when(storage.access(any())).thenReturn(new ImageAccessResponse(id, "https://example.com/signed", Instant.now().plusSeconds(300)));

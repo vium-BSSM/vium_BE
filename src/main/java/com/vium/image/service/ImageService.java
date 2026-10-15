@@ -29,7 +29,9 @@ public class ImageService {
 	private final UserProfileService users;
 	private final Clock clock;
 	private final TransactionTemplate transactions;
-	// Bound decoded image memory on the 512MiB production container; excess requests retry later.
+	// Bound memory on the 512MiB production container (~256MiB heap); excess requests retry later.
+	// Each upload holds up to ~10MiB of bytes until S3 finishes; decoding needs up to ~64MiB more.
+	private final Semaphore uploadSlots = new Semaphore(4);
 	private final Semaphore decodeSlot = new Semaphore(1);
 
 	public ImageService(UploadedImageRepository images, ImageStorage storage, ImageValidator validator,
@@ -43,6 +45,15 @@ public class ImageService {
 	public ImageUploadResponse upload(Long userId, ImagePurpose purpose, MultipartFile file) {
 		users.getProfile(userId);
 		storage.requireEnabled();
+		acquire(uploadSlots);
+		try {
+			return store(userId, purpose, file);
+		} finally {
+			uploadSlots.release();
+		}
+	}
+
+	private ImageUploadResponse store(Long userId, ImagePurpose purpose, MultipartFile file) {
 		var validated = decode(file);
 		byte[] bytes = metadata.strip(validated.bytes(), validated.contentType());
 		String bucket = purpose.isPrivate() ? properties.privateBucket() : properties.publicBucket();
@@ -65,17 +76,21 @@ public class ImageService {
 	}
 
 	private ImageValidator.Validated decode(MultipartFile file) {
-		try {
-			if (!decodeSlot.tryAcquire(3, TimeUnit.SECONDS))
-				throw new BusinessException(ErrorCode.IMAGE_STORAGE_UNAVAILABLE);
-		} catch (InterruptedException e) {
-			Thread.currentThread().interrupt();
-			throw new BusinessException(ErrorCode.IMAGE_STORAGE_UNAVAILABLE);
-		}
+		acquire(decodeSlot);
 		try {
 			return validator.validate(file);
 		} finally {
 			decodeSlot.release();
+		}
+	}
+
+	private static void acquire(Semaphore slot) {
+		try {
+			if (!slot.tryAcquire(3, TimeUnit.SECONDS))
+				throw new BusinessException(ErrorCode.IMAGE_STORAGE_UNAVAILABLE);
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			throw new BusinessException(ErrorCode.IMAGE_STORAGE_UNAVAILABLE);
 		}
 	}
 

@@ -50,6 +50,22 @@ class ImageMetadataStripperTest {
 		assertThat(stripper.strip(dirty, "image/jpeg")).isEqualTo(clean);
 	}
 
+	@Test void dropsJfifAndJfxxThumbnails() throws Exception {
+		byte[] clean = ImageTestFiles.image("jpeg", 8, 8);
+		int app0End = 4 + ((clean[4] & 0xFF) << 8 | (clean[5] & 0xFF));
+		byte[] jfifWithThumbnail = segment(0xE0, concat(Arrays.copyOfRange(clean, 6, 18),
+			new byte[] {2, 1}, "SECRET".getBytes(ISO_8859_1)));
+		byte[] jfxx = segment(0xE0, concat("JFXX\0".getBytes(ISO_8859_1), new byte[] {0x10},
+			insertAfterApp0(ImageTestFiles.image("jpeg", 2, 2), segment(0xE1, exif(false, 1, "SECRET-THUMB")))));
+		byte[] dirty = concat(Arrays.copyOf(clean, 2), jfifWithThumbnail, jfxx,
+			Arrays.copyOfRange(clean, app0End, clean.length));
+
+		byte[] stripped = stripper.strip(dirty, "image/jpeg");
+
+		assertThat(new String(stripped, ISO_8859_1)).doesNotContain("SECRET");
+		assertThat(stripped).isEqualTo(clean);
+	}
+
 	@Test void keepsIccProfile() throws Exception {
 		byte[] withIcc = insertAfterApp0(ImageTestFiles.image("jpeg", 8, 8),
 			segment(0xE2, "ICC_PROFILE\0\1\1profile".getBytes(ISO_8859_1)));
@@ -77,8 +93,12 @@ class ImageMetadataStripperTest {
 	}
 
 	private static byte[] exif(boolean little, int orientation) {
+		return exif(little, orientation, "SECRET-GPS");
+	}
+
+	private static byte[] exif(boolean little, int orientation, String secretText) {
 		var order = little ? ByteOrder.LITTLE_ENDIAN : ByteOrder.BIG_ENDIAN;
-		byte[] secret = "SECRET-GPS".getBytes(ISO_8859_1);
+		byte[] secret = secretText.getBytes(ISO_8859_1);
 		var tiff = ByteBuffer.allocate(8 + 2 + 24 + 4 + secret.length).order(order);
 		tiff.put(little ? (byte) 'I' : (byte) 'M').put(little ? (byte) 'I' : (byte) 'M').putShort((short) 42).putInt(8);
 		tiff.putShort((short) 2);

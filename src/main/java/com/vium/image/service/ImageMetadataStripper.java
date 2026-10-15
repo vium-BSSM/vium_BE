@@ -16,7 +16,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class ImageMetadataStripper {
 	private static final byte[] EXIF = "Exif\0\0".getBytes(ISO_8859_1);
-	private static final byte[] ICC = "ICC_PROFILE\0".getBytes(ISO_8859_1);
+	private static final byte[] JFIF = "JFIF\0".getBytes(ISO_8859_1);
+	// "JFIF\0", version, density units, X/Y density, thumbnail width/height.
+	private static final int JFIF_HEADER = 14;
+	private static final byte[] ICC ="ICC_PROFILE\0".getBytes(ISO_8859_1);
 	private static final byte[] PNG_SIGNATURE = {(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n'};
 	private static final Set<String> PNG_RENDERING_CHUNKS =
 		Set.of("tRNS", "gAMA", "cHRM", "sRGB", "iCCP", "sBIT", "bKGD", "pHYs");
@@ -57,6 +60,13 @@ public class ImageMetadataStripper {
 					out.writeBytes(orientationSegment(orientation));
 					orientationWritten = true;
 				}
+			} else if (marker == 0xE0) {
+				// JFIF header only: drop its RGB thumbnail and JFXX extensions, which embed whole JPEGs.
+				if (end - payload >= JFIF_HEADER && startsWith(in, payload, end, JFIF)) {
+					out.write(0xFF); out.write(0xE0); out.write(0); out.write(JFIF_HEADER + 2);
+					out.write(in, payload, JFIF_HEADER - 2);
+					out.write(0); out.write(0);
+				}
 			} else if (keepJpegSegment(marker, in, payload, end)) {
 				out.write(0xFF); out.write(marker);
 				out.write(in, i, length);
@@ -70,11 +80,11 @@ public class ImageMetadataStripper {
 		}
 	}
 
-	// APPn and COM carry metadata; keep only JFIF, ICC color profiles and Adobe color transform.
+	// APPn and COM carry metadata; keep only ICC color profiles and Adobe color transform.
 	private static boolean keepJpegSegment(int marker, byte[] in, int payload, int end) {
 		if (marker == 0xFE) return false;
 		if (marker < 0xE0 || marker > 0xEF) return true;
-		return marker == 0xE0 || marker == 0xEE || (marker == 0xE2 && startsWith(in, payload, end, ICC));
+		return marker == 0xEE || (marker == 0xE2 && startsWith(in, payload, end, ICC));
 	}
 
 	// Entropy-coded data ends at the first marker that is not byte stuffing or a restart marker.
