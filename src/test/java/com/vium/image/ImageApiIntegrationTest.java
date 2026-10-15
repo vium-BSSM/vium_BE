@@ -93,6 +93,22 @@ class ImageApiIntegrationTest {
 		verify(storage).put(any(), eq(png));
 	}
 
+	@Test void storesImageWithoutMetadata() throws Exception {
+		var text = "tEXtComment\0SECRET".getBytes(java.nio.charset.StandardCharsets.ISO_8859_1);
+		var crc = new java.util.zip.CRC32();
+		crc.update(text);
+		var body = new ByteArrayOutputStream();
+		body.write(png, 0, 33);
+		body.write(java.nio.ByteBuffer.allocate(4).putInt(text.length - 4).array());
+		body.write(text);
+		body.write(java.nio.ByteBuffer.allocate(4).putInt((int) crc.getValue()).array());
+		body.write(png, 33, png.length - 33);
+		mvc.perform(multipart("/api/me/images").file(new MockMultipartFile("file", "x.png", "image/png", body.toByteArray()))
+				.param("purpose", "PROFILE").header("Authorization", bearer(42)))
+			.andExpect(status().isCreated()).andExpect(jsonPath("$.data.sizeBytes").value(png.length));
+		verify(storage).put(any(), eq(png));
+	}
+
 	@Test void issuesPrivateUrlOnlyToOwnerWithNoCache() throws Exception {
 		long id = upload("RECEIPT");
 		when(storage.access(any())).thenReturn(new ImageAccessResponse(id, "https://example.com/signed", Instant.now().plusSeconds(300)));

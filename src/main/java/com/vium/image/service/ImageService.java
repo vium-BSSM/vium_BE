@@ -12,6 +12,7 @@ import com.vium.user.service.UserProfileService;
 import java.time.Clock;
 import java.util.UUID;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -23,16 +24,18 @@ public class ImageService {
 	private final UploadedImageRepository images;
 	private final ImageStorage storage;
 	private final ImageValidator validator;
+	private final ImageMetadataStripper metadata;
 	private final ImageStorageProperties properties;
 	private final UserProfileService users;
 	private final Clock clock;
 	private final TransactionTemplate transactions;
 	// Bound decoded image memory on the 512MiB production container; excess requests retry later.
-	private final Semaphore uploadSlot = new Semaphore(1);
+	private final Semaphore decodeSlot = new Semaphore(1);
 
 	public ImageService(UploadedImageRepository images, ImageStorage storage, ImageValidator validator,
-		ImageStorageProperties properties, UserProfileService users, Clock clock, PlatformTransactionManager manager) {
-		this.images = images; this.storage = storage; this.validator = validator;
+		ImageMetadataStripper metadata, ImageStorageProperties properties, UserProfileService users, Clock clock,
+		PlatformTransactionManager manager) {
+		this.images = images; this.storage = storage; this.validator = validator; this.metadata = metadata;
 		this.properties = properties; this.users = users; this.clock = clock;
 		this.transactions = new TransactionTemplate(manager);
 	}
@@ -40,26 +43,39 @@ public class ImageService {
 	public ImageUploadResponse upload(Long userId, ImagePurpose purpose, MultipartFile file) {
 		users.getProfile(userId);
 		storage.requireEnabled();
-		if (!uploadSlot.tryAcquire()) throw new BusinessException(ErrorCode.IMAGE_STORAGE_UNAVAILABLE);
+		var validated = decode(file);
+		byte[] bytes = metadata.strip(validated.bytes(), validated.contentType());
+		String bucket = purpose.isPrivate() ? properties.privateBucket() : properties.publicBucket();
+		String key = "images/" + userId + "/" + UUID.randomUUID() + "." + validated.extension();
+		// Commit a durable cleanup record BEFORE S3 can contain an object.
+		var pending = transactions.execute(s -> images.saveAndFlush(UploadedImage.pending(userId,
+			purpose, bucket, key, validated.contentType(), bytes.length, clock.instant())));
+		// Outside a transaction so slow S3 calls never pin DB connections.
+		// Cleanup only touches rows an hour old, far past the bounded S3 timeout.
+		storage.put(pending, bytes);
+		var ready = transactions.execute(s -> {
+			var image = images.lockById(pending.getId())
+				.orElseThrow(() -> new BusinessException(ErrorCode.IMAGE_STORAGE_UNAVAILABLE));
+			image.markReady();
+			return images.saveAndFlush(image);
+		});
+		String url = purpose.isPrivate() ? null : properties.publicBaseUrl().replaceAll("/$", "") + "/" + key;
+		return new ImageUploadResponse(ready.getId(), purpose, purpose.isPrivate() ? "PRIVATE" : "PUBLIC",
+			ready.getContentType(), ready.getSizeBytes(), url, ready.getCreatedAt());
+	}
+
+	private ImageValidator.Validated decode(MultipartFile file) {
 		try {
-			var validated = validator.validate(file);
-			String bucket = purpose.isPrivate() ? properties.privateBucket() : properties.publicBucket();
-			String key = "images/" + userId + "/" + UUID.randomUUID() + "." + validated.extension();
-			// Commit a durable cleanup record BEFORE S3 can contain an object.
-			var pending = transactions.execute(s -> images.saveAndFlush(UploadedImage.pending(userId,
-				purpose, bucket, key, validated.contentType(), validated.bytes().length, clock.instant())));
-			var ready = transactions.execute(s -> {
-				// Cleanup takes the same lock: it cannot delete a concurrent successful upload.
-				var image = images.lockById(pending.getId()).orElseThrow();
-				storage.put(image, validated.bytes());
-				image.markReady();
-				return images.saveAndFlush(image);
-			});
-			String url = purpose.isPrivate() ? null : properties.publicBaseUrl().replaceAll("/$", "") + "/" + key;
-			return new ImageUploadResponse(ready.getId(), purpose, purpose.isPrivate() ? "PRIVATE" : "PUBLIC",
-				ready.getContentType(), ready.getSizeBytes(), url, ready.getCreatedAt());
+			if (!decodeSlot.tryAcquire(3, TimeUnit.SECONDS))
+				throw new BusinessException(ErrorCode.IMAGE_STORAGE_UNAVAILABLE);
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			throw new BusinessException(ErrorCode.IMAGE_STORAGE_UNAVAILABLE);
+		}
+		try {
+			return validator.validate(file);
 		} finally {
-			uploadSlot.release();
+			decodeSlot.release();
 		}
 	}
 
