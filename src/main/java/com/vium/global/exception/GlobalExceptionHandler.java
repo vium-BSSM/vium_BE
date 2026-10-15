@@ -1,6 +1,10 @@
 package com.vium.global.exception;
 
 import com.vium.global.common.ApiResponse;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -38,6 +42,25 @@ public class GlobalExceptionHandler {
 	public ResponseEntity<ApiResponse<Void>> handleUnreadableMessage(HttpMessageNotReadableException e) {
 		return ResponseEntity.badRequest().body(ApiResponse.fail(new ApiResponse.ErrorObject(
 			ErrorCode.INVALID_REQUEST.name(), "요청 본문의 형식 또는 필수 필드를 확인해 주세요")));
+	}
+
+	@ExceptionHandler(MaxUploadSizeExceededException.class)
+	public ResponseEntity<ApiResponse<Void>> handleUploadSize(MaxUploadSizeExceededException e) {
+		return handleBusinessException(new BusinessException(ErrorCode.IMAGE_TOO_LARGE));
+	}
+
+	@ExceptionHandler(MultipartException.class)
+	public ResponseEntity<ApiResponse<Void>> handleMultipart(MultipartException e, HttpServletRequest request) {
+		return handleBusinessException(new BusinessException(request.getRequestURI().equals("/api/me/images")
+			? ErrorCode.INVALID_IMAGE : ErrorCode.INVALID_REQUEST));
+	}
+
+	@ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+	public ResponseEntity<ApiResponse<Void>> handleUnsupportedMedia(HttpMediaTypeNotSupportedException e,
+		HttpServletRequest request) {
+		return ResponseEntity.status(415).body(ApiResponse.fail(new ApiResponse.ErrorObject(
+			request.getRequestURI().equals("/api/me/images") ? "UNSUPPORTED_IMAGE_TYPE" : "INVALID_REQUEST",
+			"지원하지 않는 Content-Type입니다.")));
 	}
 
 	@ExceptionHandler(Exception.class)

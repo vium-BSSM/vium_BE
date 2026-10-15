@@ -219,3 +219,4 @@ docker compose --env-file .env.prod -f compose.prod.yml -f "$MICRO_OVERRIDE" log
 참고: [Spring Security CORS](https://docs.spring.io/spring-security/reference/servlet/integrations/cors.html), [Compose 환경변수](https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/).
 
 운영 참고: [AL2023 /tmp](https://docs.aws.amazon.com/linux/al2023/ug/filesystem-slash-tmp.html), [Docker 이미지 정리](https://docs.docker.com/reference/cli/docker/image/prune/).
+

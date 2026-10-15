@@ -1,4 +1,9 @@
 spring:
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
+      file-size-threshold: 0
   application:
     name: vium-be
 
@@ -56,3 +61,11 @@ security:
     access-token-seconds: ${JWT_ACCESS_TOKEN_SECONDS:3600}
     refresh-token-seconds: ${JWT_REFRESH_TOKEN_SECONDS:1209600}
     clock-skew-seconds: ${JWT_CLOCK_SKEW_SECONDS:60}
+
+images:
+  storage:
+    enabled: ${IMAGE_STORAGE_ENABLED:false}
+    region: ${AWS_REGION:ap-northeast-2}
+    private-bucket: ${S3_PRIVATE_BUCKET:}
+    public-bucket: ${S3_PUBLIC_BUCKET:}
+    public-base-url: ${IMAGE_PUBLIC_BASE_URL:}

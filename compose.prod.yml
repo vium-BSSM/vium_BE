@@ -21,6 +21,11 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:?Set GEMINI_API_KEY}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
       UNSPLASH_ACCESS_KEY: ${UNSPLASH_ACCESS_KEY:?Set UNSPLASH_ACCESS_KEY}
+      IMAGE_STORAGE_ENABLED: ${IMAGE_STORAGE_ENABLED:-false}
+      AWS_REGION: ${AWS_REGION:-ap-northeast-2}
+      S3_PRIVATE_BUCKET: ${S3_PRIVATE_BUCKET:-}
+      S3_PUBLIC_BUCKET: ${S3_PUBLIC_BUCKET:-}
+      IMAGE_PUBLIC_BASE_URL: ${IMAGE_PUBLIC_BASE_URL:-}
       # Calendar-date business rules currently use the JVM default timezone.
       # compose.micro.yml replaces this entire string; mirror shared JVM options there.
       JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Seoul -XX:MaxRAMPercentage=70.0"
