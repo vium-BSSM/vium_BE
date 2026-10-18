@@ -455,7 +455,7 @@ class DisposeIntegrationTest {
 	@Test
 	void autoDisposeOnlyIncludesActiveItems() {
 		Long userId = 42L;
-		LocalDate yesterday = LocalDate.now().minusDays(1);
+		LocalDate yesterday = LocalDate.now(java.time.ZoneId.of("Asia/Seoul")).minusDays(1);
 
 		jdbcTemplate.update("""
 			update "inventory_items"
@@ -557,7 +557,7 @@ class DisposeIntegrationTest {
 
 	@Test
 	void getConsumptionEventsEndpoint_WithData() throws Exception {
-		LocalDate today = LocalDate.now();
+		LocalDate today = LocalDate.now(java.time.ZoneId.of("Asia/Seoul"));
 		jdbcTemplate.update("""
 			insert into "consumption_events"
 			("id", "inventory_item_id", "user_id", "event_type", "event_source_id", "quantity", "amount", "occurred_at", "created_at")
@@ -586,7 +586,7 @@ class DisposeIntegrationTest {
 
 	@Test
 	void getConsumptionEventsEndpoint_EventTypeFilterReturnsOnlyMatchingType() throws Exception {
-		LocalDate today = LocalDate.now();
+		LocalDate today = LocalDate.now(java.time.ZoneId.of("Asia/Seoul"));
 		jdbcTemplate.update("""
 			insert into "consumption_events"
 			("id", "inventory_item_id", "user_id", "event_type", "event_source_id", "quantity", "occurred_at", "created_at")
@@ -605,7 +605,7 @@ class DisposeIntegrationTest {
 
 	@Test
 	void getConsumptionEventsEndpoint_EventSourceConvertsAutoEstimatedCode() throws Exception {
-		LocalDate today = LocalDate.now();
+		LocalDate today = LocalDate.now(java.time.ZoneId.of("Asia/Seoul"));
 		jdbcTemplate.update("""
 			insert into "consumption_events"
 			("id", "inventory_item_id", "user_id", "event_type", "event_source_id", "quantity", "occurred_at", "created_at")
@@ -620,7 +620,7 @@ class DisposeIntegrationTest {
 
 	@Test
 	void getConsumptionEventsEndpoint_UserIsolation() throws Exception {
-		LocalDate today = LocalDate.now();
+		LocalDate today = LocalDate.now(java.time.ZoneId.of("Asia/Seoul"));
 		jdbcTemplate.update("""
 			insert into "consumption_events"
 			("id", "inventory_item_id", "user_id", "event_type", "event_source_id", "quantity", "occurred_at", "created_at")
@@ -716,7 +716,7 @@ class DisposeIntegrationTest {
 
 	@Test
 	void getConsumptionEventsEndpoint_OccurredAtFormat() throws Exception {
-		LocalDate today = LocalDate.now();
+		LocalDate today = LocalDate.now(java.time.ZoneId.of("Asia/Seoul"));
 
 		// DB에는 Asia/Seoul 벽시계 시각(naive)으로 저장되어 있다고 가정: 12:30:45 KST
 		jdbcTemplate.update("""

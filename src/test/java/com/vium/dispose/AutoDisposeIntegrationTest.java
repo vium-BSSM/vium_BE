@@ -57,7 +57,7 @@ class AutoDisposeIntegrationTest {
 
 	@Test
 	void disposesExpiredActiveItemWithProportionalAmountAndNextDayOccurredAt() {
-		LocalDate expiresOn = LocalDate.now().minusDays(3);
+		LocalDate expiresOn = LocalDate.now(java.time.ZoneId.of("Asia/Seoul")).minusDays(3);
 		jdbcTemplate.update("""
 			insert into "inventory_items"
 			("id", "user_id", "custom_name", "status_id", "unit_id", "initial_quantity", "remaining_quantity",
@@ -88,7 +88,7 @@ class AutoDisposeIntegrationTest {
 
 	@Test
 	void excludesItemsNotYetExpired() {
-		LocalDate expiresToday = LocalDate.now();
+		LocalDate expiresToday = LocalDate.now(java.time.ZoneId.of("Asia/Seoul"));
 		jdbcTemplate.update("""
 			insert into "inventory_items"
 			("id", "user_id", "custom_name", "status_id", "unit_id", "initial_quantity", "remaining_quantity",
@@ -106,7 +106,7 @@ class AutoDisposeIntegrationTest {
 
 	@Test
 	void excludesItemsWithZeroRemainingQuantity() {
-		LocalDate expiresOn = LocalDate.now().minusDays(1);
+		LocalDate expiresOn = LocalDate.now(java.time.ZoneId.of("Asia/Seoul")).minusDays(1);
 		jdbcTemplate.update("""
 			insert into "inventory_items"
 			("id", "user_id", "custom_name", "status_id", "unit_id", "initial_quantity", "remaining_quantity",
@@ -122,7 +122,7 @@ class AutoDisposeIntegrationTest {
 
 	@Test
 	void excludesAlreadyNonActiveItems() {
-		LocalDate expiresOn = LocalDate.now().minusDays(1);
+		LocalDate expiresOn = LocalDate.now(java.time.ZoneId.of("Asia/Seoul")).minusDays(1);
 		jdbcTemplate.update("""
 			insert into "inventory_items"
 			("id", "user_id", "custom_name", "status_id", "unit_id", "initial_quantity", "remaining_quantity",
@@ -141,7 +141,7 @@ class AutoDisposeIntegrationTest {
 	@Test
 	void skipsDisposalWhenRemainingQuantityChangedConcurrently() {
 		// 실제 DB에는 이미 다른 프로세스가 폐기 처리해 remaining_quantity가 0으로 바뀐 상태를 시뮬레이션
-		LocalDate expiresOn = LocalDate.now().minusDays(1);
+		LocalDate expiresOn = LocalDate.now(java.time.ZoneId.of("Asia/Seoul")).minusDays(1);
 		jdbcTemplate.update("""
 			insert into "inventory_items"
 			("id", "user_id", "custom_name", "status_id", "unit_id", "initial_quantity", "remaining_quantity",
@@ -151,7 +151,7 @@ class AutoDisposeIntegrationTest {
 
 		// 조건부 UPDATE 호출: 읽은 값(5)과 실제 DB 값(0)이 다르므로 실패해야 한다
 		boolean updated = inventoryService.disposeIfUnchanged(
-			304L, (short) 1, (short) 3, BigDecimal.valueOf(5), java.time.LocalDateTime.now());
+			304L, (short) 1, (short) 3, BigDecimal.valueOf(5), java.time.LocalDateTime.now(java.time.ZoneId.of("Asia/Seoul")));
 
 		assertThat(updated).isFalse();
 		// 상태는 테스트에서 직접 넣은 값(3=disposed)을 그대로 유지, remaining_quantity도 변화 없음
@@ -164,7 +164,7 @@ class AutoDisposeIntegrationTest {
 
 	@Test
 	void updatesUpdatedAtColumnOnConditionalDispose() {
-		LocalDate expiresOn = LocalDate.now().minusDays(1);
+		LocalDate expiresOn = LocalDate.now(java.time.ZoneId.of("Asia/Seoul")).minusDays(1);
 		jdbcTemplate.update("""
 			insert into "inventory_items"
 			("id", "user_id", "custom_name", "status_id", "unit_id", "initial_quantity", "remaining_quantity",
