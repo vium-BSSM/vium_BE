@@ -1,5 +1,7 @@
 package com.vium.shopping.service;
 
+import com.vium.global.code.Unit;
+import com.vium.global.code.UnitRepository;
 import com.vium.global.exception.BusinessException;
 import com.vium.global.exception.ErrorCode;
 import com.vium.global.exception.NotFoundException;
@@ -12,6 +14,7 @@ import com.vium.shopping.repository.ShoppingListItemQueryRepository;
 import com.vium.shopping.repository.ShoppingListItemRepository;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,9 +38,7 @@ public class ShoppingListService {
 	// 의존성 주입 (생성자 자동 생성 by @RequiredArgsConstructor)
 	private final ShoppingListItemRepository shoppingListItemRepository;
 	private final ShoppingListItemQueryRepository shoppingListItemQueryRepository;
-
-	// TODO: 필요한 의존성 추가
-	// private final UnitRepository unitRepository;  // 단위명 조회용
+	private final UnitRepository unitRepository;
 
 	/**
 	 * 장보기 리스트 조회
@@ -78,13 +79,33 @@ public class ShoppingListService {
 		List<ShoppingListItem> items = shoppingListItemQueryRepository
 			.findShoppingListByUserId(userId);
 
-		// Step 2: Entity 리스트를 DTO로 변환
+		// Step 2: 단위명을 한 번에 조회 (건건이 조회하지 않도록 N+1 방지)
+		Map<Short, String> unitNames = resolveUnitNames(items);
+
+		// Step 3: Entity 리스트를 DTO로 변환
 		List<ShoppingListItemResponse> responses = items.stream()
-			.map(ShoppingListItemResponse::from)
+			.map(item -> ShoppingListItemResponse.from(item, unitNames.get(item.getUnitId())))
 			.toList();
 
-		// Step 3: 응답 반환
+		// Step 4: 응답 반환
 		return new ShoppingListResponse(responses);
+	}
+
+	private Map<Short, String> resolveUnitNames(List<ShoppingListItem> items) {
+		List<Short> unitIds = items.stream()
+			.map(ShoppingListItem::getUnitId)
+			.filter(java.util.Objects::nonNull)
+			.distinct()
+			.toList();
+		// item.getUnitId()가 null일 수 있어 null-key 조회를 허용하는 가변 Map을 사용한다(Map.of()는 null 키에서 NPE).
+		Map<Short, String> result = new java.util.HashMap<>();
+		if (unitIds.isEmpty()) {
+			return result;
+		}
+		for (Unit unit : unitRepository.findAllById(unitIds)) {
+			result.put(unit.getId(), unit.getName());
+		}
+		return result;
 	}
 
 	/**
@@ -164,7 +185,10 @@ public class ShoppingListService {
 		ShoppingListItem saved = shoppingListItemRepository.save(item);
 
 		// Step 5: Entity를 DTO로 변환해서 응답
-		return ShoppingListItemResponse.from(saved);
+		String unitName = saved.getUnitId() != null
+			? unitRepository.findById(saved.getUnitId()).map(Unit::getName).orElse(null)
+			: null;
+		return ShoppingListItemResponse.from(saved, unitName);
 	}
 
 	/**
@@ -226,7 +250,10 @@ public class ShoppingListService {
 		ShoppingListItem updated = shoppingListItemRepository.save(item);
 
 		// Step 4: Entity를 DTO로 변환해서 응답
-		return ShoppingListItemResponse.from(updated);
+		String unitName = updated.getUnitId() != null
+			? unitRepository.findById(updated.getUnitId()).map(Unit::getName).orElse(null)
+			: null;
+		return ShoppingListItemResponse.from(updated, unitName);
 	}
 
 	/**
