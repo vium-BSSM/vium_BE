@@ -16,7 +16,7 @@ public class WasteReportQueryRepository {
 
 	public List<WasteReportDto> findReports(Long userId) {
 		String sql = """
-			select row_number() over (order by period_start desc) as waste_report_id,
+			select extract(year from period_start)::bigint * 100 + extract(month from period_start)::bigint as waste_report_id,
 			       period_start,
 			       period_end,
 			       total_wasted_amount,
