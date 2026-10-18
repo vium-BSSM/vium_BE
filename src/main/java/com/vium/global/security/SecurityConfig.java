@@ -4,6 +4,7 @@ import com.vium.global.common.ApiResponse;
 import com.vium.global.exception.ErrorCode;
 import jakarta.servlet.DispatcherType;
 import java.time.Clock;
+import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
@@ -88,6 +89,6 @@ public class SecurityConfig {
 
 	@Bean
 	public Clock clock() {
-		return Clock.systemDefaultZone();
+		return Clock.system(ZoneId.of("Asia/Seoul"));
 	}
 }

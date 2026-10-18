@@ -26,6 +26,15 @@ spring:
     enabled: true
     locations: classpath:db/migration
 
+  task:
+    scheduling:
+      pool:
+        size: 1
+      thread-name-prefix: dispose-batch-
+      shutdown:
+        await-termination: true
+        await-termination-period: 60s
+
 server:
   port: ${SERVER_PORT:8080}
 
@@ -51,6 +60,12 @@ gemini:
 unsplash:
   access-key: ${UNSPLASH_ACCESS_KEY}
   timeout-seconds: 3
+
+disposal:
+  auto-dispose:
+    enabled: ${DISPOSAL_AUTO_DISPOSE_ENABLED:false}
+    cron: ${DISPOSAL_AUTO_DISPOSE_CRON:0 10 0 * * *}
+    time-zone: ${DISPOSAL_AUTO_DISPOSE_TIMEZONE:Asia/Seoul}
 
 security:
   cors:
