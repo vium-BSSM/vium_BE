@@ -64,14 +64,14 @@ public record ShoppingListItemResponse(
 	 * @param item 변환할 entity
 	 * @return DTO
 	 */
-	public static ShoppingListItemResponse from(ShoppingListItem item) {
+	public static ShoppingListItemResponse from(ShoppingListItem item, String unitName) {
 		return new ShoppingListItemResponse(
 			item.getId(),
 			item.getIngredientCatalogId(),
 			item.getCustomName(),
 			item.getSuggestedQuantity(),
 			item.getUnitId(),
-			null,  // TODO: unitName은 추후 추가 (units 테이블 조회 필요)
+			unitName,
 			item.getReason(),
 			item.getIsChecked(),
 			item.getCreatedAt()

@@ -1,6 +1,5 @@
 package com.vium.shopping.dto.response;
 
-import com.vium.shopping.entity.ShoppingListItem;
 import java.util.List;
 
 /**
@@ -58,21 +57,6 @@ public record ShoppingListResponse(
 	/** 사용자의 모든 장보기 항목 */
 	List<ShoppingListItemResponse> items
 ) {
-
-	/**
-	 * Entity 리스트를 DTO로 변환하는 팩토리 메서드
-	 *
-	 * List<ShoppingListItem> → ShoppingListResponse
-	 *
-	 * @param items entity 리스트
-	 * @return DTO
-	 */
-	public static ShoppingListResponse from(List<ShoppingListItem> items) {
-		List<ShoppingListItemResponse> responses = items.stream()
-			.map(ShoppingListItemResponse::from)
-			.toList();
-		return new ShoppingListResponse(responses);
-	}
 
 	/**
 	 * 빈 응답 생성 (항목이 없을 때)
