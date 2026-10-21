@@ -9,12 +9,22 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.vium.dispose.dto.UpdateInventoryItemStatusRequest;
+import com.vium.dispose.dto.UpdateInventoryItemStatusResponse;
 import com.vium.dispose.entity.ConsumptionEvent;
 import com.vium.dispose.repository.ConsumptionEventRepository;
 import com.vium.dispose.service.DisposeService;
+import com.vium.global.exception.InvalidRequestException;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -158,6 +168,63 @@ class DisposeIntegrationTest {
 			"select status_id from inventory_items where id = 101", Integer.class))
 			.isEqualTo(1);
 		assertThat(consumptionEventRepository.count()).isZero();
+	}
+
+	// ===== 동시성: 같은 재고에 대한 동시 PATCH =====
+
+	@Test
+	void concurrentUpdatesDoNotDoubleDeductInventoryOrDuplicateEvents() throws Exception {
+		jdbcTemplate.update("""
+			insert into "inventory_items"
+			("id", "user_id", "custom_name", "status_id", "unit_id", "initial_quantity", "remaining_quantity", "created_at", "updated_at")
+			values (105, 42, '양배추', 1, 1, 10, 10, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			""");
+
+		UpdateInventoryItemStatusRequest request =
+			new UpdateInventoryItemStatusRequest("consumed", new BigDecimal("6"), null, null);
+
+		CountDownLatch ready = new CountDownLatch(2);
+		CountDownLatch start = new CountDownLatch(1);
+		Callable<UpdateInventoryItemStatusResponse> task = () -> {
+			ready.countDown();
+			start.await();
+			return disposeService.updateStatus(42L, 105L, request);
+		};
+
+		ExecutorService executor = Executors.newFixedThreadPool(2);
+		try {
+			Future<UpdateInventoryItemStatusResponse> future1 = executor.submit(task);
+			Future<UpdateInventoryItemStatusResponse> future2 = executor.submit(task);
+
+			assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+			start.countDown();
+
+			int successCount = 0;
+			int rejectedCount = 0;
+			for (Future<UpdateInventoryItemStatusResponse> future : List.of(future1, future2)) {
+				try {
+					future.get(10, TimeUnit.SECONDS);
+					successCount++;
+				} catch (ExecutionException e) {
+					assertThat(e.getCause()).isInstanceOf(InvalidRequestException.class);
+					rejectedCount++;
+				}
+			}
+
+			// 두 번째 요청은 첫 번째가 반영한 남은 수량(4)을 보고 기존 400("Quantity must not exceed remaining quantity")을 받는다.
+			assertThat(successCount).isEqualTo(1);
+			assertThat(rejectedCount).isEqualTo(1);
+		} finally {
+			executor.shutdown();
+			executor.awaitTermination(10, TimeUnit.SECONDS);
+		}
+
+		assertThat(jdbcTemplate.queryForObject(
+			"select remaining_quantity from inventory_items where id = 105", BigDecimal.class))
+			.isEqualByComparingTo(BigDecimal.valueOf(4));
+		assertThat(jdbcTemplate.queryForObject(
+			"select count(*) from consumption_events where inventory_item_id = 105", Integer.class))
+			.isEqualTo(1);
 	}
 
 	// ===== A 시나리오: 전량/부분 처리, 비례 amount, 검증 =====

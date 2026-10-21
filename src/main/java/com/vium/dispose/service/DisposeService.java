@@ -40,7 +40,8 @@ public class DisposeService {
 	@Transactional
 	public UpdateInventoryItemStatusResponse updateStatus(Long userId, Long inventoryItemId,
 			UpdateInventoryItemStatusRequest request) {
-		InventoryItemSnapshot snapshot = inventoryService.getSnapshot(userId, inventoryItemId);
+		// 검증 전에 행 락을 먼저 잡아야 동시 요청이 같은 남은 수량을 보고 둘 다 통과하지 않는다
+		InventoryItemSnapshot snapshot = inventoryService.getSnapshotForUpdate(userId, inventoryItemId);
 
 		validate(request, snapshot);
 
