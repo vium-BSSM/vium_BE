@@ -1,6 +1,8 @@
 package com.vium.recipe.service;
 
 import com.vium.global.code.ItemStatusRepository;
+import com.vium.global.code.Unit;
+import com.vium.global.code.UnitRepository;
 import com.vium.global.exception.BusinessException;
 import com.vium.global.exception.ErrorCode;
 import com.vium.ingredient.service.IngredientCatalogService;
@@ -16,10 +18,12 @@ import com.vium.recipe.repository.RecipeIngredientRepository;
 import com.vium.recipe.repository.RecipeRepository;
 import com.vium.recipe.repository.RecipeSuggestionRepository;
 import com.vium.recipe.repository.RecipeStepRepository;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +40,7 @@ public class RecipeQueryService {
 	private final InventoryItemRepository inventoryItemRepository;
 	private final IngredientCatalogService ingredientCatalogService;
 	private final ItemStatusRepository itemStatusRepository;
+	private final UnitRepository unitRepository;
 
 	/**
 	 * 레시피 상세 정보를 조회합니다 (API ②).
@@ -60,16 +65,13 @@ public class RecipeQueryService {
 			recipeId);
 		List<RecipeStep> steps = recipeStepRepository.findByRecipeIdOrderByStepOrderAsc(recipeId);
 
-		// 3. inventoryId 매핑 (3-4의 3)
-		Map<Long, Long> catalogIdToInventoryId = mapCatalogIdToInventoryId(userId, ingredients);
+		// 3. 재고 매핑 (3-4의 3): inventoryId와 함께 남은 수량·단위를 내려준다
+		Map<Long, InventoryItem> catalogIdToInventory = mapCatalogIdToInventory(userId, ingredients);
+		Map<Short, String> unitNames = findUnitNames(catalogIdToInventory.values());
 
 		// 응답 생성
 		List<IngredientResponse> ingredientResponses = ingredients.stream()
-			.map(ing -> new IngredientResponse(
-				ing.getIngredientCatalogId(),
-				catalogIdToInventoryId.get(ing.getIngredientCatalogId()),
-				getIngredientName(ing.getIngredientCatalogId())
-			))
+			.map(ing -> toIngredientResponse(ing, catalogIdToInventory.get(ing.getIngredientCatalogId()), unitNames))
 			.toList();
 
 		List<StepResponse> stepResponses = steps.stream()
@@ -87,9 +89,36 @@ public class RecipeQueryService {
 		);
 	}
 
-	private Map<Long, Long> mapCatalogIdToInventoryId(Long userId,
+	private IngredientResponse toIngredientResponse(RecipeIngredient ingredient, InventoryItem inventory,
+		Map<Short, String> unitNames) {
+		Long catalogId = ingredient.getIngredientCatalogId();
+		if (inventory == null) {
+			return new IngredientResponse(catalogId, null, getIngredientName(catalogId), null, null);
+		}
+		return new IngredientResponse(
+			catalogId,
+			inventory.getId(),
+			getIngredientName(catalogId),
+			inventory.getRemainingQuantity(),
+			unitNames.get(inventory.getUnitId())
+		);
+	}
+
+	private Map<Short, String> findUnitNames(Collection<InventoryItem> inventoryItems) {
+		List<Short> unitIds = inventoryItems.stream()
+			.map(InventoryItem::getUnitId)
+			.distinct()
+			.toList();
+		if (unitIds.isEmpty()) {
+			return Map.of();
+		}
+		return unitRepository.findAllById(unitIds).stream()
+			.collect(Collectors.toMap(Unit::getId, Unit::getName));
+	}
+
+	private Map<Long, InventoryItem> mapCatalogIdToInventory(Long userId,
 		List<RecipeIngredient> ingredients) {
-		Map<Long, Long> result = new HashMap<>();
+		Map<Long, InventoryItem> result = new HashMap<>();
 
 		for (RecipeIngredient ingredient : ingredients) {
 			Long catalogId = ingredient.getIngredientCatalogId();
@@ -112,7 +141,7 @@ public class RecipeQueryService {
 					return dateCompare != 0 ? dateCompare : a.getId().compareTo(b.getId());
 				});
 
-			active.ifPresent(item -> result.put(catalogId, item.getId()));
+			active.ifPresent(item -> result.put(catalogId, item));
 		}
 
 		return result;
