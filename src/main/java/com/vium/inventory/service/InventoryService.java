@@ -79,6 +79,18 @@ public class InventoryService {
 		return new InventoryState(item.getId(), item.getUserId(), item.getRemainingQuantity());
 	}
 
+	/**
+	 * 소비/폐기 PATCH용 스냅샷. 행에 PESSIMISTIC_WRITE 락을 걸어 같은 트랜잭션이 끝날 때까지
+	 * 다른 요청이 remainingQuantity를 읽거나 바꾸지 못하게 한다. 반드시 호출자 트랜잭션 안에서 사용한다.
+	 */
+	@Transactional
+	public InventoryItemSnapshot getSnapshotForUpdate(Long userId, Long inventoryItemId) {
+		InventoryItem item = inventoryItemRepository.findByIdAndUserIdForUpdate(inventoryItemId, userId)
+			.orElseThrow(() -> new NotFoundException("Inventory item not found"));
+		return new InventoryItemSnapshot(item.getId(), item.getUserId(), item.getRemainingQuantity(),
+			item.getInitialQuantity(), item.getAmount());
+	}
+
 	@Transactional(readOnly = true)
 	public InventoryItemSnapshot getSnapshot(Long userId, Long inventoryItemId) {
 		InventoryItem item = inventoryItemRepository.findByIdAndUserId(inventoryItemId, userId)
