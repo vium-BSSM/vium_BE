@@ -1,6 +1,7 @@
 package com.vium.ingredient.service;
 
 import com.vium.ingredient.entity.IngredientCatalog;
+import com.vium.ingredient.dto.CatalogName;
 import com.vium.ingredient.repository.IngredientCatalogRepository;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -12,6 +13,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class IngredientCatalogService {
 
 	private final IngredientCatalogRepository ingredientCatalogRepository;
+
+	@Transactional(readOnly = true)
+	public List<CatalogName> findAllNames() {
+		return ingredientCatalogRepository.findAllNames();
+	}
 
 	@Transactional(readOnly = true)
 	public boolean existsById(Long ingredientCatalogId) {
