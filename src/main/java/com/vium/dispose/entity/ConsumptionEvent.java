@@ -64,8 +64,8 @@ public class ConsumptionEvent {
 	}
 
 	public static ConsumptionEvent create(Long inventoryItemId, Long userId, String eventType,
-			Short eventSourceId, BigDecimal quantity, BigDecimal amount) {
+			Short eventSourceId, BigDecimal quantity, BigDecimal amount, LocalDateTime occurredAt) {
 		return new ConsumptionEvent(inventoryItemId, userId, eventType, eventSourceId, quantity, amount,
-				LocalDateTime.now());
+				occurredAt);
 	}
 }

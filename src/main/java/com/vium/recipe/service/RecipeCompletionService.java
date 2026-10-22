@@ -5,6 +5,7 @@ import com.vium.dispose.dto.UpdateInventoryItemStatusRequest;
 import com.vium.global.code.ItemStatusRepository;
 import com.vium.global.exception.BusinessException;
 import com.vium.global.exception.ErrorCode;
+import com.vium.global.exception.InvalidRequestException;
 import com.vium.inventory.entity.InventoryItem;
 import com.vium.inventory.repository.InventoryItemRepository;
 import com.vium.recipe.dto.RecipeCompleteRequest;
@@ -34,6 +35,9 @@ public class RecipeCompletionService {
 		// 1. 중복 검사
 		validateNoDuplicateInventory(request.usages());
 
+		// 1-1. usageRate / usedQuantity 중 하나만 보냈는지, usedQuantity 소수 자릿수 검사
+		validateUsageValues(request.usages());
+
 		// 2. 레시피 접근 권한 확인
 		if (!recipeSuggestionRepository.existsByUserIdAndRecipeId(userId, recipeId)) {
 			throw new BusinessException(ErrorCode.RECIPE_NOT_FOUND);
@@ -46,6 +50,7 @@ public class RecipeCompletionService {
 		List<InventoryItem> inventoryItems = inventoryItemRepository.findAllById(inventoryIds);
 
 		validateInventoryItems(userId, inventoryIds, inventoryItems);
+		validateUsedQuantities(request.usages(), inventoryItems);
 
 		// 4. 재고마다 차감
 		Short activeStatusId = getActiveStatusId();
@@ -57,14 +62,23 @@ public class RecipeCompletionService {
 				.findFirst()
 				.orElseThrow();
 
-			if (usage.usageRate() == 0) {
-				// 0% → 변경 없음
-				continue;
-			}
+			BigDecimal usedQuantity;
+			if (usage.usedQuantity() != null) {
+				if (usage.usedQuantity().signum() == 0) {
+					// 사용 수량 0 → 변경 없음
+					continue;
+				}
+				usedQuantity = usage.usedQuantity();
+			} else {
+				if (usage.usageRate() == 0) {
+					// 0% → 변경 없음
+					continue;
+				}
 
-			BigDecimal usedQuantity = item.getRemainingQuantity()
-				.multiply(BigDecimal.valueOf(usage.usageRate()))
-				.divide(BigDecimal.valueOf(100), 3, RoundingMode.HALF_UP);
+				usedQuantity = item.getRemainingQuantity()
+					.multiply(BigDecimal.valueOf(usage.usageRate()))
+					.divide(BigDecimal.valueOf(100), 3, RoundingMode.HALF_UP);
+			}
 
 			BigDecimal newRemainingQuantity = item.getRemainingQuantity().subtract(usedQuantity);
 
@@ -87,6 +101,39 @@ public class RecipeCompletionService {
 		for (RecipeCompleteRequest.UsageDto usage : usages) {
 			if (!seenIds.add(usage.inventoryId())) {
 				throw new BusinessException(ErrorCode.DUPLICATE_INVENTORY);
+			}
+		}
+	}
+
+	private void validateUsageValues(List<RecipeCompleteRequest.UsageDto> usages) {
+		for (RecipeCompleteRequest.UsageDto usage : usages) {
+			if (usage.usageRate() != null && usage.usedQuantity() != null) {
+				throw new InvalidRequestException("usageRate와 usedQuantity는 함께 보낼 수 없습니다.");
+			}
+			if (usage.usageRate() == null && usage.usedQuantity() == null) {
+				throw new InvalidRequestException("usageRate 또는 usedQuantity 중 하나는 필요합니다.");
+			}
+			if (usage.usedQuantity() != null && usage.usedQuantity().signum() < 0) {
+				throw new InvalidRequestException("usedQuantity는 0 이상이어야 합니다.");
+			}
+			if (usage.usedQuantity() != null && usage.usedQuantity().scale() > 3) {
+				throw new InvalidRequestException("usedQuantity는 소수점 3자리까지 입력할 수 있습니다.");
+			}
+		}
+	}
+
+	private void validateUsedQuantities(List<RecipeCompleteRequest.UsageDto> usages,
+		List<InventoryItem> inventoryItems) {
+		for (RecipeCompleteRequest.UsageDto usage : usages) {
+			if (usage.usedQuantity() == null) {
+				continue;
+			}
+			InventoryItem item = inventoryItems.stream()
+				.filter(i -> i.getId().equals(usage.inventoryId()))
+				.findFirst()
+				.orElseThrow();
+			if (usage.usedQuantity().compareTo(item.getRemainingQuantity()) > 0) {
+				throw new InvalidRequestException("usedQuantity는 남은 수량을 초과할 수 없습니다.");
 			}
 		}
 	}

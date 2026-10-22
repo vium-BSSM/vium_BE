@@ -19,6 +19,9 @@
       "name": "dispose"
     },
     {
+      "name": "Recipe"
+    },
+    {
       "name": "receipt"
     },
     {
@@ -29,6 +32,10 @@
     },
     {
       "name": "settings"
+    },
+    {
+      "name": "image",
+      "description": "S3 이미지 업로드 및 개인 이미지 조회"
     }
   ],
   "paths": {
@@ -222,7 +229,8 @@
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "headers": {}
           },
           "401": {
             "description": "Access Token 누락·만료·무효",
@@ -232,7 +240,8 @@
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "headers": {}
           },
           "403": {
             "description": "다른 사용자 소유의 Refresh Token 세션",
@@ -242,7 +251,8 @@
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "headers": {}
           }
         },
         "security": [
@@ -344,6 +354,17 @@
             },
             "headers": {}
           },
+          "400": {
+            "description": "필수값 누락, 이메일 형식 오류 또는 입력 길이 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "headers": {}
+          },
           "409": {
             "description": "이메일 중복 (탈퇴 계정 포함)",
             "content": {
@@ -354,16 +375,6 @@
               }
             },
             "headers": {}
-          },
-          "400": {
-            "description": "필수값 누락, 이메일 형식 오류 또는 입력 길이 초과",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
           }
         },
         "security": []
@@ -389,10 +400,10 @@
                 "properties": {
                   "refreshToken": {
                     "type": "string",
-                    "example": "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG",
                     "maxLength": 512,
                     "minLength": 1,
-                    "description": "로그인 또는 직전 재발급에서 받은 불투명 토큰 원문. 공백만인 값은 허용하지 않으며 JWT가 아니다."
+                    "description": "로그인 또는 직전 재발급에서 받은 불투명 토큰 원문. 공백만인 값은 허용하지 않으며 JWT가 아니다.",
+                    "example": "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG"
                   }
                 }
               }
@@ -445,6 +456,7 @@
                     },
                     "error": {
                       "type": "object",
+                      "properties": {},
                       "nullable": true
                     }
                   }
@@ -470,7 +482,8 @@
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "headers": {}
           },
           "401": {
             "description": "Refresh Token 미존재·만료·폐기·재사용 또는 탈퇴 사용자",
@@ -560,6 +573,122 @@
           }
         },
         "security": []
+      }
+    },
+    "/api/me": {
+      "get": {
+        "summary": "내 정보 조회",
+        "deprecated": false,
+        "description": "Access Token의 사용자 ID로 현재 로그인한 사용자의 정보를 조회한다. 요청 본문이나 사용자 ID 파라미터는 받지 않는다. 존재하지 않거나 탈퇴한 계정은 401로 처리한다. 비밀번호와 인증 토큰은 응답에 포함하지 않는다.",
+        "tags": [
+          "user"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "현재 사용자 정보 조회 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "email",
+                        "displayName"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "integer",
+                          "format": "int64",
+                          "minimum": 1,
+                          "description": "사용자 ID"
+                        },
+                        "email": {
+                          "type": "string",
+                          "format": "email",
+                          "maxLength": 255
+                        },
+                        "displayName": {
+                          "type": "string",
+                          "maxLength": 80,
+                          "description": "닉네임"
+                        }
+                      }
+                    },
+                    "error": {
+                      "type": "object",
+                      "enum": [
+                        null
+                      ],
+                      "description": "성공 시 null",
+                      "properties": {},
+                      "nullable": true
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "id": 12,
+                    "email": "user@example.com",
+                    "displayName": "홍길동"
+                  },
+                  "error": null
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "required": false,
+                "description": "사용자 정보 응답 캐시 금지",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "no-store"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access Token 누락·만료·무효 또는 존재하지 않거나 탈퇴한 사용자",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "UNAUTHORIZED",
+                    "message": "인증이 필요합니다."
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
       }
     },
     "/api/me/ingredients": {
@@ -738,8 +867,8 @@
                               "amount": {
                                 "type": "integer",
                                 "format": "int64",
-                                "nullable": true,
-                                "description": "등록된 재료의 취득 금액(원). 소수 금액은 HALF_UP 방식으로 원 단위 반올림하여 반환합니다(2500.49 → 2500, 2500.50 → 2501). DB 원본 금액은 변경하지 않습니다. 미입력 시 null이며 잔여 수량에 따라 차감하지 않습니다."
+                                "description": "등록된 재료의 취득 금액(원). 소수 금액은 HALF_UP 방식으로 원 단위 반올림하여 반환합니다(2500.49 → 2500, 2500.50 → 2501). DB 원본 금액은 변경하지 않습니다. 미입력 시 null이며 잔여 수량에 따라 차감하지 않습니다.",
+                                "nullable": true
                               },
                               "unitId": {
                                 "type": "integer",
@@ -808,175 +937,6 @@
                     ]
                   },
                   "error": null
-                }
-              }
-            },
-            "headers": {}
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ]
-      }
-    },
-    "/api/me/ingredients/scan": {
-      "post": {
-        "summary": "식재료 스캔 등록",
-        "deprecated": false,
-        "description": "",
-        "tags": [],
-        "parameters": [],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "scanType": {
-                    "type": "string"
-                  },
-                  "imageUrl": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "scanType",
-                  "imageUrl"
-                ]
-              },
-              "example": {
-                "scanType": "receipt",
-                "imageUrl": "https://example.com/receipt.jpg"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "receiptId": {
-                          "type": "integer"
-                        },
-                        "ocrStatus": {
-                          "type": "string"
-                        },
-                        "purchaseId": {
-                          "type": "integer"
-                        },
-                        "items": {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "properties": {
-                              "inventoryItemId": {
-                                "type": "integer"
-                              },
-                              "ingredientCatalogId": {
-                                "type": "integer",
-                                "nullable": true
-                              },
-                              "name": {
-                                "type": "string"
-                              },
-                              "categoryName": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "initialQuantity": {
-                                "type": "number"
-                              },
-                              "remainingQuantity": {
-                                "type": "number"
-                              },
-                              "unitId": {
-                                "type": "integer",
-                                "description": "고정 단위 ID: 1=개, 2=g, 3=kg, 4=ml, 5=L, 6=팩, 7=봉, 8=병, 9=캔, 10=통. 포장 단위는 무게·부피로 자동 환산하지 않습니다.",
-                                "enum": [
-                                  1,
-                                  2,
-                                  3,
-                                  4,
-                                  5,
-                                  6,
-                                  7,
-                                  8,
-                                  9,
-                                  10
-                                ]
-                              },
-                              "unit": {
-                                "type": "string"
-                              },
-                              "expiresOn": {
-                                "type": "string"
-                              }
-                            }
-                          }
-                        }
-                      },
-                      "required": [
-                        "receiptId",
-                        "ocrStatus",
-                        "purchaseId",
-                        "items"
-                      ]
-                    },
-                    "error": {
-                      "type": "null"
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data",
-                    "error"
-                  ]
-                },
-                "example": {
-                  "success": true,
-                  "data": {
-                    "receiptId": 3,
-                    "ocrStatus": "completed",
-                    "purchaseId": 7,
-                    "items": [
-                      {
-                        "inventoryItemId": 12,
-                        "ingredientCatalogId": 2,
-                        "name": "달걀",
-                        "categoryName": "dairy",
-                        "initialQuantity": 10,
-                        "remainingQuantity": 10,
-                        "unitId": 1,
-                        "unit": "개",
-                        "expiresOn": "2026-09-10"
-                      }
-                    ]
-                  },
-                  "error": null
-                }
-              }
-            },
-            "headers": {}
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             },
@@ -1304,8 +1264,7 @@
               "schema": {
                 "type": "object",
                 "properties": {}
-              },
-              "examples": {}
+              }
             }
           }
         },
@@ -1831,107 +1790,85 @@
         "security": []
       }
     },
-    "/api/me/recipes/recommended": {
+    "/api/me/recipes/{recipeId}": {
       "get": {
-        "summary": "소비기한 임박 레시피 조회",
+        "summary": "레시피 상세",
         "deprecated": false,
-        "description": "",
-        "tags": [],
-        "parameters": [],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {}
-              },
-              "examples": {}
+        "description": "추천받은 레시피의 상세 정보.\n\n- 재료별 inventoryId: 같은 재료의 active 재고 중 소비기한이 가장 빠른 것. 보유하지 않으면 null (사용량 조사 슬라이더에서 제외).\n- imageUrl이 null이면 기본 회색 박스를 표시합니다.\n- 추천받지 않은 레시피는 404입니다.",
+        "operationId": "getRecipeDetail",
+        "tags": [
+          "Recipe"
+        ],
+        "parameters": [
+          {
+            "name": "recipeId",
+            "in": "path",
+            "description": "레시피 ID",
+            "required": true,
+            "example": "",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
             }
           }
-        },
+        ],
         "responses": {
           "200": {
-            "description": "",
+            "description": "성공",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiResponseBase"
                     },
-                    "data": {
+                    {
                       "type": "object",
                       "properties": {
-                        "recipes": {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "properties": {
-                              "recipeId": {
-                                "type": "integer"
-                              },
-                              "title": {
-                                "type": "string"
-                              },
-                              "usedIngredients": {
-                                "type": "array",
-                                "items": {
-                                  "type": "object",
-                                  "properties": {
-                                    "ingredientCatalogId": {
-                                      "type": "integer",
-                                      "nullable": true
-                                    },
-                                    "name": {
-                                      "type": "string"
-                                    }
-                                  },
-                                  "required": [
-                                    "ingredientCatalogId",
-                                    "name"
-                                  ]
-                                }
-                              },
-                              "reason": {
-                                "type": "string"
-                              }
-                            }
-                          }
+                        "data": {
+                          "$ref": "#/components/schemas/RecipeDetailResponse"
                         }
-                      },
-                      "required": [
-                        "recipes"
-                      ]
-                    },
-                    "error": {
-                      "type": "null"
+                      }
                     }
-                  },
-                  "required": [
-                    "success",
-                    "data",
-                    "error"
                   ]
                 },
                 "example": {
                   "success": true,
                   "data": {
-                    "recipes": [
+                    "recipeId": 1,
+                    "title": "당근 크림 파스타",
+                    "category": "WESTERN",
+                    "cookTime": 20,
+                    "imageUrl": "https://images.unsplash.com/photo-xxxx?w=1080",
+                    "ingredients": [
                       {
-                        "recipeId": 1,
-                        "title": "우유 팬케이크",
-                        "usedIngredients": [
-                          {
-                            "ingredientCatalogId": 5,
-                            "name": "우유"
-                          },
-                          {
-                            "ingredientCatalogId": 8,
-                            "name": "달걀"
-                          }
-                        ],
-                        "reason": "소비기한이 임박한 우유와 달걀을 활용할 수 있는 레시피입니다."
+                        "ingredientCatalogId": 3,
+                        "inventoryId": 21,
+                        "name": "당근"
+                      },
+                      {
+                        "ingredientCatalogId": 7,
+                        "inventoryId": 22,
+                        "name": "감자"
+                      },
+                      {
+                        "ingredientCatalogId": 11,
+                        "inventoryId": null,
+                        "name": "파스타면"
+                      }
+                    ],
+                    "steps": [
+                      {
+                        "step": 1,
+                        "description": "끓는 물에 면을 넣어 삶아주세요!"
+                      },
+                      {
+                        "step": 2,
+                        "description": "면을 건져내고 다른 재료들과 볶아주세요"
+                      },
+                      {
+                        "step": 3,
+                        "description": "접시에 플레이팅하세요! 완성입니다."
                       }
                     ]
                   },
@@ -1940,30 +1877,886 @@
               }
             },
             "headers": {}
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized",
+            "description": "인증 실패 (UNAUTHORIZED)"
+          },
+          "404": {
+            "$ref": "#/components/responses/RecipeNotFound",
+            "description": "레시피 없음 또는 추천받지 않은 레시피 (RECIPE_NOT_FOUND)"
           }
         },
+        "security": []
+      }
+    },
+    "/api/me/recipes/{recipeId}/complete": {
+      "post": {
+        "summary": "요리 완료 (재료 사용량 반영)",
+        "deprecated": false,
+        "description": "사용량 조사 화면의 슬라이더 값을 재고에 반영합니다.\n\n- usageRate: 현재 남은 양의 몇 %를 썼는지 (0~100 정수)\n- 0 → 변경 없음 / 계산 후 남은 양 > 0 → 남은 양만 차감 / 남은 양 ≤ 0 (100% 포함) → 소진(consumed) 처리\n- inventoryId는 레시피 재료가 아니어도 됩니다 (재료 추가 화면에서 고른 재료 포함).\n- 하나라도 실패하면 아무것도 차감하지 않습니다.\n- 중복 차감 방지를 위해 요청 중에는 완료 버튼을 비활성화해 주세요.",
+        "operationId": "completeRecipe",
+        "tags": [
+          "Recipe"
+        ],
+        "parameters": [
+          {
+            "name": "recipeId",
+            "in": "path",
+            "description": "레시피 ID",
+            "required": true,
+            "example": "",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecipeCompleteRequest"
+              },
+              "example": {
+                "usages": [
+                  {
+                    "inventoryId": 21,
+                    "usageRate": 40
+                  },
+                  {
+                    "inventoryId": 22,
+                    "usageRate": 100
+                  },
+                  {
+                    "inventoryId": 57,
+                    "usageRate": 30
+                  }
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseBase"
+                },
+                "example": {
+                  "success": true,
+                  "data": null,
+                  "error": null
+                }
+              }
+            },
+            "headers": {}
+          },
+          "400": {
+            "description": "요청 오류 (EMPTY_USAGES / INVALID_USAGE_RATE / DUPLICATE_INVENTORY)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "examples": {
+                  "EMPTY_USAGES": {
+                    "summary": "EMPTY_USAGES",
+                    "value": {
+                      "success": false,
+                      "data": null,
+                      "error": {
+                        "code": "EMPTY_USAGES",
+                        "message": "usages가 비어 있거나 50개를 초과합니다."
+                      }
+                    }
+                  },
+                  "INVALID_USAGE_RATE": {
+                    "summary": "INVALID_USAGE_RATE",
+                    "value": {
+                      "success": false,
+                      "data": null,
+                      "error": {
+                        "code": "INVALID_USAGE_RATE",
+                        "message": "usageRate는 0~100 사이여야 합니다."
+                      }
+                    }
+                  },
+                  "DUPLICATE_INVENTORY": {
+                    "summary": "DUPLICATE_INVENTORY",
+                    "value": {
+                      "success": false,
+                      "data": null,
+                      "error": {
+                        "code": "DUPLICATE_INVENTORY",
+                        "message": "같은 재고가 중복되었습니다."
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized",
+            "description": "인증 실패 (UNAUTHORIZED)"
+          },
+          "403": {
+            "description": "다른 사용자의 재고 (INVENTORY_ACCESS_DENIED)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "INVENTORY_ACCESS_DENIED",
+                    "message": "접근할 수 없는 재고입니다."
+                  }
+                }
+              }
+            },
+            "headers": {}
+          },
+          "404": {
+            "description": "레시피 또는 재고 없음 (RECIPE_NOT_FOUND / INVENTORY_NOT_FOUND)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "examples": {
+                  "RECIPE_NOT_FOUND": {
+                    "summary": "RECIPE_NOT_FOUND",
+                    "value": {
+                      "success": false,
+                      "data": null,
+                      "error": {
+                        "code": "RECIPE_NOT_FOUND",
+                        "message": "레시피를 찾을 수 없습니다."
+                      }
+                    }
+                  },
+                  "INVENTORY_NOT_FOUND": {
+                    "summary": "INVENTORY_NOT_FOUND",
+                    "value": {
+                      "success": false,
+                      "data": null,
+                      "error": {
+                        "code": "INVENTORY_NOT_FOUND",
+                        "message": "재고를 찾을 수 없습니다."
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          },
+          "409": {
+            "description": "이미 소진·폐기된 재고 (INVENTORY_NOT_ACTIVE)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "INVENTORY_NOT_ACTIVE",
+                    "message": "이미 소진되거나 폐기된 재고입니다."
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/me/recipes/recommended": {
+      "get": {
+        "summary": "맞춤 레시피 추천 목록",
+        "deprecated": false,
+        "description": "보유 재료 기반 AI 레시피 추천. 카테고리당 최대 3개(ALL이면 최대 15개).\n\n- 재료 구성(종류)이 최근 추천과 같으면 기존 추천을 그대로 반환합니다.\n- 재료 구성이 바뀌면 새로 생성하며, 첫 호출은 10초 이상 걸릴 수 있습니다.\n- 보유 재료가 없으면 빈 배열을 반환합니다.\n- 정렬: 소비기한 긴급도 내림차순 → 조리시간 오름차순 → recipeId 오름차순",
+        "operationId": "getRecommendedRecipes",
+        "tags": [
+          "Recipe"
+        ],
+        "parameters": [
+          {
+            "name": "category",
+            "in": "query",
+            "description": "카테고리 탭 필터 (대문자)",
+            "required": false,
+            "example": {},
+            "schema": {
+              "$ref": "#/components/schemas/RecipeCategoryFilter"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiResponseBase"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/RecommendedRecipesResponse"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "recipes": [
+                      {
+                        "recipeId": 1,
+                        "title": "당근 크림 파스타",
+                        "category": "WESTERN",
+                        "cookTime": 20,
+                        "usedIngredients": [
+                          {
+                            "ingredientCatalogId": 3,
+                            "name": "당근"
+                          },
+                          {
+                            "ingredientCatalogId": 7,
+                            "name": "감자"
+                          },
+                          {
+                            "ingredientCatalogId": 5,
+                            "name": "무지방 우유"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "error": null
+                }
+              }
+            },
+            "headers": {}
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidCategory",
+            "description": "잘못된 카테고리 (INVALID_CATEGORY)"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized",
+            "description": "인증 실패 (UNAUTHORIZED)"
+          },
+          "503": {
+            "$ref": "#/components/responses/RecipeGenerationFailed",
+            "description": "레시피 생성 실패 (RECIPE_GENERATION_FAILED). 잠시 후 다시 시도 안내"
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/me/receipts/scan": {
+      "post": {
+        "tags": [
+          "receipt"
+        ],
+        "summary": "영수증 인식 결과 등록",
+        "operationId": "scanReceipt",
+        "description": "오프라인 매장 **종이 영수증 사진**의 인식 결과를 처리한다. 결제 일시를 구매일로, 상호명을 구매처로 추출한다. 생성되는 구매 내역의 type은 RECEIPT.\n\n앱이 기기 안에서 ML Kit으로 인식한 글자 줄(좌표 포함)을 받아 서버가 **규칙 기반으로** 품목·수량·금액·구매일·구매처를 추출하고, 카탈로그 매칭과 소비기한 추정을 거쳐 **확인 대기(DRAFT) 구매 내역**을 만든다. 외부 OCR/AI 서비스는 호출하지 않는다. 이 단계에서는 재고(inventory_items)를 만들지 않는다. 사용자가 결과를 확인·수정한 뒤 POST /api/me/purchases/{purchaseId}/confirm을 호출해야 재고에 등록된다.\n- imageId는 선택이다. 보내면 본인이 purpose=RECEIPT로 업로드한 이미지인지 확인하고 구매 내역에 연결한다(원본 다시 보기용).\n- 봉투값·할인·포인트·합계·결제 정보 줄은 품목에서 제외한다. 카탈로그에 없는 품목은 ingredientCatalogId=null로 포함된다.\n- 같은 내용을 여러 번 보내면 매번 새 DRAFT가 생긴다. 품목 행을 하나도 찾지 못하면 DRAFT를 만들지 않고 422를 반환한다.\n- 품목명에 포함된 용량·개수를 수량·단위로 변환한다. 예: '대란 30구' → 30 개, '두부 300g' → 300 g, '감자 1kg' 2개 구매 → 2 kg.",
         "security": [
           {
             "bearer": []
           }
-        ]
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScanRequest"
+              },
+              "example": {
+                "imageId": 102,
+                "imageWidth": 1080,
+                "imageHeight": 2400,
+                "lines": [
+                  {
+                    "text": "이마트 OO점",
+                    "left": 380,
+                    "top": 120,
+                    "right": 700,
+                    "bottom": 170
+                  },
+                  {
+                    "text": "2026-10-20 18:32",
+                    "left": 80,
+                    "top": 260,
+                    "right": 520,
+                    "bottom": 300
+                  },
+                  {
+                    "text": "서울우유 1L",
+                    "left": 80,
+                    "top": 520,
+                    "right": 400,
+                    "bottom": 560
+                  },
+                  {
+                    "text": "3,500",
+                    "left": 880,
+                    "top": 522,
+                    "right": 1000,
+                    "bottom": 558
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "인식 완료, 확인 대기 구매 내역 생성",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseDetailResponse"
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "purchaseId": 7,
+                    "type": "RECEIPT",
+                    "status": "DRAFT",
+                    "imageId": 102,
+                    "purchaseSourceId": 1,
+                    "purchaseSourceName": "이마트",
+                    "purchasedAt": "2026-10-20T18:32:00+09:00",
+                    "totalAmount": 9300,
+                    "items": [
+                      {
+                        "purchaseItemId": 21,
+                        "rawName": "서울우유 1L",
+                        "ingredientCatalogId": 5,
+                        "ingredientName": "우유",
+                        "quantity": 1,
+                        "unitId": 5,
+                        "storageMethodId": 1,
+                        "unitPrice": 3500,
+                        "amount": 3500,
+                        "expiresOn": "2026-10-27"
+                      },
+                      {
+                        "purchaseItemId": 22,
+                        "rawName": "깐마늘 200g",
+                        "ingredientCatalogId": null,
+                        "ingredientName": null,
+                        "quantity": 200,
+                        "unitId": 2,
+                        "storageMethodId": 1,
+                        "unitPrice": null,
+                        "amount": 5800,
+                        "expiresOn": null
+                      }
+                    ],
+                    "createdAt": "2026-10-22T09:00:00+09:00"
+                  },
+                  "error": null
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "요청이 올바르지 않습니다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "INVALID_REQUEST",
+                    "message": "인식 결과가 올바르지 않습니다."
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "인증이 필요합니다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "UNAUTHORIZED",
+                    "message": "인증이 필요합니다."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "imageId로 보낸 이미지를 찾을 수 없습니다. (타인 이미지, RECEIPT가 아닌 이미지 포함)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "IMAGE_NOT_FOUND",
+                    "message": "이미지를 찾을 수 없습니다."
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "인식 결과에서 식재료 품목을 찾지 못했습니다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "SCAN_UNRECOGNIZABLE",
+                    "message": "구매한 품목을 찾지 못했습니다. 다시 촬영하거나 직접 등록해 주세요."
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     },
-    "/api/me/receipts": {
-      "get": {
-        "summary": "구매/영수증 내역 조회",
-        "deprecated": false,
-        "description": "receipts, purchases, purchase_items 테이블을 조회해 구매/영수증 내역을 반환한다.",
+    "/api/me/online-orders/scan": {
+      "post": {
         "tags": [
           "receipt"
         ],
+        "summary": "온라인 주문내역 인식 결과 등록",
+        "operationId": "scanOnlineOrder",
+        "description": "쿠팡·마켓컬리 등 **온라인 쇼핑 주문내역 화면 캡처**의 인식 결과를 처리한다. 주문일을 구매일로, 쇼핑몰을 구매처로 추출한다(목록에 없는 쇼핑몰은 온라인쇼핑). 취소·반품 상품은 제외한다. 생성되는 구매 내역의 type은 ONLINE_ORDER.\n\n앱이 기기 안에서 ML Kit으로 인식한 글자 줄(좌표 포함)을 받아 서버가 **규칙 기반으로** 품목·수량·금액·구매일·구매처를 추출하고, 카탈로그 매칭과 소비기한 추정을 거쳐 **확인 대기(DRAFT) 구매 내역**을 만든다. 외부 OCR/AI 서비스는 호출하지 않는다. 이 단계에서는 재고(inventory_items)를 만들지 않는다. 사용자가 결과를 확인·수정한 뒤 POST /api/me/purchases/{purchaseId}/confirm을 호출해야 재고에 등록된다.\n- imageId는 선택이다. 보내면 본인이 purpose=RECEIPT로 업로드한 이미지인지 확인하고 구매 내역에 연결한다(원본 다시 보기용).\n- 봉투값·할인·포인트·합계·결제 정보 줄은 품목에서 제외한다. 카탈로그에 없는 품목은 ingredientCatalogId=null로 포함된다.\n- 같은 내용을 여러 번 보내면 매번 새 DRAFT가 생긴다. 품목 행을 하나도 찾지 못하면 DRAFT를 만들지 않고 422를 반환한다.\n- 품목명에 포함된 용량·개수를 수량·단위로 변환한다. 예: '대란 30구' → 30 개, '두부 300g' → 300 g, '감자 1kg' 2개 구매 → 2 kg.",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScanRequest"
+              },
+              "example": {
+                "imageId": 102,
+                "imageWidth": 1080,
+                "imageHeight": 2400,
+                "lines": [
+                  {
+                    "text": "이마트 OO점",
+                    "left": 380,
+                    "top": 120,
+                    "right": 700,
+                    "bottom": 170
+                  },
+                  {
+                    "text": "2026-10-20 18:32",
+                    "left": 80,
+                    "top": 260,
+                    "right": 520,
+                    "bottom": 300
+                  },
+                  {
+                    "text": "서울우유 1L",
+                    "left": 80,
+                    "top": 520,
+                    "right": 400,
+                    "bottom": 560
+                  },
+                  {
+                    "text": "3,500",
+                    "left": 880,
+                    "top": 522,
+                    "right": 1000,
+                    "bottom": 558
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "인식 완료, 확인 대기 구매 내역 생성",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseDetailResponse"
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "purchaseId": 7,
+                    "type": "ONLINE_ORDER",
+                    "status": "DRAFT",
+                    "imageId": 102,
+                    "purchaseSourceId": 2,
+                    "purchaseSourceName": "쿠팡",
+                    "purchasedAt": "2026-10-19T00:00:00+09:00",
+                    "totalAmount": 9300,
+                    "items": [
+                      {
+                        "purchaseItemId": 21,
+                        "rawName": "서울우유 1L",
+                        "ingredientCatalogId": 5,
+                        "ingredientName": "우유",
+                        "quantity": 1,
+                        "unitId": 5,
+                        "storageMethodId": 1,
+                        "unitPrice": 3500,
+                        "amount": 3500,
+                        "expiresOn": "2026-10-27"
+                      },
+                      {
+                        "purchaseItemId": 22,
+                        "rawName": "깐마늘 200g",
+                        "ingredientCatalogId": null,
+                        "ingredientName": null,
+                        "quantity": 200,
+                        "unitId": 2,
+                        "storageMethodId": 1,
+                        "unitPrice": null,
+                        "amount": 5800,
+                        "expiresOn": null
+                      }
+                    ],
+                    "createdAt": "2026-10-22T09:00:00+09:00"
+                  },
+                  "error": null
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "요청이 올바르지 않습니다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "INVALID_REQUEST",
+                    "message": "인식 결과가 올바르지 않습니다."
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "인증이 필요합니다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "UNAUTHORIZED",
+                    "message": "인증이 필요합니다."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "imageId로 보낸 이미지를 찾을 수 없습니다. (타인 이미지, RECEIPT가 아닌 이미지 포함)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "IMAGE_NOT_FOUND",
+                    "message": "이미지를 찾을 수 없습니다."
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "인식 결과에서 식재료 품목을 찾지 못했습니다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "SCAN_UNRECOGNIZABLE",
+                    "message": "구매한 품목을 찾지 못했습니다. 다시 촬영하거나 직접 등록해 주세요."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/me/purchases/{purchaseId}/confirm": {
+      "post": {
+        "tags": [
+          "receipt"
+        ],
+        "summary": "인식 결과 확인 및 재고 등록",
+        "operationId": "confirmPurchase",
+        "description": "DRAFT 구매 내역을 사용자가 확인·수정한 최종 품목으로 확정하고, 품목마다 재고(inventory_items)를 생성한다.\n- 요청 items가 최종 목록이다. purchase_items는 요청 내용으로 교체되고, 빠진 인식 품목은 등록되지 않는다.\n- 각 재고의 purchasedOn은 purchasedAt의 날짜(Asia/Seoul), expiresOn이 null이면 POST /api/me/ingredients와 같은 규칙으로 자동 추정하고, 추정할 수 없으면(카탈로그 미매칭 등) 400을 반환한다.\n- totalAmount는 확정된 품목 amount의 합으로 다시 계산한다(모두 null이면 인식값 유지).\n- 구매 내역 상태 변경과 재고 생성은 하나의 트랜잭션이다. 이미 CONFIRMED면 409를 반환하며 재고를 중복 생성하지 않는다.",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
         "parameters": [
+          {
+            "name": "purchaseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PurchaseConfirmRequest"
+              },
+              "example": {
+                "purchaseSourceId": 1,
+                "purchasedAt": "2026-10-20T18:32:00+09:00",
+                "items": [
+                  {
+                    "purchaseItemId": 21,
+                    "ingredientCatalogId": 5,
+                    "customName": null,
+                    "quantity": 1,
+                    "unitId": 5,
+                    "storageMethodId": 1,
+                    "amount": 3500,
+                    "expiresOn": null
+                  },
+                  {
+                    "purchaseItemId": 22,
+                    "ingredientCatalogId": null,
+                    "customName": "깐마늘",
+                    "quantity": 200,
+                    "unitId": 2,
+                    "storageMethodId": 1,
+                    "amount": 5800,
+                    "expiresOn": "2026-11-05"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "재고 등록 완료",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseConfirmResponse"
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "purchaseId": 7,
+                    "status": "CONFIRMED",
+                    "ingredients": [
+                      {
+                        "inventoryItemId": 40,
+                        "ingredientCatalogId": 5,
+                        "customName": null,
+                        "initialQuantity": 1,
+                        "remainingQuantity": 1,
+                        "unitId": 5,
+                        "storageMethodId": 1,
+                        "statusCode": "active",
+                        "purchasedOn": "2026-10-20",
+                        "expiresOn": "2026-10-27"
+                      },
+                      {
+                        "inventoryItemId": 41,
+                        "ingredientCatalogId": null,
+                        "customName": "깐마늘",
+                        "initialQuantity": 200,
+                        "remainingQuantity": 200,
+                        "unitId": 2,
+                        "storageMethodId": 1,
+                        "statusCode": "active",
+                        "purchasedOn": "2026-10-20",
+                        "expiresOn": "2026-11-05"
+                      }
+                    ]
+                  },
+                  "error": null
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "요청이 올바르지 않습니다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "INVALID_REQUEST",
+                    "message": "재료를 식별할 수 없는 품목이 있습니다."
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "인증이 필요합니다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "UNAUTHORIZED",
+                    "message": "인증이 필요합니다."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "구매 내역을 찾을 수 없습니다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "PURCHASE_NOT_FOUND",
+                    "message": "구매 내역을 찾을 수 없습니다."
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "이미 확정된 구매 내역입니다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "PURCHASE_ALREADY_CONFIRMED",
+                    "message": "이미 재고에 등록된 구매 내역입니다."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/me/purchases": {
+      "get": {
+        "tags": [
+          "receipt"
+        ],
+        "summary": "구매 내역 목록 조회",
+        "operationId": "listPurchases",
+        "description": "본인의 영수증·온라인 주문 구매 내역을 purchasedAt 최신순으로 반환한다. from/to는 purchasedAt의 날짜(Asia/Seoul) 기준이며 양 끝을 포함한다.",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "description": "생략 시 전체",
+            "schema": {
+              "$ref": "#/components/schemas/PurchaseType"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "생략 시 전체",
+            "schema": {
+              "$ref": "#/components/schemas/PurchaseStatus"
+            }
+          },
           {
             "name": "from",
             "in": "query",
-            "description": "조회 시작일",
             "required": false,
-            "example": "",
             "schema": {
               "type": "string",
               "format": "date"
@@ -1972,9 +2765,7 @@
           {
             "name": "to",
             "in": "query",
-            "description": "조회 종료일",
             "required": false,
-            "example": "",
             "schema": {
               "type": "string",
               "format": "date"
@@ -1987,40 +2778,301 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {}
+                  "$ref": "#/components/schemas/PurchaseListResponse"
                 },
                 "example": {
                   "success": true,
                   "data": {
-                    "receipts": [
+                    "purchases": [
                       {
-                        "receiptId": 3,
                         "purchaseId": 7,
+                        "type": "RECEIPT",
+                        "status": "CONFIRMED",
                         "purchaseSourceName": "이마트",
-                        "purchasedAt": "2026-08-20T10:00:00",
-                        "totalAmount": 15000,
-                        "ocrStatus": "completed",
-                        "items": [
-                          {
-                            "ingredientCatalogId": 5,
-                            "name": "우유",
-                            "quantity": 1,
-                            "unitPrice": 3500,
-                            "amount": 3500
-                          }
-                        ]
+                        "purchasedAt": "2026-10-20T18:32:00+09:00",
+                        "totalAmount": 9300,
+                        "itemCount": 2
+                      },
+                      {
+                        "purchaseId": 6,
+                        "type": "ONLINE_ORDER",
+                        "status": "DRAFT",
+                        "purchaseSourceName": "쿠팡",
+                        "purchasedAt": "2026-10-19T00:00:00+09:00",
+                        "totalAmount": 21500,
+                        "itemCount": 4
                       }
                     ]
                   },
                   "error": null
                 }
               }
-            },
-            "headers": {}
+            }
+          },
+          "400": {
+            "description": "요청이 올바르지 않습니다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "INVALID_REQUEST",
+                    "message": "조회 기간이 올바르지 않습니다."
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "인증이 필요합니다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "UNAUTHORIZED",
+                    "message": "인증이 필요합니다."
+                  }
+                }
+              }
+            }
           }
-        },
-        "security": []
+        }
+      }
+    },
+    "/api/me/purchases/{purchaseId}": {
+      "get": {
+        "tags": [
+          "receipt"
+        ],
+        "summary": "구매 내역 상세 조회",
+        "operationId": "getPurchase",
+        "description": "구매 내역과 품목을 반환한다. DRAFT면 확인 화면을 다시 열 때 사용한다. 원본 이미지는 imageId로 GET /api/me/images/{imageId}/access-url을 호출해 조회한다.",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "purchaseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseDetailResponse"
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "purchaseId": 7,
+                    "type": "RECEIPT",
+                    "status": "DRAFT",
+                    "imageId": 102,
+                    "purchaseSourceId": 1,
+                    "purchaseSourceName": "이마트",
+                    "purchasedAt": "2026-10-20T18:32:00+09:00",
+                    "totalAmount": 9300,
+                    "items": [
+                      {
+                        "purchaseItemId": 21,
+                        "rawName": "서울우유 1L",
+                        "ingredientCatalogId": 5,
+                        "ingredientName": "우유",
+                        "quantity": 1,
+                        "unitId": 5,
+                        "storageMethodId": 1,
+                        "unitPrice": 3500,
+                        "amount": 3500,
+                        "expiresOn": "2026-10-27"
+                      },
+                      {
+                        "purchaseItemId": 22,
+                        "rawName": "깐마늘 200g",
+                        "ingredientCatalogId": null,
+                        "ingredientName": null,
+                        "quantity": 200,
+                        "unitId": 2,
+                        "storageMethodId": 1,
+                        "unitPrice": null,
+                        "amount": 5800,
+                        "expiresOn": null
+                      }
+                    ],
+                    "createdAt": "2026-10-22T09:00:00+09:00"
+                  },
+                  "error": null
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "인증이 필요합니다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "UNAUTHORIZED",
+                    "message": "인증이 필요합니다."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "구매 내역을 찾을 수 없습니다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "PURCHASE_NOT_FOUND",
+                    "message": "구매 내역을 찾을 수 없습니다."
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "receipt"
+        ],
+        "summary": "확인 대기 구매 내역 삭제",
+        "operationId": "deleteDraftPurchase",
+        "description": "인식 결과를 등록하지 않고 버릴 때 사용한다. DRAFT만 삭제할 수 있으며 CONFIRMED는 재고·낭비 기록과 연결되어 있어 409를 반환한다. 원본 이미지는 삭제하지 않는다.",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "purchaseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "삭제 완료",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "type": "null"
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "data": null,
+                  "error": null
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "인증이 필요합니다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "UNAUTHORIZED",
+                    "message": "인증이 필요합니다."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "구매 내역을 찾을 수 없습니다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "PURCHASE_NOT_FOUND",
+                    "message": "구매 내역을 찾을 수 없습니다."
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "확정된 구매 내역은 삭제할 수 없습니다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "PURCHASE_ALREADY_CONFIRMED",
+                    "message": "이미 재고에 등록된 구매 내역은 삭제할 수 없습니다."
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/me/notifications/expiry-popup": {
@@ -2231,44 +3283,6 @@
         "security": []
       }
     },
-    "/api/me/purchase-suggestions": {
-      "get": {
-        "summary": "다음 구매량 제안",
-        "deprecated": false,
-        "description": "[MVP] 낭비 이력을 바탕으로 '이번엔 절반만 사세요' 등 다음 장보기 구매량을 제안한다. 품목별 최근 낭비 비율(폐기량/구매량)을 분석하여 추천 구매 수량 또는 구매 조정 메시지를 반환한다.",
-        "tags": [
-          "logic"
-        ],
-        "parameters": [],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {}
-              },
-              "examples": {}
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {}
-                }
-              }
-            },
-            "headers": {}
-          }
-        },
-        "security": []
-      }
-    },
     "/api/me/shopping-helper": {
       "get": {
         "summary": "장보기 도우미 뷰",
@@ -2327,7 +3341,6 @@
                   },
                   "unitId": {
                     "type": "integer",
-                    "example": 4,
                     "description": "고정 단위 ID: 1=개, 2=g, 3=kg, 4=ml, 5=L, 6=팩, 7=봉, 8=병, 9=캔, 10=통. 포장 단위는 무게·부피로 자동 환산하지 않습니다.",
                     "enum": [
                       1,
@@ -2340,7 +3353,8 @@
                       8,
                       9,
                       10
-                    ]
+                    ],
+                    "example": 4
                   },
                   "reason": {
                     "type": "string",
@@ -2529,6 +3543,43 @@
         "security": []
       }
     },
+    "/api/me/purchase-suggestions": {
+      "get": {
+        "summary": "다음 구매량 제안",
+        "deprecated": false,
+        "description": "[MVP] 낭비 이력을 바탕으로 '이번엔 절반만 사세요' 등 다음 장보기 구매량을 제안한다. 품목별 최근 낭비 비율(폐기량/구매량)을 분석하여 추천 구매 수량 또는 구매 조정 메시지를 반환한다.",
+        "tags": [
+          "logic"
+        ],
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {}
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
     "/api/me/settings": {
       "get": {
         "summary": "사용자 설정 조회",
@@ -2627,98 +3678,96 @@
         "security": []
       }
     },
-    "/api/me": {
-      "get": {
-        "summary": "내 정보 조회",
-        "description": "Access Token의 사용자 ID로 현재 로그인한 사용자의 정보를 조회한다. 요청 본문이나 사용자 ID 파라미터는 받지 않는다. 존재하지 않거나 탈퇴한 계정은 401로 처리한다. 비밀번호와 인증 토큰은 응답에 포함하지 않는다.",
+    "/api/me/images": {
+      "post": {
         "tags": [
-          "user"
+          "image"
         ],
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "현재 사용자 정보 조회 성공",
-            "headers": {
-              "Cache-Control": {
-                "description": "사용자 정보 응답 캐시 금지",
-                "schema": {
-                  "type": "string",
-                  "enum": [
-                    "no-store"
-                  ]
+        "summary": "이미지 업로드",
+        "operationId": "uploadImage",
+        "description": "로그인 사용자가 multipart/form-data로 이미지 1개를 서버에 전송합니다. file과 purpose는 필수입니다. JPEG/PNG만 허용하며 파일 크기는 1~5,242,880바이트(5MiB), 가로·세로 각각 최대 4,096픽셀입니다. Content-Type·확장자만 신뢰하지 않고 실제 이미지 디코딩과 형식·크기를 검증합니다. 빈 파일, 손상된 이미지 및 제한 초과 해상도는 INVALID_IMAGE입니다.\nRECEIPT는 개인 버킷, PROFILE/RECIPE는 공개 이미지 버킷에 저장합니다. 서버가 인증 사용자 ID와 UUID로 저장 키를 생성하며 클라이언트는 소유자·버킷·키·공개 여부를 지정할 수 없습니다. 파일 소유자, 용도, 버킷, 저장 키, 형식, 크기, 생성 시각을 DB에 기록하고 저장 완료 후 201을 반환합니다. DB 저장 실패 시 업로드 파일 정리를 수행하며 정리 실패는 재처리 대상으로 남깁니다.\n공개 파일은 URL을 아는 누구나 조회할 수 있습니다. 업로드 자체는 프로필·레시피·영수증 데이터에 이미지를 연결하지 않습니다. 연결은 해당 도메인 API에서 소유권을 검증하여 별도로 처리합니다. 재요청은 새 파일을 생성합니다. 비밀키나 내부 버킷 경로는 응답하지 않습니다.",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file",
+                  "purpose"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "JPEG 또는 PNG 이미지 1개, 최대 5MiB"
+                  },
+                  "purpose": {
+                    "$ref": "#/components/schemas/ImagePurpose"
+                  }
+                }
+              },
+              "encoding": {
+                "file": {
+                  "contentType": "image/jpeg, image/png"
                 }
               }
-            },
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "이미지 저장 완료",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "required": [
-                    "success",
-                    "data",
-                    "error"
-                  ],
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "required": [
-                        "id",
-                        "email",
-                        "displayName"
-                      ],
-                      "properties": {
-                        "id": {
-                          "type": "integer",
-                          "format": "int64",
-                          "minimum": 1,
-                          "description": "사용자 ID"
-                        },
-                        "email": {
-                          "type": "string",
-                          "format": "email",
-                          "maxLength": 255
-                        },
-                        "displayName": {
-                          "type": "string",
-                          "maxLength": 80,
-                          "description": "닉네임"
-                        }
-                      }
-                    },
-                    "error": {
-                      "type": "object",
-                      "nullable": true,
-                      "enum": [
-                        null
-                      ],
-                      "description": "성공 시 null"
-                    }
-                  }
+                  "$ref": "#/components/schemas/ImageUploadResponse"
                 },
                 "example": {
                   "success": true,
                   "data": {
-                    "id": 12,
-                    "email": "user@example.com",
-                    "displayName": "홍길동"
+                    "imageId": 101,
+                    "purpose": "PROFILE",
+                    "visibility": "PUBLIC",
+                    "contentType": "image/png",
+                    "sizeBytes": 102400,
+                    "url": "https://d3eyp8dyewtbe4.cloudfront.net/images/1/550e8400-e29b-41d4-a716-446655440000.png",
+                    "createdAt": "2026-10-15T03:00:00Z"
                   },
                   "error": null
                 }
               }
             }
           },
-          "401": {
-            "description": "Access Token 누락·만료·무효 또는 존재하지 않거나 탈퇴한 사용자",
+          "400": {
+            "description": "이미지 또는 업로드 요청이 올바르지 않습니다.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/ImageApiErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "INVALID_IMAGE",
+                    "message": "이미지 또는 업로드 요청이 올바르지 않습니다."
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "인증이 필요합니다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageApiErrorResponse"
                 },
                 "example": {
                   "success": false,
@@ -2730,13 +3779,211 @@
                 }
               }
             }
+          },
+          "413": {
+            "description": "이미지는 최대 5MiB까지 업로드할 수 있습니다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageApiErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "IMAGE_TOO_LARGE",
+                    "message": "이미지는 최대 5MiB까지 업로드할 수 있습니다."
+                  }
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "JPEG 또는 PNG 이미지 파일만 업로드할 수 있습니다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageApiErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "UNSUPPORTED_IMAGE_TYPE",
+                    "message": "JPEG 또는 PNG 이미지 파일만 업로드할 수 있습니다."
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "이미지 정보를 저장하지 못했습니다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageApiErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "INTERNAL_ERROR",
+                    "message": "이미지 정보를 저장하지 못했습니다."
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "이미지 저장소에 접근할 수 없습니다. 잠시 후 다시 시도해주세요.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageApiErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "IMAGE_STORAGE_UNAVAILABLE",
+                    "message": "이미지 저장소에 접근할 수 없습니다. 잠시 후 다시 시도해주세요."
+                  }
+                }
+              }
+            }
           }
-        },
+        }
+      }
+    },
+    "/api/me/images/{imageId}/access-url": {
+      "get": {
+        "tags": [
+          "image"
+        ],
+        "summary": "개인 이미지 임시 조회 URL 발급",
+        "operationId": "getPrivateImageAccessUrl",
+        "description": "인증 사용자가 업로드한 PRIVATE 이미지에 한해 유효기간 300초의 S3 Presigned GET URL을 발급합니다. 미존재·삭제·다른 사용자 소유·PUBLIC 이미지에는 동일한 404 IMAGE_NOT_FOUND를 반환합니다. 공개 이미지는 업로드 응답의 CloudFront URL을 사용합니다. URL은 소지한 사람이 만료 전까지 사용할 수 있으므로 공유하지 않습니다. URL 발급 응답은 Cache-Control: no-store로 반환합니다. 이 API는 이미지 본문을 반환하지 않습니다.",
         "security": [
           {
             "bearer": []
           }
-        ]
+        ],
+        "parameters": [
+          {
+            "name": "imageId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "개인 이미지 임시 조회 URL 발급 완료",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageAccessResponse"
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "imageId": 102,
+                    "url": "https://example.s3.ap-northeast-2.amazonaws.com/images/example.png?X-Amz-Signature=example",
+                    "expiresAt": "2026-10-15T03:05:00Z"
+                  },
+                  "error": null
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "description": "임시 URL 응답 캐시 금지",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "no-store"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "이미지 ID가 올바르지 않습니다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageApiErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "INVALID_REQUEST",
+                    "message": "이미지 ID가 올바르지 않습니다."
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "인증이 필요합니다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageApiErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "UNAUTHORIZED",
+                    "message": "인증이 필요합니다."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "이미지를 찾을 수 없습니다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageApiErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "IMAGE_NOT_FOUND",
+                    "message": "이미지를 찾을 수 없습니다."
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "이미지 조회 URL을 발급하지 못했습니다. 잠시 후 다시 시도해주세요.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageApiErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "IMAGE_STORAGE_UNAVAILABLE",
+                    "message": "이미지 조회 URL을 발급하지 못했습니다. 잠시 후 다시 시도해주세요."
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     }
   },
@@ -2759,6 +4006,27 @@
           "message"
         ]
       },
+      "ApiResponseBase": {
+        "type": "object",
+        "required": [
+          "success",
+          "data",
+          "error"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "data": {
+            "type": "null"
+          },
+          "error": {
+            "type": "object",
+            "properties": {},
+            "nullable": true
+          }
+        }
+      },
       "ErrorResponse": {
         "type": "object",
         "properties": {
@@ -2777,14 +4045,1032 @@
           "success",
           "error"
         ]
+      },
+      "ApiErrorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "data",
+          "error"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": false
+          },
+          "data": {
+            "type": "null",
+            "example": null
+          },
+          "error": {
+            "type": "object",
+            "required": [
+              "code",
+              "message"
+            ],
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "RecipeCategoryFilter": {
+        "type": "string",
+        "enum": [
+          "ALL",
+          "KOREAN",
+          "CHINESE",
+          "WESTERN",
+          "JAPANESE",
+          "DESSERT"
+        ],
+        "default": "ALL",
+        "description": "ALL=전체, KOREAN=한식, CHINESE=중식, WESTERN=양식, JAPANESE=일식, DESSERT=디저트"
+      },
+      "RecipeCategory": {
+        "type": "string",
+        "enum": [
+          "KOREAN",
+          "CHINESE",
+          "WESTERN",
+          "JAPANESE",
+          "DESSERT"
+        ]
+      },
+      "UsedIngredient": {
+        "type": "object",
+        "required": [
+          "ingredientCatalogId",
+          "name"
+        ],
+        "properties": {
+          "ingredientCatalogId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "재료 마스터 ID"
+          },
+          "name": {
+            "type": "string",
+            "description": "재료 이름 (카드 해시태그)"
+          }
+        }
+      },
+      "RecommendedRecipe": {
+        "type": "object",
+        "required": [
+          "recipeId",
+          "title",
+          "category",
+          "cookTime",
+          "usedIngredients"
+        ],
+        "properties": {
+          "recipeId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "title": {
+            "type": "string",
+            "description": "카드 제목"
+          },
+          "category": {
+            "$ref": "#/components/schemas/RecipeCategory"
+          },
+          "cookTime": {
+            "type": "integer",
+            "description": "조리시간(분)"
+          },
+          "usedIngredients": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UsedIngredient"
+            }
+          }
+        }
+      },
+      "RecommendedRecipesResponse": {
+        "type": "object",
+        "required": [
+          "recipes"
+        ],
+        "properties": {
+          "recipes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RecommendedRecipe"
+            },
+            "description": "없으면 빈 배열"
+          }
+        }
+      },
+      "RecipeDetailIngredient": {
+        "type": "object",
+        "required": [
+          "ingredientCatalogId",
+          "inventoryId",
+          "name"
+        ],
+        "properties": {
+          "ingredientCatalogId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "inventoryId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "차감에 쓸 사용자 재고 ID. 보유하지 않으면 null",
+            "nullable": true
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "RecipeStep": {
+        "type": "object",
+        "required": [
+          "step",
+          "description"
+        ],
+        "properties": {
+          "step": {
+            "type": "integer",
+            "description": "1부터 시작"
+          },
+          "description": {
+            "type": "string"
+          }
+        }
+      },
+      "RecipeDetailResponse": {
+        "type": "object",
+        "required": [
+          "recipeId",
+          "title",
+          "category",
+          "cookTime",
+          "imageUrl",
+          "ingredients",
+          "steps"
+        ],
+        "properties": {
+          "recipeId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "title": {
+            "type": "string"
+          },
+          "category": {
+            "$ref": "#/components/schemas/RecipeCategory"
+          },
+          "cookTime": {
+            "type": "integer",
+            "description": "조리시간(분)"
+          },
+          "imageUrl": {
+            "type": "string",
+            "description": "없으면 null (회색 박스 표시)",
+            "nullable": true
+          },
+          "ingredients": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RecipeDetailIngredient"
+            }
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RecipeStep"
+            }
+          }
+        }
+      },
+      "RecipeUsage": {
+        "type": "object",
+        "required": [
+          "inventoryId",
+          "usageRate"
+        ],
+        "properties": {
+          "inventoryId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "내 active 재고 ID"
+          },
+          "usageRate": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "현재 남은 양 중 사용한 비율(%)"
+          }
+        }
+      },
+      "RecipeCompleteRequest": {
+        "type": "object",
+        "required": [
+          "usages"
+        ],
+        "properties": {
+          "usages": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 50,
+            "items": {
+              "$ref": "#/components/schemas/RecipeUsage"
+            },
+            "description": "inventoryId 중복 불가"
+          }
+        }
+      },
+      "ImagePurpose": {
+        "type": "string",
+        "enum": [
+          "RECEIPT",
+          "PROFILE",
+          "RECIPE"
+        ],
+        "description": "RECEIPT는 비공개, PROFILE과 RECIPE는 공개 이미지입니다. 공개 여부는 서버가 용도로 결정합니다."
+      },
+      "UploadedImage": {
+        "type": "object",
+        "required": [
+          "imageId",
+          "purpose",
+          "visibility",
+          "contentType",
+          "sizeBytes",
+          "url",
+          "createdAt"
+        ],
+        "properties": {
+          "imageId": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "purpose": {
+            "$ref": "#/components/schemas/ImagePurpose"
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "PRIVATE",
+              "PUBLIC"
+            ]
+          },
+          "contentType": {
+            "type": "string",
+            "enum": [
+              "image/jpeg",
+              "image/png"
+            ]
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 5242880
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "nullable": true,
+            "description": "공개 이미지는 CloudFront HTTPS URL, 개인 이미지는 null. 개인 이미지 조회 API로 임시 URL을 발급받습니다."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ImageUploadResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "data",
+          "error"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "data": {
+            "$ref": "#/components/schemas/UploadedImage"
+          },
+          "error": {
+            "type": "object",
+            "nullable": true,
+            "enum": [
+              null
+            ]
+          }
+        }
+      },
+      "ImageAccessResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "data",
+          "error"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "data": {
+            "type": "object",
+            "required": [
+              "imageId",
+              "url",
+              "expiresAt"
+            ],
+            "properties": {
+              "imageId": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 1
+              },
+              "url": {
+                "type": "string",
+                "format": "uri",
+                "description": "S3 Presigned GET URL. 로그에 기록하거나 영구 저장하지 않습니다."
+              },
+              "expiresAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "발급 시점부터 300초 후 만료 시각(UTC)."
+              }
+            }
+          },
+          "error": {
+            "type": "object",
+            "nullable": true,
+            "enum": [
+              null
+            ]
+          }
+        }
+      },
+      "ImageApiErrorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "data",
+          "error"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "data": {
+            "type": "object",
+            "nullable": true,
+            "enum": [
+              null
+            ]
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorObject"
+          }
+        }
+      },
+      "PurchaseType": {
+        "type": "string",
+        "enum": [
+          "RECEIPT",
+          "ONLINE_ORDER"
+        ],
+        "description": "RECEIPT=오프라인 종이 영수증 촬영, ONLINE_ORDER=온라인 쇼핑 주문내역 캡처."
+      },
+      "PurchaseStatus": {
+        "type": "string",
+        "enum": [
+          "DRAFT",
+          "CONFIRMED"
+        ],
+        "description": "DRAFT=인식 완료 후 사용자 확인 대기(재고 미등록), CONFIRMED=확인 완료되어 재고에 등록됨."
+      },
+      "ScanRequest": {
+        "type": "object",
+        "required": [
+          "imageWidth",
+          "imageHeight",
+          "lines"
+        ],
+        "description": "앱이 기기 안에서 ML Kit으로 인식한 결과. 서버는 이미지를 다시 인식하지 않는다.",
+        "properties": {
+          "imageId": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true,
+            "description": "원본 보관용(선택). POST /api/me/images로 purpose=RECEIPT 업로드한 본인 이미지 ID"
+          },
+          "imageWidth": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "imageHeight": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "lines": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 300,
+            "items": {
+              "$ref": "#/components/schemas/OcrLine"
+            },
+            "description": "모든 블록의 모든 Line을 순서 상관없이 평탄화해서 보낸다. 서버가 좌표로 행을 복원한다."
+          }
+        }
+      },
+      "PurchaseItemDraft": {
+        "type": "object",
+        "required": [
+          "purchaseItemId",
+          "rawName",
+          "ingredientCatalogId",
+          "ingredientName",
+          "quantity",
+          "unitId",
+          "storageMethodId",
+          "unitPrice",
+          "amount",
+          "expiresOn"
+        ],
+        "properties": {
+          "purchaseItemId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "rawName": {
+            "type": "string",
+            "description": "영수증/주문내역에서 읽은 원래 품목명",
+            "example": "서울우유 1L"
+          },
+          "ingredientCatalogId": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true,
+            "description": "카탈로그 매칭 결과. 매칭 실패 시 null. 앱은 null이 아닌 품목만 기본 선택 상태로 보여 주는 것을 권장"
+          },
+          "ingredientName": {
+            "type": "string",
+            "nullable": true,
+            "description": "매칭된 카탈로그 재료명",
+            "example": "우유"
+          },
+          "quantity": {
+            "type": "number",
+            "description": "인식된 수량(소수 3자리)"
+          },
+          "unitId": {
+            "type": "integer",
+            "description": "고정 단위 ID: 1=개, 2=g, 3=kg, 4=ml, 5=L, 6=팩, 7=봉, 8=병, 9=캔, 10=통. 포장 단위는 무게·부피로 자동 환산하지 않습니다.",
+            "enum": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10
+            ]
+          },
+          "storageMethodId": {
+            "type": "integer",
+            "description": "추천 보관방법: 1=냉장, 2=냉동, 3=실온. 소비기한 규칙이 있는 보관방법 중 냉장→실온→냉동 순으로 선택, 매칭 실패 시 1"
+          },
+          "unitPrice": {
+            "type": "integer",
+            "nullable": true,
+            "description": "단가(원)"
+          },
+          "amount": {
+            "type": "integer",
+            "nullable": true,
+            "description": "품목 금액(원)"
+          },
+          "expiresOn": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "description": "구매일·카탈로그·보관방법 기준 자동 추정 소비기한. 매칭 실패 등으로 추정할 수 없으면 null"
+          }
+        }
+      },
+      "PurchaseDetail": {
+        "type": "object",
+        "required": [
+          "purchaseId",
+          "type",
+          "status",
+          "imageId",
+          "purchaseSourceId",
+          "purchaseSourceName",
+          "purchasedAt",
+          "totalAmount",
+          "items",
+          "createdAt"
+        ],
+        "properties": {
+          "purchaseId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "type": {
+            "$ref": "#/components/schemas/PurchaseType"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PurchaseStatus"
+          },
+          "imageId": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "purchaseSourceId": {
+            "type": "integer",
+            "nullable": true,
+            "description": "구매처 ID: 1=이마트, 2=쿠팡, 3=전통시장, 4=편의점, 5=온라인쇼핑, 6=기타. 인식 실패 시 null"
+          },
+          "purchaseSourceName": {
+            "type": "string",
+            "nullable": true
+          },
+          "purchasedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "인식된 구매(주문) 일시. 찾지 못하면 스캔 시각"
+          },
+          "totalAmount": {
+            "type": "integer",
+            "nullable": true,
+            "description": "합계 금액(원)"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PurchaseItemDraft"
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PurchaseDetailResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "data",
+          "error"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/PurchaseDetail"
+          },
+          "error": {
+            "type": "null",
+            "example": null
+          }
+        }
+      },
+      "PurchaseConfirmItem": {
+        "type": "object",
+        "required": [
+          "quantity",
+          "unitId"
+        ],
+        "description": "ingredientCatalogId와 customName 중 최소 하나는 필수.",
+        "properties": {
+          "purchaseItemId": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true,
+            "description": "인식된 품목을 수정한 경우 해당 ID, 사용자가 새로 추가한 품목이면 null"
+          },
+          "ingredientCatalogId": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "customName": {
+            "type": "string",
+            "maxLength": 120,
+            "nullable": true
+          },
+          "quantity": {
+            "type": "number",
+            "minimum": 0.001,
+            "description": "소수 3자리까지"
+          },
+          "unitId": {
+            "type": "integer",
+            "description": "고정 단위 ID: 1=개, 2=g, 3=kg, 4=ml, 5=L, 6=팩, 7=봉, 8=병, 9=캔, 10=통. 포장 단위는 무게·부피로 자동 환산하지 않습니다.",
+            "enum": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10
+            ]
+          },
+          "storageMethodId": {
+            "type": "integer",
+            "nullable": true
+          },
+          "amount": {
+            "type": "integer",
+            "minimum": 0,
+            "nullable": true,
+            "description": "품목 금액(원)"
+          },
+          "expiresOn": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "description": "null이면 서버가 자동 추정. ingredientCatalogId가 없으면 필수"
+          }
+        }
+      },
+      "PurchaseConfirmRequest": {
+        "type": "object",
+        "required": [
+          "purchasedAt",
+          "items"
+        ],
+        "properties": {
+          "purchaseSourceId": {
+            "type": "integer",
+            "nullable": true
+          },
+          "purchasedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "현재 시각 이후 불가"
+          },
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "description": "재고로 등록할 최종 품목 목록. 목록에 없는 인식 품목은 등록하지 않는다.",
+            "items": {
+              "$ref": "#/components/schemas/PurchaseConfirmItem"
+            }
+          }
+        }
+      },
+      "PurchaseConfirmResult": {
+        "type": "object",
+        "required": [
+          "purchaseId",
+          "status",
+          "ingredients"
+        ],
+        "properties": {
+          "purchaseId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PurchaseStatus"
+          },
+          "ingredients": {
+            "type": "array",
+            "description": "생성된 재고. 형태는 POST /api/me/ingredients 응답과 같다.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "inventoryItemId": {
+                  "type": "integer",
+                  "format": "int64"
+                },
+                "ingredientCatalogId": {
+                  "type": "integer",
+                  "nullable": true
+                },
+                "customName": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "initialQuantity": {
+                  "type": "number"
+                },
+                "remainingQuantity": {
+                  "type": "number"
+                },
+                "unitId": {
+                  "type": "integer",
+                  "description": "고정 단위 ID: 1=개, 2=g, 3=kg, 4=ml, 5=L, 6=팩, 7=봉, 8=병, 9=캔, 10=통. 포장 단위는 무게·부피로 자동 환산하지 않습니다.",
+                  "enum": [
+                    1,
+                    2,
+                    3,
+                    4,
+                    5,
+                    6,
+                    7,
+                    8,
+                    9,
+                    10
+                  ]
+                },
+                "storageMethodId": {
+                  "type": "integer",
+                  "nullable": true
+                },
+                "statusCode": {
+                  "type": "string"
+                },
+                "purchasedOn": {
+                  "type": "string",
+                  "format": "date"
+                },
+                "expiresOn": {
+                  "type": "string",
+                  "format": "date",
+                  "nullable": true
+                }
+              }
+            }
+          }
+        }
+      },
+      "PurchaseConfirmResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "data",
+          "error"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/PurchaseConfirmResult"
+          },
+          "error": {
+            "type": "null",
+            "example": null
+          }
+        }
+      },
+      "PurchaseSummary": {
+        "type": "object",
+        "required": [
+          "purchaseId",
+          "type",
+          "status",
+          "purchaseSourceName",
+          "purchasedAt",
+          "totalAmount",
+          "itemCount"
+        ],
+        "properties": {
+          "purchaseId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "type": {
+            "$ref": "#/components/schemas/PurchaseType"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PurchaseStatus"
+          },
+          "purchaseSourceName": {
+            "type": "string",
+            "nullable": true
+          },
+          "purchasedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "totalAmount": {
+            "type": "integer",
+            "nullable": true
+          },
+          "itemCount": {
+            "type": "integer"
+          }
+        }
+      },
+      "PurchaseListResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "data",
+          "error"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "data": {
+            "type": "object",
+            "required": [
+              "purchases"
+            ],
+            "properties": {
+              "purchases": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/PurchaseSummary"
+                }
+              }
+            }
+          },
+          "error": {
+            "type": "null",
+            "example": null
+          }
+        }
+      },
+      "OcrLine": {
+        "type": "object",
+        "required": [
+          "text",
+          "left",
+          "top",
+          "right",
+          "bottom"
+        ],
+        "description": "ML Kit Text Recognition(한국어)의 Line 하나. 좌표는 원본 이미지 픽셀 기준(TextLine.boundingBox / frame).",
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "left": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "top": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "right": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "bottom": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
       }
     },
-    "responses": {},
+    "responses": {
+      "Unauthorized": {
+        "description": "인증 실패 (UNAUTHORIZED)",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            },
+            "examples": {
+              "성공": {
+                "summary": "성공",
+                "value": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "UNAUTHORIZED",
+                    "message": "인증이 필요합니다."
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "InvalidCategory": {
+        "description": "잘못된 카테고리 (INVALID_CATEGORY)",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            },
+            "examples": {
+              "성공": {
+                "summary": "성공",
+                "value": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "INVALID_CATEGORY",
+                    "message": "지원하지 않는 카테고리입니다."
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "RecipeNotFound": {
+        "description": "레시피 없음 또는 추천받지 않은 레시피 (RECIPE_NOT_FOUND)",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            },
+            "examples": {
+              "성공": {
+                "summary": "성공",
+                "value": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "RECIPE_NOT_FOUND",
+                    "message": "레시피를 찾을 수 없습니다."
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "RecipeGenerationFailed": {
+        "description": "레시피 생성 실패 (RECIPE_GENERATION_FAILED). 잠시 후 다시 시도 안내",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            },
+            "examples": {
+              "성공": {
+                "summary": "성공",
+                "value": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "RECIPE_GENERATION_FAILED",
+                    "message": "레시피 추천을 생성하지 못했습니다. 잠시 후 다시 시도해주세요."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "securitySchemes": {
       "bearer": {
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "JWT"
+      },
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "parameters": {
+      "RecipeId": {
+        "name": "recipeId",
+        "in": "path",
+        "required": true,
+        "description": "레시피 ID",
+        "schema": {
+          "type": "integer",
+          "format": "int64"
+        }
       }
     }
   },

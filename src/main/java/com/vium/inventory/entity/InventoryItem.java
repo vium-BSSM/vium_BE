@@ -72,8 +72,9 @@ public class InventoryItem {
 	@Builder
 	public InventoryItem(Long userId, Long ingredientCatalogId, String customName, Short statusId,
 			Short storageMethodId, Short unitId, BigDecimal initialQuantity, BigDecimal remainingQuantity,
-			BigDecimal amount, LocalDate purchasedOn, LocalDate expiresOn) {
+			BigDecimal amount, LocalDate purchasedOn, LocalDate expiresOn, Long purchaseItemId) {
 		this.userId = userId;
+		this.purchaseItemId = purchaseItemId;
 		this.ingredientCatalogId = ingredientCatalogId;
 		this.customName = customName;
 		this.statusId = statusId;
