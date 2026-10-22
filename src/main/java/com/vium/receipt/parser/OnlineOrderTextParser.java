@@ -43,7 +43,7 @@ public class OnlineOrderTextParser {
 				last = null;
 				continue;
 			}
-			if (OcrPatterns.excluded(text, false) || OcrPatterns.hasDate(text)) {
+			if (OcrPatterns.hasDate(text)) {
 				name.clear();
 				continue;
 			}
@@ -54,6 +54,8 @@ public class OnlineOrderTextParser {
 			}
 			var amount = OcrPatterns.lastAmount(text, true);
 			if (OcrPatterns.hasWonAmount(text)) {
+				// 배송 배지는 상품 가격과 함께 올 수 있지만 비용·혜택 금액은 상품이 아니다.
+				if (compact.contains("배송비") || compact.contains("쿠폰") || compact.contains("적립")) continue;
 				last = null;
 				if (amount != null && !name.isEmpty()) {
 					last = new Candidate(String.join(" ", name), amount);
@@ -62,7 +64,7 @@ public class OnlineOrderTextParser {
 					candidates.add(last);
 				}
 				name.clear();
-			} else if (OcrPatterns.hasLetters(text)) {
+			} else if (!OcrPatterns.excluded(text, false) && OcrPatterns.hasLetters(text)) {
 				name.add(text.strip());
 				if (name.size() > 2) name.removeFirst();
 			}

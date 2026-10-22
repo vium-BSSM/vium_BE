@@ -11,6 +11,41 @@ import org.junit.jupiter.params.provider.ValueSource;
 class OnlineOrderTextParserTest {
 	private final OnlineOrderTextParser parser = new OnlineOrderTextParser(ParserFixtures.CLOCK);
 
+	@ParameterizedTest
+	@ValueSource(strings = {"로켓배송", "무료배송"})
+	void preservesProductAcrossShippingBadge(String badge) {
+		var result = parser.parse(ParserFixtures.rows("두부 300g", badge, "2,000원 1개"));
+		assertThat(result.items()).singleElement().satisfies(item -> {
+			assertThat(item.rawName()).isEqualTo("두부 300g");
+			assertThat(item.quantity()).isEqualByComparingTo("300");
+			assertThat(item.unitId()).isEqualTo((short) 2);
+			assertThat(item.amount()).isEqualByComparingTo("2000");
+		});
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = {"로켓배송", "무료배송"})
+	void parsesPriceBeforeShippingBadgeExclusion(String badge) {
+		var result = parser.parse(ParserFixtures.rows("두부 300g", "2,000원 1개 " + badge));
+		assertThat(result.items()).singleElement().satisfies(item -> {
+			assertThat(item.rawName()).isEqualTo("두부 300g");
+			assertThat(item.quantity()).isEqualByComparingTo("300");
+			assertThat(item.unitId()).isEqualTo((short) 2);
+			assertThat(item.amount()).isEqualByComparingTo("2000");
+		});
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = {"배송비 3,000원", "쿠폰 500원", "적립 100원"})
+	void ignoresNonProductPriceWithoutConsumingPendingName(String price) {
+		assertThat(parser.parse(ParserFixtures.rows("두부 300g", price)).items()).isEmpty();
+		var result = parser.parse(ParserFixtures.rows("두부 300g", price, "2,000원 1개"));
+		assertThat(result.items()).singleElement().satisfies(item -> {
+			assertThat(item.rawName()).isEqualTo("두부 300g");
+			assertThat(item.amount()).isEqualByComparingTo("2000");
+		});
+	}
+
 	@Test
 	void clearsScreenHeadingsAtDateBoundary() {
 		var result = parser.parse(ParserFixtures.rows("쿠팡", "주문목록", "2026. 10. 19 주문", "두부 300g", "2,000원"));
@@ -19,8 +54,8 @@ class OnlineOrderTextParserTest {
 
 	@ParameterizedTest
 	@ValueSource(strings = {"배송 완료", "리뷰 쓰기", "주문상세"})
-	void clearsPendingNameAtExcludedRow(String boundary) {
-		var result = parser.parse(ParserFixtures.rows("화면 제목", boundary, "두부 300g", "2,000원"));
+	void preservesPendingNameAtExcludedRow(String boundary) {
+		var result = parser.parse(ParserFixtures.rows("두부 300g", boundary, "2,000원"));
 		assertThat(result.items()).singleElement().satisfies(item -> assertThat(item.rawName()).isEqualTo("두부 300g"));
 	}
 
