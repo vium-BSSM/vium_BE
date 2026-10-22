@@ -50,6 +50,10 @@ public class PurchaseItem {
 	@Column(name = "expires_on")
 	private LocalDate expiresOn;
 
+	public void setExpiresOn(LocalDate expiresOn) {
+		this.expiresOn = expiresOn;
+	}
+
 	@Builder
 	public PurchaseItem(Long purchaseId, Long ingredientCatalogId, String rawName,
 			BigDecimal quantity, Short unitId, Short storageMethodId, BigDecimal unitPrice,

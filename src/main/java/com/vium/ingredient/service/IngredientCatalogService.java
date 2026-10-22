@@ -20,6 +20,11 @@ public class IngredientCatalogService {
 	}
 
 	@Transactional(readOnly = true)
+	public List<CatalogName> findNamesByIds(java.util.Collection<Long> ids) {
+		return ids.isEmpty() ? List.of() : ingredientCatalogRepository.findNamesByIds(ids);
+	}
+
+	@Transactional(readOnly = true)
 	public boolean existsById(Long ingredientCatalogId) {
 		return ingredientCatalogRepository.existsById(ingredientCatalogId);
 	}

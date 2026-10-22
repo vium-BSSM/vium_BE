@@ -134,6 +134,15 @@ public class InventoryService {
 
 	@Transactional
 	public IngredientResponse register(Long userId, IngredientRegisterRequest request) {
+		return registerItem(userId, request, null);
+	}
+
+	@Transactional
+	public IngredientResponse registerFromPurchase(Long userId, IngredientRegisterRequest request, Long purchaseItemId) {
+		return registerItem(userId, request, purchaseItemId);
+	}
+
+	private IngredientResponse registerItem(Long userId, IngredientRegisterRequest request, Long purchaseItemId) {
 		validate(request);
 
 		LocalDate purchasedOn = request.purchasedOn() != null ? request.purchasedOn() : LocalDate.now();
@@ -147,6 +156,7 @@ public class InventoryService {
 
 		InventoryItem inventoryItem = InventoryItem.builder()
 			.userId(userId)
+			.purchaseItemId(purchaseItemId)
 			.ingredientCatalogId(request.ingredientCatalogId())
 			.customName(customName)
 			.statusId(activeStatus.getId())

@@ -12,6 +12,9 @@ public interface IngredientCatalogRepository extends JpaRepository<IngredientCat
 	@Query("SELECT new com.vium.ingredient.dto.CatalogName(c.id, c.name) FROM IngredientCatalog c")
 	List<CatalogName> findAllNames();
 
+	@Query("SELECT new com.vium.ingredient.dto.CatalogName(c.id, c.name) FROM IngredientCatalog c WHERE c.id IN :ids")
+	List<CatalogName> findNamesByIds(@Param("ids") java.util.Collection<Long> ids);
+
 	@Query(value = "SELECT id, category_id, default_unit_id, name, created_at FROM ingredient_catalog WHERE LOWER(name) LIKE LOWER(CONCAT('%', :keyword, '%')) ORDER BY name ASC LIMIT 20", nativeQuery = true)
 	List<IngredientCatalog> searchByKeyword(@Param("keyword") String keyword);
 }
