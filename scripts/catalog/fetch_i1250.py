@@ -21,6 +21,14 @@ FIELDS = {
 }
 
 
+class ApiResultError(RuntimeError):
+    """Expose only a validated result code, never an upstream message or URL."""
+
+    def __init__(self, code):
+        safe_code = code if isinstance(code, str) and re.fullmatch(r"(?:INFO|ERROR)-\d{3}", code) else "UNKNOWN"
+        super().__init__(f"API 결과 오류 ({safe_code})")
+
+
 def read_key(root=ROOT):
     key = os.environ.get("FOODSAFETY_API_KEY", "").strip()
     if key:
@@ -47,11 +55,14 @@ def request_page(key, food_type, start, end):
         time.sleep(0.3)
         try:
             with urlopen(url, timeout=30) as response:
-                payload = json.load(response)["I1250"]
+                body = json.load(response)
+                payload = body.get("I1250", body)
             code = payload.get("RESULT", {}).get("CODE")
             if code not in ("INFO-000", "INFO-200"):
-                raise ValueError("API result error")
+                raise ApiResultError(code)
             return payload
+        except ApiResultError:
+            raise
         except Exception:
             # Exception text and upstream MSG can contain the credential URL.
             if attempt == 2:
@@ -61,19 +72,25 @@ def request_page(key, food_type, start, end):
 def collect(key, food_type, fetch=request_page):
     start = 1
     rows = {}
+    excluded_other_types = 0
     while True:
         payload = fetch(key, food_type, start, start + 999)
         if payload.get("RESULT", {}).get("CODE") == "INFO-200":
             if start != 1:
                 raise ValueError("페이지 수집 도중 결과 없음")
-            return {"food_type": food_type, "fetched_at": today(), "total_count": 0, "rows": []}
+            return {"food_type": food_type, "fetched_at": today(), "total_count": 0,
+                    "excluded_other_types": 0, "rows": []}
         total = int(payload["total_count"])
         page = payload.get("row", [])
         if total < 0 or not isinstance(page, list) or (not page and start <= total):
             raise ValueError("잘못된 페이지 응답")
         for row in page:
-            if row.get("PRDLST_DCNM") != food_type or not row.get("PRDLST_REPORT_NO"):
-                raise ValueError("식품유형 또는 품목제조번호 불일치")
+            if not row.get("PRDLST_REPORT_NO"):
+                raise ValueError("품목제조번호 누락")
+            # PRDLST_DCNM is a substring search; retain only exact type matches.
+            if row.get("PRDLST_DCNM") != food_type:
+                excluded_other_types += 1
+                continue
             normalized = {target: row.get(source, "") for target, source in FIELDS.items()}
             report = normalized["report_no"]
             if report not in rows or normalized["last_updt"] > rows[report]["last_updt"]:
@@ -82,6 +99,7 @@ def collect(key, food_type, fetch=request_page):
             break
         start += 1000
     return {"food_type": food_type, "fetched_at": today(), "total_count": total,
+            "excluded_other_types": excluded_other_types,
             "rows": [rows[key] for key in sorted(rows)]}
 
 
@@ -131,8 +149,11 @@ def main(argv=None):
             snapshot = collect(key, food_type)
             save_snapshot(ROOT / "data/raw/i1250" / (filename + ".json"), snapshot)
             print(f"{food_type}: {len(snapshot['rows'])}건 저장")
-            if snapshot["total_count"] == 0:
+            if not snapshot["rows"]:
                 print(f"식품유형 '{food_type}' 결과 없음 — ingredients.csv의 mfds_type을 확인하세요")
+        except ApiResultError as error:
+            print(f"{food_type}: 수집 실패 — {error}", file=sys.stderr)
+            failed = True
         except Exception:
             print(f"{food_type}: 수집 실패 (인증·API 응답·네트워크·저장 경로 확인 필요)", file=sys.stderr)
             failed = True

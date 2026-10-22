@@ -37,9 +37,49 @@ class FetchTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             fetcher.collect("secret", "두부", lambda *args: page([], 5))
 
-    def test_wrong_type_rejected(self):
-        with self.assertRaises(ValueError):
-            fetcher.collect("secret", "어묵", lambda *args: page([row("a")], 1))
+    def test_other_types_excluded_across_pages(self):
+        other = dict(row("other"), PRDLST_DCNM="가공두부")
+        calls = []
+        def request(key, food_type, start, end):
+            calls.append(start)
+            return page([other], 1001) if start == 1 else page([other, row("a")], 1001)
+        result = fetcher.collect("secret", "두부", request)
+        self.assertEqual([1, 1001], calls)
+        self.assertEqual(["a"], [r["report_no"] for r in result["rows"]])
+        self.assertEqual(1001, result["total_count"])
+        self.assertEqual(2, result["excluded_other_types"])
+
+    def test_all_other_types_produce_empty_snapshot(self):
+        result = fetcher.collect("secret", "어묵", lambda *args: page([row("a")], 1))
+        self.assertEqual([], result["rows"])
+        self.assertEqual(1, result["excluded_other_types"])
+
+    def test_missing_report_number_still_rejected(self):
+        for food_type in ("두부", "어묵"):
+            with self.subTest(food_type=food_type), self.assertRaises(ValueError):
+                fetcher.collect("secret", food_type, lambda *args: page([row("")], 1))
+
+    def test_result_errors_are_not_retried(self):
+        for nested in (True, False):
+            payload = {"RESULT": {"CODE": "INFO-100", "MSG": "https://host/secret"}}
+            body = {"I1250": payload} if nested else payload
+            with self.subTest(nested=nested), \
+                    patch.object(fetcher, "urlopen") as request, \
+                    patch.object(fetcher.time, "sleep"):
+                request.return_value.__enter__.return_value = io.StringIO(json.dumps(body))
+                with self.assertRaisesRegex(fetcher.ApiResultError, "INFO-100") as error:
+                    fetcher.request_page("secret", "두부", 1, 1000)
+                self.assertEqual(1, request.call_count)
+                self.assertNotIn("secret", str(error.exception))
+
+    def test_cli_reports_safe_api_code(self):
+        with patch.object(fetcher, "read_key", return_value="secret"), \
+                patch.object(fetcher, "collect", side_effect=fetcher.ApiResultError("INFO-100")), \
+                redirect_stderr(io.StringIO()) as output:
+            self.assertEqual(1, fetcher.main(["두부"]))
+        self.assertIn("INFO-100", output.getvalue())
+        self.assertNotIn("secret", output.getvalue())
+        self.assertNotIn("secret", str(fetcher.ApiResultError("https://host/secret")))
 
     def test_retries_do_not_expose_secret(self):
         with patch.object(fetcher, "urlopen", side_effect=OSError("https://host/secret")) as request, \
