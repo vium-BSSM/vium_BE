@@ -13,6 +13,7 @@ import java.util.regex.Pattern;
 public class OnlineOrderTextParser {
 
 	private static final Pattern COUNT = Pattern.compile("^(\\d+)\\s*개$");
+	private static final Pattern INLINE_COUNT = Pattern.compile("(?<![\\p{L}\\d.,])(\\d+)\\s*개(?![\\p{L}\\d])");
 	private final Clock clock;
 	private final ItemNameQuantityParser quantities = new ItemNameQuantityParser();
 	private final PurchaseSourceDetector sources = new PurchaseSourceDetector();
@@ -42,7 +43,10 @@ public class OnlineOrderTextParser {
 				last = null;
 				continue;
 			}
-			if (OcrPatterns.excluded(text, false) || OcrPatterns.hasDate(text)) continue;
+			if (OcrPatterns.excluded(text, false) || OcrPatterns.hasDate(text)) {
+				name.clear();
+				continue;
+			}
 			var count = COUNT.matcher(text.strip());
 			if (count.matches() && name.isEmpty()) {
 				if (last != null) last.purchaseQty = new BigDecimal(count.group(1));
@@ -53,6 +57,8 @@ public class OnlineOrderTextParser {
 				last = null;
 				if (amount != null && !name.isEmpty()) {
 					last = new Candidate(String.join(" ", name), amount);
+					var inlineCount = INLINE_COUNT.matcher(text);
+					if (inlineCount.find()) last.purchaseQty = new BigDecimal(inlineCount.group(1));
 					candidates.add(last);
 				}
 				name.clear();

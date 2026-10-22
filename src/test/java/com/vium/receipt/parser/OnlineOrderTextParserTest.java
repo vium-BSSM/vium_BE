@@ -12,6 +12,38 @@ class OnlineOrderTextParserTest {
 	private final OnlineOrderTextParser parser = new OnlineOrderTextParser(ParserFixtures.CLOCK);
 
 	@Test
+	void clearsScreenHeadingsAtDateBoundary() {
+		var result = parser.parse(ParserFixtures.rows("쿠팡", "주문목록", "2026. 10. 19 주문", "두부 300g", "2,000원"));
+		assertThat(result.items()).singleElement().satisfies(item -> assertThat(item.rawName()).isEqualTo("두부 300g"));
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = {"배송 완료", "리뷰 쓰기", "주문상세"})
+	void clearsPendingNameAtExcludedRow(String boundary) {
+		var result = parser.parse(ParserFixtures.rows("화면 제목", boundary, "두부 300g", "2,000원"));
+		assertThat(result.items()).singleElement().satisfies(item -> assertThat(item.rawName()).isEqualTo("두부 300g"));
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = {"2,000원 2개", "2,000원 2 개", "2개 2,000원", "3,000원 2,000원 2개"})
+	void readsQuantityOnPriceRow(String priceRow) {
+		var result = parser.parse(ParserFixtures.rows("두부", priceRow));
+		assertThat(result.items()).singleElement().satisfies(item -> {
+			assertThat(item.quantity()).isEqualByComparingTo("2");
+			assertThat(item.amount()).isEqualByComparingTo("2000");
+		});
+	}
+
+	@Test
+	void appliesInlinePurchaseQuantityToPackageCapacity() {
+		var result = parser.parse(ParserFixtures.rows("두부 300g", "2,000원 2개", "2개"));
+		assertThat(result.items()).singleElement().satisfies(item -> {
+			assertThat(item.quantity()).isEqualByComparingTo("600");
+			assertThat(item.unitId()).isEqualTo((short) 2);
+		});
+	}
+
+	@Test
 	void parsesCoupangCardsDiscountedPriceQuantityAndCancellation() throws Exception {
 		var result = parser.parse(ParserFixtures.load("online-coupang.json"));
 		assertThat(result.purchaseSourceCode()).isEqualTo("coupang");

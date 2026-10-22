@@ -36,6 +36,22 @@ class ReceiptTextParserTest {
 		assertThat(result.totalAmount()).isEqualByComparingTo("7500");
 	}
 
+	@ParameterizedTest
+	@CsvSource({"서울우유 1L,1,5", "두부 300g,300,2", "대란 30구,30,1"})
+	void parsesTwoLineNamesContainingPackageNumbers(String name, String quantity, int unit) {
+		var result = parser.parse(ParserFixtures.rows(name, "8801234567890 3,500 1 3,500"));
+		assertThat(result.items()).singleElement().satisfies(item -> {
+			assertThat(item.rawName()).isEqualTo(name);
+			assertItem(item, quantity, unit, "3500", "3500");
+		});
+	}
+
+	@Test
+	void doesNotMergeCompletedItemWithFollowingNumericLine() {
+		var result = parser.parse(ParserFixtures.rows("우유 3500", "8801234567890 2000 1 2000"));
+		assertThat(result.items()).singleElement().satisfies(item -> assertItem(item, "1", 1, null, "3500"));
+	}
+
 	@Test
 	void parsesConvenienceItemsAndKeepsPackMultiplier() throws Exception {
 		var result = parser.parse(ParserFixtures.load("receipt-convenience.json"));

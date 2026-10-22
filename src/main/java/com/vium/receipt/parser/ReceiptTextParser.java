@@ -48,7 +48,7 @@ public class ReceiptTextParser {
 			}
 			previousWasItem = false;
 			if (OcrPatterns.excluded(text, true) || OcrPatterns.hasDate(text)) continue;
-			if (OcrPatterns.hasLetters(text) && !OcrPatterns.hasDigits(text) && i + 1 < end) {
+			if (OcrPatterns.hasLetters(text) && OcrPatterns.trailingNumbers(text).numbers().isEmpty() && i + 1 < end) {
 				String next = texts.get(i + 1).strip();
 				if (next.matches("[-\\d,\\s]+") && OcrPatterns.hasDigits(next)) {
 					text += " " + OcrPatterns.withoutBarcodes(next);
