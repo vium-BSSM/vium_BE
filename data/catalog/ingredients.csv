@@ -1,0 +1,412 @@
+name,category,default_unit,foodkeeper_id,mfds_type,mfds_storage,note
+감자,채소,kg,297,,,FoodKeeper: Potatoes; 실온 우선 적용을 위해 4단계 냉장 규칙 제외 검토
+고구마,채소,kg,422,,,FoodKeeper: Yams/sweet potatoes
+양파,채소,kg,294,,,"FoodKeeper: Onions / yellow, white, red, etc.; 통양파 기준; 실온 우선 적용 검토"
+적양파,채소,kg,294,,,"FoodKeeper: Onions / yellow, white, red, etc."
+대파,채소,ea,,,,직접 대응 원본 미지정; 4단계 manual 검토
+쪽파,채소,ea,,,,직접 대응 원본 미지정; 4단계 manual 검토
+마늘,채소,g,285,,,FoodKeeper: Garlic
+깐마늘,채소,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+다진마늘,채소,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+생강,채소,g,286,,,FoodKeeper: Ginger root
+다진생강,채소,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+당근,채소,g,279,,,"FoodKeeper: Carrots, parsnips"
+미니당근,채소,g,491,,,FoodKeeper: Baby carrots
+무,채소,ea,,,,직접 대응 원본 미지정; 4단계 manual 검토
+열무,채소,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+알타리무,채소,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+배추,채소,ea,,,,직접 대응 원본 미지정; 4단계 manual 검토
+알배추,채소,ea,,,,직접 대응 원본 미지정; 4단계 manual 검토
+양배추,채소,ea,278,,,FoodKeeper: Cabbage
+적양배추,채소,ea,278,,,FoodKeeper: Cabbage
+청경채,채소,g,275,,,FoodKeeper: Bok choy
+상추,채소,g,291,,,"FoodKeeper: Lettuce / leaf, spinach"
+적상추,채소,g,291,,,"FoodKeeper: Lettuce / leaf, spinach"
+로메인,채소,g,290,,,"FoodKeeper: Lettuce / iceberg, romaine"
+양상추,채소,ea,290,,,"FoodKeeper: Lettuce / iceberg, romaine"
+시금치,채소,g,291,,,"FoodKeeper: Lettuce / leaf, spinach"
+케일,채소,g,423,,,FoodKeeper: Kale
+근대,채소,g,550,,,FoodKeeper: Swiss chard
+깻잎,채소,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+쑥갓,채소,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+미나리,채소,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+부추,채소,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+달래,채소,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+냉이,채소,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+참나물,채소,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+취나물,채소,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+방풍나물,채소,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+돌나물,채소,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+고사리,채소,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+숙주,채소,g,679,,,FoodKeeper: Mung bean / sprouts
+콩나물,채소,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+오이,채소,ea,283,,,FoodKeeper: Cucumbers
+애호박,채소,ea,,,,직접 대응 원본 미지정; 4단계 manual 검토
+주키니,채소,ea,547,,,"FoodKeeper: Zucchini / fresh, whole"
+단호박,채소,ea,,,,직접 대응 원본 미지정; 4단계 manual 검토
+늙은호박,채소,ea,298,,,FoodKeeper: Pumpkins
+가지,채소,ea,284,,,FoodKeeper: Eggplant
+토마토,채소,g,306,,,FoodKeeper: Tomatoes
+방울토마토,채소,g,600,,,FoodKeeper: Cherry tomatoes
+대추방울토마토,채소,g,600,,,FoodKeeper: Cherry tomatoes
+브로콜리,채소,ea,276,,,FoodKeeper: Broccoli and broccoli raab (rapini)
+콜리플라워,채소,ea,280,,,FoodKeeper: Cauliflower
+방울양배추,채소,g,277,,,FoodKeeper: Brussels sprouts
+아스파라거스,채소,g,271,,,FoodKeeper: Asparagus
+셀러리,채소,g,281,,,FoodKeeper: Celery
+비트,채소,g,274,,,FoodKeeper: Beets
+콜라비,채소,ea,494,,,FoodKeeper: Kohlrabi
+연근,채소,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+우엉,채소,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+더덕,채소,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+도라지,채소,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+토란,채소,g,305,,,FoodKeeper: Taro
+죽순,채소,g,272,,,FoodKeeper: Bamboo shoots
+옥수수,채소,ea,282,,,FoodKeeper: Corn on the cob
+피망,채소,ea,296,,,FoodKeeper: Peppers
+파프리카,채소,ea,296,,,FoodKeeper: Peppers
+고추,채소,g,548,,,FoodKeeper: Hot peppers
+청양고추,채소,g,548,,,FoodKeeper: Hot peppers
+풋고추,채소,g,548,,,FoodKeeper: Hot peppers
+홍고추,채소,g,548,,,FoodKeeper: Hot peppers
+꽈리고추,채소,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+양송이버섯,채소,g,292,,,FoodKeeper: Mushrooms
+표고버섯,채소,g,292,,,FoodKeeper: Mushrooms
+새송이버섯,채소,g,292,,,FoodKeeper: Mushrooms
+느타리버섯,채소,g,292,,,FoodKeeper: Mushrooms
+팽이버섯,채소,g,292,,,FoodKeeper: Mushrooms
+목이버섯,채소,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+루콜라,채소,g,678,,,FoodKeeper: Arugula
+치커리,채소,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+바질,채소,g,509,,,FoodKeeper: Basil / fresh
+고수,채소,g,506,,,FoodKeeper: Cilantro
+파슬리,채소,g,611,,,FoodKeeper: Parsley / fresh
+민트,채소,g,507,,,FoodKeeper: Mint
+레몬그라스,채소,g,505,,,FoodKeeper: Lemongrass
+사과,과일,ea,248,,,FoodKeeper: Apples
+배,과일,ea,266,,,"FoodKeeper: Peaches, nectarines, plums, pears, sapote"
+바나나,과일,ea,251,,,FoodKeeper: Bananas
+딸기,과일,pack,481,,,FoodKeeper: Strawberries
+블루베리,과일,pack,254,,,FoodKeeper: Blueberries
+라즈베리,과일,pack,482,,,FoodKeeper: Raspberries
+블랙베리,과일,pack,253,,,"FoodKeeper: Berries / blackberries, boysenberries, currant"
+포도,과일,kg,261,,,FoodKeeper: Grapes
+청포도,과일,kg,261,,,FoodKeeper: Grapes
+샤인머스캣,과일,kg,261,,,FoodKeeper: Grapes
+거봉,과일,kg,261,,,FoodKeeper: Grapes
+복숭아,과일,ea,266,,,"FoodKeeper: Peaches, nectarines, plums, pears, sapote"
+천도복숭아,과일,ea,266,,,"FoodKeeper: Peaches, nectarines, plums, pears, sapote"
+자두,과일,ea,266,,,"FoodKeeper: Peaches, nectarines, plums, pears, sapote"
+살구,과일,ea,249,,,FoodKeeper: Apricots
+체리,과일,pack,483,,,FoodKeeper: Cherries
+키위,과일,ea,263,,,FoodKeeper: Kiwi fruit
+골드키위,과일,ea,263,,,FoodKeeper: Kiwi fruit
+오렌지,과일,ea,256,,,"FoodKeeper: Citrus fruit / lemon, lime, orange, grapefruit, tangerines, clementines"
+귤,과일,kg,256,,,"FoodKeeper: Citrus fruit / lemon, lime, orange, grapefruit, tangerines, clementines"
+레몬,과일,ea,256,,,"FoodKeeper: Citrus fruit / lemon, lime, orange, grapefruit, tangerines, clementines"
+라임,과일,ea,256,,,"FoodKeeper: Citrus fruit / lemon, lime, orange, grapefruit, tangerines, clementines"
+자몽,과일,ea,256,,,"FoodKeeper: Citrus fruit / lemon, lime, orange, grapefruit, tangerines, clementines"
+한라봉,과일,ea,,,,직접 대응 원본 미지정; 4단계 manual 검토
+천혜향,과일,ea,,,,직접 대응 원본 미지정; 4단계 manual 검토
+유자,과일,ea,664,,,"FoodKeeper: Yuzu / fruit, fresh"
+금귤,과일,pack,414,,,FoodKeeper: Kumquats
+망고,과일,ea,265,,,"FoodKeeper: Papaya, mango, feijoa, passionfruit, casaha melon"
+애플망고,과일,ea,265,,,"FoodKeeper: Papaya, mango, feijoa, passionfruit, casaha melon"
+파인애플,과일,ea,267,,,FoodKeeper: Pineapple
+수박,과일,ea,495,,,FoodKeeper: Watermelon
+멜론,과일,ea,264,,,FoodKeeper: Melons
+참외,과일,ea,,,,직접 대응 원본 미지정; 4단계 manual 검토
+아보카도,과일,ea,250,,,FoodKeeper: Avocados
+석류,과일,ea,269,,,FoodKeeper: Pomegranate
+용과,과일,ea,480,,,FoodKeeper: Pitaya/dragon fruit
+패션프루트,과일,ea,265,,,"FoodKeeper: Papaya, mango, feijoa, passionfruit, casaha melon"
+파파야,과일,ea,265,,,"FoodKeeper: Papaya, mango, feijoa, passionfruit, casaha melon"
+코코넛,과일,ea,258,,,FoodKeeper: Coconuts / fresh
+단감,과일,ea,,,,직접 대응 원본 미지정; 4단계 manual 검토
+홍시,과일,ea,,,,직접 대응 원본 미지정; 4단계 manual 검토
+무화과,과일,ea,,,,직접 대응 원본 미지정; 4단계 manual 검토
+소고기,육류,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+소 등심,육류,g,40,,,FoodKeeper: Beef / steaks
+소 안심,육류,g,37,,,"FoodKeeper: Beef / tenderloin, whole"
+소 채끝,육류,g,40,,,FoodKeeper: Beef / steaks
+소 부채살,육류,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+소 살치살,육류,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+소 갈비,육류,g,42,,,FoodKeeper: Beef / short ribs
+소 양지,육류,g,39,,,"FoodKeeper: Beef / chuck roast, brisket"
+소 사태,육류,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+소 우둔살,육류,g,36,,,FoodKeeper: Beef / round or rump roast
+소 다짐육,육류,g,43,,,FoodKeeper: Beef / ground
+소 불고기용,육류,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+소 국거리,육류,g,41,,,"FoodKeeper: Beef / stew, cubes"
+돼지고기,육류,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+삼겹살,육류,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+목살,육류,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+돼지 앞다리살,육류,g,74,,,FoodKeeper: Pork / shoulder
+돼지 뒷다리살,육류,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+돼지 등심,육류,g,61,,,"FoodKeeper: Pork / loin roast, boneless"
+돼지 안심,육류,g,67,,,FoodKeeper: Pork / tenderloin
+돼지 갈비,육류,g,72,,,FoodKeeper: Pork / ribs
+돼지 다짐육,육류,g,73,,,FoodKeeper: Pork / ground
+돼지 항정살,육류,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+돼지 갈매기살,육류,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+돼지 등갈비,육류,g,72,,,FoodKeeper: Pork / ribs
+닭고기,육류,g,113,,,FoodKeeper: Chicken / whole
+닭가슴살,육류,g,117,,,"FoodKeeper: Chicken parts / breast halves, boneless"
+닭안심,육류,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+닭다리,육류,g,118,,,FoodKeeper: Chicken parts / legs or thighs
+닭다리살,육류,g,118,,,FoodKeeper: Chicken parts / legs or thighs
+닭날개,육류,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+닭봉,육류,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+닭볶음탕용,육류,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+닭 다짐육,육류,g,115,,,FoodKeeper: Ground turkey or chicken
+오리고기,육류,g,123,,,"FoodKeeper: Duckling / domestic or wild, whole"
+훈제오리,육류,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+양갈비,육류,g,51,,,"FoodKeeper: Lamb / chops, ribs, or loin"
+양 다짐육,육류,g,50,,,FoodKeeper: Lamb / ground
+베이컨,육류,g,79,,,FoodKeeper: Bacon
+슬라이스햄,육류,g,515,,,"FoodKeeper: Ham / pre-packaged, luncheon/deli meat"
+소시지,육류,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+살라미,육류,g,516,,,"FoodKeeper: Salami / pre-packaged, luncheon/deli meat"
+고등어,수산물,g,146,,,"FoodKeeper: Fatty fish / bluefish, catfish, mackerel, mullet, salmon, tuna, etc."
+연어,수산물,g,146,,,"FoodKeeper: Fatty fish / bluefish, catfish, mackerel, mullet, salmon, tuna, etc."
+참치,수산물,g,146,,,"FoodKeeper: Fatty fish / bluefish, catfish, mackerel, mullet, salmon, tuna, etc."
+갈치,수산물,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+삼치,수산물,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+꽁치,수산물,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+청어,수산물,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+대구,수산물,g,144,,,"FoodKeeper: Lean fish / cod, flounder, haddock, halibut, sole, etc."
+명태,수산물,g,145,,,"FoodKeeper: Lean fish / pollock, ocean perch, rockfish, sea trout."
+동태,수산물,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+가자미,수산물,g,144,,,"FoodKeeper: Lean fish / cod, flounder, haddock, halibut, sole, etc."
+광어,수산물,g,144,,,"FoodKeeper: Lean fish / cod, flounder, haddock, halibut, sole, etc."
+우럭,수산물,g,145,,,"FoodKeeper: Lean fish / pollock, ocean perch, rockfish, sea trout."
+도미,수산물,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+조기,수산물,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+민어,수산물,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+장어,수산물,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+아귀,수산물,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+오징어,수산물,g,152,,,FoodKeeper: Squid
+한치,수산물,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+갑오징어,수산물,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+주꾸미,수산물,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+낙지,수산물,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+문어,수산물,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+새우,수산물,g,151,,,"FoodKeeper: Shrimp, crayfish"
+흰다리새우,수산물,g,151,,,"FoodKeeper: Shrimp, crayfish"
+대하,수산물,g,151,,,"FoodKeeper: Shrimp, crayfish"
+바지락,수산물,g,157,,,"FoodKeeper: Live clams, mussels, crab, and oysters"
+모시조개,수산물,g,157,,,"FoodKeeper: Live clams, mussels, crab, and oysters"
+홍합,수산물,g,157,,,"FoodKeeper: Live clams, mussels, crab, and oysters"
+굴,수산물,g,153,,,"FoodKeeper: Shucked clams, mussels, and oysters"
+가리비,수산물,g,150,,,FoodKeeper: Scallops
+전복,수산물,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+꽃게,수산물,g,157,,,"FoodKeeper: Live clams, mussels, crab, and oysters"
+대게다리,수산물,g,156,,,"FoodKeeper: Crab legs / king, dungeness, snow"
+랍스터,수산물,g,158,,,FoodKeeper: Fresh whole lobster / live
+멍게,수산물,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+해삼,수산물,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+생미역,수산물,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+매생이,수산물,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+꼬막,수산물,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+명란,수산물,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+우유,유제품,ml,27,,,FoodKeeper: Milk / plain or flavored; 냉장 수치 없음; 4단계 manual 검토
+저지방우유,유제품,ml,27,,,FoodKeeper: Milk / plain or flavored; 냉장 수치 없음; 4단계 manual 검토
+무지방우유,유제품,ml,27,,,FoodKeeper: Milk / plain or flavored; 냉장 수치 없음; 4단계 manual 검토
+락토프리우유,유제품,ml,543,,,FoodKeeper: Milk / lactose-free
+멸균우유,유제품,ml,644,,,FoodKeeper: Milk / shelf-stable
+바나나우유,유제품,ml,27,,,FoodKeeper: Milk / plain or flavored; 냉장 수치 없음; 4단계 manual 검토
+초코우유,유제품,ml,27,,,FoodKeeper: Milk / plain or flavored; 냉장 수치 없음; 4단계 manual 검토
+딸기우유,유제품,ml,27,,,FoodKeeper: Milk / plain or flavored; 냉장 수치 없음; 4단계 manual 검토
+요거트,유제품,pack,33,,,FoodKeeper: Yogurt
+그릭요거트,유제품,pack,,,,직접 대응 원본 미지정; 4단계 manual 검토
+버터,유제품,g,1,,,FoodKeeper: Butter
+무염버터,유제품,g,1,,,FoodKeeper: Butter
+마가린,유제품,g,26,,,FoodKeeper: Margarine
+생크림,유제품,ml,14,,,FoodKeeper: Cream / heavy
+사워크림,유제품,pack,29,,,FoodKeeper: Sour cream
+크림치즈,유제품,pack,10,,,FoodKeeper: Cream cheese
+리코타치즈,유제품,pack,490,,,FoodKeeper: Ricotta
+코티지치즈,유제품,pack,9,,,FoodKeeper: Cottage cheese
+체다치즈,유제품,pack,3,,,"FoodKeeper: Cheese / hard such as cheddar, swiss, block parmesan"
+슬라이스치즈,유제품,pack,6,,,FoodKeeper: Cheese / processed slices
+슈레드모짜렐라,유제품,pack,5,,,"FoodKeeper: Cheese / shredded; cheddar, mozzarella, etc."
+브리치즈,유제품,pack,7,,,"FoodKeeper: Cheese / soft such as brie, bel paese, goat"
+스트링치즈,유제품,pack,544,,,FoodKeeper: String Cheese
+파마산치즈가루,유제품,pack,4,,,FoodKeeper: Cheese / parmesan; shredded or grated
+연유,유제품,can,383,,,FoodKeeper: Milk / canned evaporated or condensed
+쌀,곡류,kg,338,,,FoodKeeper: Rice / white or wild
+현미,곡류,kg,339,,,FoodKeeper: Rice / brown
+찹쌀,곡류,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+흑미,곡류,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+보리,곡류,g,577,,,FoodKeeper: Barley / whole grain
+귀리,곡류,g,585,,,FoodKeeper: Oats / whole grain
+기장,곡류,g,583,,,FoodKeeper: Millet / whole grain
+수수,곡류,g,589,,,FoodKeeper: Sorghum / whole grain
+메밀,곡류,g,579,,,FoodKeeper: Buckwheat / whole grain
+퀴노아,곡류,g,425,,,FoodKeeper: Quinoa / uncooked
+오트밀,곡류,g,375,,,"FoodKeeper: Cereal / cook before eating (oatmeal, etc.)"
+밀가루,곡류,g,222,,,FoodKeeper: Flour / white
+통밀가루,곡류,g,223,,,FoodKeeper: Flour / whole wheat
+쌀가루,곡류,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+찹쌀가루,곡류,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+옥수수가루,곡류,g,218,,,"FoodKeeper: Cornmeal / regular, degerminated"
+옥수수전분,곡류,g,220,,,FoodKeeper: Cornstarch
+감자전분,곡류,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+타피오카전분,곡류,g,243,,,FoodKeeper: Tapiocas
+빵가루,곡류,g,643,,,FoodKeeper: Breadcrumbs / commercial
+렌틸콩,곡류,g,334,,,FoodKeeper: Lentils / dried
+병아리콩,곡류,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+검은콩,곡류,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+팥,곡류,g,,,,직접 대응 원본 미지정; 4단계 manual 검토
+녹두,곡류,g,680,,,"FoodKeeper: Mung bean / dry, food-grade bags"
+땅콩,곡류,g,442,,,FoodKeeper: Peanuts / no shell
+아몬드,곡류,g,438,,,FoodKeeper: Almonds / no shell
+호두,곡류,g,446,,,FoodKeeper: Walnuts / shell or no shell
+캐슈넛,곡류,g,439,,,FoodKeeper: Cashews / no shell
+잣,곡류,g,653,,,FoodKeeper: Pine nuts
+피스타치오,곡류,g,445,,,FoodKeeper: Pistachios / shell or no shell
+해바라기씨,곡류,g,608,,,"FoodKeeper: Sunflower seeds / raw, unsalted, no shell"
+호박씨,곡류,g,604,,,"FoodKeeper: Pumpkin seeds / raw, no shell"
+치아씨드,곡류,g,573,,,FoodKeeper: Chia seeds
+간장,양념,bottle,360,,,FoodKeeper: Soy sauce or teriyaki sauce
+진간장,양념,bottle,360,,,FoodKeeper: Soy sauce or teriyaki sauce
+국간장,양념,bottle,,,,직접 대응 원본 미지정; 4단계 manual 검토
+양조간장,양념,bottle,360,,,FoodKeeper: Soy sauce or teriyaki sauce
+된장,양념,container,,,,직접 대응 원본 미지정; 4단계 manual 검토
+고추장,양념,container,,,,직접 대응 원본 미지정; 4단계 manual 검토
+쌈장,양념,container,,,,직접 대응 원본 미지정; 4단계 manual 검토
+춘장,양념,container,,,,직접 대응 원본 미지정; 4단계 manual 검토
+고춧가루,양념,bag,232,,,FoodKeeper: Chili powder
+소금,양념,bag,468,,,"FoodKeeper: Salt / table, plain, or iodized"
+설탕,양념,bag,240,,,FoodKeeper: Sugar / granulated
+흑설탕,양념,bag,239,,,FoodKeeper: Sugar / brown
+슈가파우더,양념,bag,241,,,FoodKeeper: Sugar / confectioners
+후추,양념,bottle,469,,,"FoodKeeper: Black pepper / ground, dried, commercially bottled or purchased in bulk"
+통후추,양념,bottle,470,,,"FoodKeeper: Black pepper / cracked, dried, commercially bottled or purchased in bulk"
+계피가루,양념,bottle,472,,,"FoodKeeper: Cinnamon / ground, dried, commercially bottled or purchased in bulk"
+큐민가루,양념,bottle,473,,,"FoodKeeper: Cumin / ground, dried, commercially bottled or purchased in bulk, opened or unopened"
+마늘가루,양념,bottle,474,,,"FoodKeeper: Garlic powder / dried, commercially bottled or purchased in bulk"
+양파가루,양념,bottle,475,,,"FoodKeeper: Onion powder / dried, commercially bottled or purchased in bulk"
+카레가루,양념,bag,,,,직접 대응 원본 미지정; 4단계 manual 검토
+올리브유,양념,bottle,227,,,FoodKeeper: Oils / olive or vegetable
+식용유,양념,bottle,227,,,FoodKeeper: Oils / olive or vegetable
+카놀라유,양념,bottle,520,,,FoodKeeper: Canola oil
+포도씨유,양념,bottle,523,,,FoodKeeper: Grapeseed oil
+해바라기유,양념,bottle,522,,,FoodKeeper: Sunflower oil
+참기름,양념,bottle,612,,,FoodKeeper: Sesame oil
+들기름,양념,bottle,,,,직접 대응 원본 미지정; 4단계 manual 검토
+코코넛오일,양념,bottle,454,,,FoodKeeper: Coconut oil
+아보카도오일,양념,bottle,668,,,FoodKeeper: Avocado Oil
+식초,양념,bottle,361,,,FoodKeeper: Vinegar
+사과식초,양념,bottle,557,,,FoodKeeper: Apple cider vinegar
+발사믹식초,양념,bottle,669,,,FoodKeeper: Balsamic vinegar
+맛술,양념,bottle,636,,,FoodKeeper: Cooking wine
+굴소스,양념,bottle,434,,,FoodKeeper: Oyster sauce
+케첩,양념,bottle,348,,,"FoodKeeper: Ketchup, cocktail, or chili sauce"
+마요네즈,양념,bottle,350,,,FoodKeeper: Mayonnaise / commercial
+머스터드,양념,bottle,351,,,FoodKeeper: Mustard
+핫소스,양념,bottle,559,,,FoodKeeper: Hot sauce
+스위트칠리소스,양념,bottle,348,,,"FoodKeeper: Ketchup, cocktail, or chili sauce"
+데리야끼소스,양념,bottle,360,,,FoodKeeper: Soy sauce or teriyaki sauce
+바비큐소스,양념,bottle,340,,,FoodKeeper: Barbecue sauce / bottled
+토마토소스,양념,bottle,599,,,"FoodKeeper: Tomato sauce / spaghetti, pizza"
+토마토페이스트,양념,can,501,,,FoodKeeper: Tomato paste
+바질페스토,양념,bottle,354,,,FoodKeeper: Pesto / jarred
+땅콩버터,양념,container,387,,,FoodKeeper: Peanut butter / commercial
+꿀,양념,bottle,345,,,FoodKeeper: Honey
+메이플시럽,양념,bottle,533,,,"FoodKeeper: ""Genuine"" Maple syrup / unopened, glass"
+물엿,양념,bottle,,,,직접 대응 원본 미지정; 4단계 manual 검토
+올리고당,양념,bottle,,,,직접 대응 원본 미지정; 4단계 manual 검토
+멸치액젓,양념,bottle,,,,직접 대응 원본 미지정; 4단계 manual 검토
+까나리액젓,양념,bottle,,,,직접 대응 원본 미지정; 4단계 manual 검토
+참깨,양념,bag,613,,,FoodKeeper: Sesame seeds
+들깨가루,양념,bag,,,,직접 대응 원본 미지정; 4단계 manual 검토
+베이킹파우더,양념,bottle,212,,,FoodKeeper: Baking powder
+베이킹소다,양념,bottle,213,,,FoodKeeper: Baking soda
+드라이이스트,양념,bag,561,,,FoodKeeper: Yeast / packaged
+생수,음료,ml,413,,,FoodKeeper: Water / commercially bottled
+탄산수,음료,ml,407,,,"FoodKeeper: Soda / carbonated cola drinks, mixers, diet sodas; bottles or cans"
+콜라,음료,ml,407,,,"FoodKeeper: Soda / carbonated cola drinks, mixers, diet sodas; bottles or cans"
+사이다,음료,ml,407,,,"FoodKeeper: Soda / carbonated cola drinks, mixers, diet sodas; bottles or cans"
+오렌지주스,음료,ml,455,,,FoodKeeper: Orange juice / commercially packaged carton
+사과주스,음료,ml,,,,직접 대응 원본 미지정; 4단계 manual 검토
+포도주스,음료,ml,,,,직접 대응 원본 미지정; 4단계 manual 검토
+토마토주스,음료,ml,,,,직접 대응 원본 미지정; 4단계 manual 검토
+두유,음료,ml,421,,,FoodKeeper: Soy milk
+아몬드음료,음료,ml,427,,,FoodKeeper: Almond milk
+코코넛워터,음료,ml,660,,,FoodKeeper: Coconut water
+레몬즙,음료,ml,448,,,FoodKeeper: Lemon juice
+라임즙,음료,ml,447,,,FoodKeeper: Lime juice
+원두커피,음료,g,400,,,FoodKeeper: Coffee / whole beans
+인스턴트커피,음료,g,402,,,FoodKeeper: Coffee / instant
+녹차,음료,bag,,,,직접 대응 원본 미지정; 4단계 manual 검토
+홍차,음료,bag,,,,직접 대응 원본 미지정; 4단계 manual 검토
+보리차,음료,bag,,,,직접 대응 원본 미지정; 4단계 manual 검토
+냉동블루베리,냉동식품,bag,315,,,"FoodKeeper: Fruits / such as berries, melons; 냉동 판매 상태; frozen 규칙만 적용 검토"
+냉동딸기,냉동식품,bag,315,,,"FoodKeeper: Fruits / such as berries, melons; 냉동 판매 상태; frozen 규칙만 적용 검토"
+냉동망고,냉동식품,bag,315,,,"FoodKeeper: Fruits / such as berries, melons; 냉동 판매 상태; frozen 규칙만 적용 검토"
+냉동브로콜리,냉동식품,bag,331,,,FoodKeeper: Vegetables; 냉동 판매 상태; frozen 규칙만 적용 검토
+냉동시금치,냉동식품,bag,331,,,FoodKeeper: Vegetables; 냉동 판매 상태; frozen 규칙만 적용 검토
+냉동옥수수,냉동식품,bag,331,,,FoodKeeper: Vegetables; 냉동 판매 상태; frozen 규칙만 적용 검토
+냉동완두콩,냉동식품,bag,331,,,FoodKeeper: Vegetables; 냉동 판매 상태; frozen 규칙만 적용 검토
+냉동그린빈,냉동식품,bag,331,,,FoodKeeper: Vegetables; 냉동 판매 상태; frozen 규칙만 적용 검토
+냉동새우,냉동식품,bag,325,,,"FoodKeeper: Shrimp, shellfish; 냉동 판매 상태; frozen 규칙만 적용 검토"
+냉동오징어,냉동식품,bag,,,,직접 대응 원본 미지정; 4단계 manual 검토; 냉동 판매 상태; frozen 규칙만 적용 검토
+냉동연어,냉동식품,bag,,,,직접 대응 원본 미지정; 4단계 manual 검토; 냉동 판매 상태; frozen 규칙만 적용 검토
+냉동대구,냉동식품,bag,,,,직접 대응 원본 미지정; 4단계 manual 검토; 냉동 판매 상태; frozen 규칙만 적용 검토
+냉동감자,냉동식품,bag,313,,,"FoodKeeper: Frozen potato products / fries, hashbrowns, tater tots; 냉동 판매 상태; frozen 규칙만 적용 검토"
+냉동에다마메,냉동식품,bag,641,,,FoodKeeper: Edamame / frozen; 냉동 판매 상태; frozen 규칙만 적용 검토
+냉동혼합채소,냉동식품,bag,331,,,FoodKeeper: Vegetables; 냉동 판매 상태; frozen 규칙만 적용 검토
+계란,기타,ea,21,,,FoodKeeper: Eggs / in shell
+메추리알,기타,ea,,,,직접 대응 원본 미지정; 4단계 manual 검토
+두부,기타,pack,168,두부,cold,FoodKeeper: Tofu; I1250 두부 정확 일치 행 우선
+순두부,기타,pack,,,,직접 대응 원본 미지정; 4단계 manual 검토
+연두부,기타,pack,,,,직접 대응 원본 미지정; 4단계 manual 검토
+유부,기타,pack,,,,직접 대응 원본 미지정; 4단계 manual 검토
+어묵,기타,pack,,어묵,cold,I1250 어묵 수집 필요; 제품 표시 보관조건 확인
+곤약,기타,pack,,,,직접 대응 원본 미지정; 4단계 manual 검토
+청포묵,기타,pack,,,,직접 대응 원본 미지정; 4단계 manual 검토
+도토리묵,기타,pack,,,,직접 대응 원본 미지정; 4단계 manual 검토
+배추김치,기타,kg,493,,,FoodKeeper: Kimchi; 일반 Kimchi에 대응; I1250 식품유형 확인 전 미지정
+총각김치,기타,kg,,,,직접 대응 원본 미지정; 4단계 manual 검토
+깍두기,기타,kg,,,,직접 대응 원본 미지정; 4단계 manual 검토
+열무김치,기타,kg,,,,직접 대응 원본 미지정; 4단계 manual 검토
+오이소박이,기타,kg,,,,직접 대응 원본 미지정; 4단계 manual 검토
+백김치,기타,kg,,,,직접 대응 원본 미지정; 4단계 manual 검토
+갓김치,기타,kg,,,,직접 대응 원본 미지정; 4단계 manual 검토
+파김치,기타,kg,,,,직접 대응 원본 미지정; 4단계 manual 검토
+떡국떡,기타,pack,,,,직접 대응 원본 미지정; 4단계 manual 검토
+떡볶이떡,기타,pack,,,,직접 대응 원본 미지정; 4단계 manual 검토
+가래떡,기타,pack,,,,직접 대응 원본 미지정; 4단계 manual 검토
+소면,기타,pack,,,,직접 대응 원본 미지정; 4단계 manual 검토
+중면,기타,pack,,,,직접 대응 원본 미지정; 4단계 manual 검토
+칼국수면,기타,pack,,,,직접 대응 원본 미지정; 4단계 manual 검토
+우동면,기타,pack,,,,직접 대응 원본 미지정; 4단계 manual 검토
+메밀면,기타,pack,,,,직접 대응 원본 미지정; 4단계 manual 검토
+당면,기타,pack,,,,직접 대응 원본 미지정; 4단계 manual 검토
+쌀국수면,기타,pack,,,,직접 대응 원본 미지정; 4단계 manual 검토
+파스타면,기타,pack,335,,,"FoodKeeper: Pasta / dry, without eggs"
+스파게티면,기타,pack,335,,,"FoodKeeper: Pasta / dry, without eggs"
+펜네,기타,pack,335,,,"FoodKeeper: Pasta / dry, without eggs"
+푸실리,기타,pack,335,,,"FoodKeeper: Pasta / dry, without eggs"
+라자냐면,기타,pack,335,,,"FoodKeeper: Pasta / dry, without eggs"
+식빵,기타,pack,195,,,"FoodKeeper: Commercial bread products / including pan breads, flat breads, rolls, and buns"
+통밀식빵,기타,pack,461,,,FoodKeeper: Whole wheat bread / commercially baked & pre-sliced
+또띠아,기타,pack,196,,,FoodKeeper: Tortillas / flour
+김,기타,bag,,,,직접 대응 원본 미지정; 4단계 manual 검토
+김밥김,기타,bag,,,,직접 대응 원본 미지정; 4단계 manual 검토
+마른미역,기타,bag,,,,직접 대응 원본 미지정; 4단계 manual 검토
+다시마,기타,bag,,,,직접 대응 원본 미지정; 4단계 manual 검토
+국물멸치,기타,bag,,,,직접 대응 원본 미지정; 4단계 manual 검토
+볶음멸치,기타,bag,,,,직접 대응 원본 미지정; 4단계 manual 검토
+황태채,기타,bag,,,,직접 대응 원본 미지정; 4단계 manual 검토
+건새우,기타,bag,,,,직접 대응 원본 미지정; 4단계 manual 검토
+건표고버섯,기타,bag,385,,,FoodKeeper: Mushrooms / dried
+참치캔,기타,can,618,,,FoodKeeper: Tuna / canned
+옥수수캔,기타,can,372,,,"FoodKeeper: Canned goods / low acid (such as meat, poultry, fish, gravy, stew, soups, beans, carrots, corn, pasta, peas, potatoes, spinach)"
+완두콩캔,기타,can,372,,,"FoodKeeper: Canned goods / low acid (such as meat, poultry, fish, gravy, stew, soups, beans, carrots, corn, pasta, peas, potatoes, spinach)"
+올리브절임,기타,bottle,352,,,FoodKeeper: Olives / black and green
+오이피클,기타,bottle,353,,,FoodKeeper: Pickles
+단무지,기타,pack,,,,직접 대응 원본 미지정; 4단계 manual 검토
+건포도,기타,bag,379,,,"FoodKeeper: Fruits, dried / raisins, apricots, mangoes, cranberries, etc."
+건크랜베리,기타,bag,379,,,"FoodKeeper: Fruits, dried / raisins, apricots, mangoes, cranberries, etc."
