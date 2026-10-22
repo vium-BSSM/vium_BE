@@ -67,7 +67,7 @@
 5. **장보기 도우미 / 구매량 제안** — shopping-helper, purchase-suggestions, shopping-list-items
 6. **알림** — notifications (서버 배치가 생성)
 7. **인증** — 이메일 회원가입·로그인, Access Token 인증, 토큰 갱신 및 로그아웃 구현 완료. (아래 5항 참고)
-8. **확장** — 영수증 OCR(scan, `purchases`에 저장), 레시피 추천, 대시보드/절약금액.
+8. **확장** — 영수증·온라인 주문내역 인식 결과 등록, 구매 확정·조회·삭제 백엔드 구현 완료. OCR은 앱의 ML Kit 한국어 인식기가 수행하며, 서버는 좌표가 포함된 텍스트를 규칙 기반으로 파싱한다. scan은 DRAFT를 만들고 confirm에서 재고를 생성한다. 실제 앱 인식 결과를 통한 정확도 검증은 남아 있다. 레시피 추천, 대시보드/절약금액도 확장 범위다.
 
 ---
 
@@ -112,6 +112,7 @@
 - **도메인별 모놀리식 + 계층형 아키텍처**를 사용한다. 하나의 Spring Boot 애플리케이션과 PostgreSQL DB를 운영한다.
 - `dispose`는 소진·폐기, 자동 폐기, 이벤트 이력, 낭비 리포트·패턴 집계를 담당한다.
 - `ingredient`는 공용 재료 카탈로그·소비기한 규칙, `inventory`는 사용자별 보유 재료·잔여 수량·상태, `user`는 사용자 정보·설정을 담당한다.
+- `receipt`는 영수증·온라인 주문내역의 행 복원·규칙 파싱, 구매 DRAFT 저장, 확정·조회·삭제를 담당한다. 외부 OCR·LLM API를 호출하지 않는다. 이미지 소유권은 `ImageService`, 카탈로그 매칭 데이터·소비기한 규칙은 `ingredient`의 서비스, 확정 시 재고 생성은 `InventoryService`를 통해 처리한다.
 - `image`는 S3 이미지 검증·업로드·소유권·임시 조회 URL과 실패 파일 정리를 담당한다. `UserProfileService`로 활성 사용자를 확인하고 이미지 메타데이터만 변경하며 프로필·레시피 연결은 각 도메인이 담당한다.
 - `auth`는 로그인 흐름·토큰 발급·세션 저장을 담당한다. `user`는 계정 조회와 비밀번호 검증을 담당하며, `auth`에는 향후 회원가입·토큰 갱신·로그아웃 흐름을 추가한다.
 
@@ -144,6 +145,15 @@ com.vium
 │   ├── entity           ConsumptionEvent
 │   └── repository       ConsumptionEventRepository,
 │                        ConsumptionEventQueryRepository, WasteReportQueryRepository
+├── receipt
+│   ├── controller       ReceiptScanController, PurchaseController
+│   ├── dto              scan·구매 확정·조회 요청/응답, 파서 결과
+│   ├── service          PurchaseScanService, PurchaseScanNormalizer,
+│   │                    PurchaseConfirmService, PurchaseQueryService
+│   ├── parser           OcrRowAssembler, ReceiptTextParser, OnlineOrderTextParser,
+│   │                    OcrPatterns, ItemNameQuantityParser, PurchaseSourceDetector
+│   ├── entity           Purchase, PurchaseItem, PurchaseType, PurchaseStatus
+│   └── repository       PurchaseRepository, PurchaseItemRepository, PurchaseQueryRepository
 ├── auth
 │   ├── controller       AuthController
 │   ├── dto              LoginRequest, LoginResponse
@@ -159,7 +169,7 @@ com.vium
     ├── common           ApiResponse
     ├── exception        BusinessException, ErrorCode, GlobalExceptionHandler 등
     ├── security         SecurityConfig, CurrentUserProvider, TokenConfig, JwtProperties
-    ├── code             공통 코드 테이블 Entity·Repository
+    ├── code             공통 코드 테이블 Entity·Repository (PurchaseSource 포함)
     └── controller       HealthController
 ```
 
@@ -187,6 +197,7 @@ com.vium
 - 함께 성공해야 하는 업무의 최상위 Service 메서드에 `@Transactional`을 둔다.
 - 소진·폐기는 `DisposeService → InventoryService`로 재고를 변경한 뒤 `ConsumptionEventRepository`에 이벤트를 저장한다. 자동 폐기는 `AutoDisposeService`가 같은 원칙으로 조율한다.
 - **재고 변경과 이벤트 저장은 동일 트랜잭션에 참여하며, 하나라도 실패하면 모두 롤백한다.** 재고 변경에 별도 `REQUIRES_NEW` 트랜잭션을 사용하지 않는다.
+- 구매 확정은 `PurchaseConfirmService → InventoryService.registerFromPurchase`로 처리한다. 구매 행에 비관적 쓰기 잠금을 걸고, 품목 교체·재고 생성·CONFIRMED 전환을 하나의 트랜잭션에서 수행한다. 실패하면 원래 DRAFT와 품목을 복원하며, 재고의 `purchase_item_id`는 확정된 새 품목을 참조한다. 재고 생성에는 소진·폐기 이벤트를 적재하지 않는다.
 - 조회 서비스에는 `@Transactional(readOnly = true)`를 적용한다.
 - 현재 사용자 ID는 `global.security.CurrentUserProvider` 한 곳에서 제공한다. 컨트롤러는 이를 주입받고, 서비스에 사용자 ID를 전달한다. `AuthenticationUtil` 같은 중복 접근 경로를 만들지 않는다.
 - `auth`는 로그인·토큰 발급·세션 저장을, `global.security`는 요청 인증 검증과 현재 사용자 접근을 담당한다.
@@ -233,3 +244,25 @@ com.vium
    - 예: `feat/12-ingredient-register`, `fix/27-waste-report-timezone`
 3. **커밋 메시지도 같은 타입 접두사를 쓴다.** 예: `feat: 재료 등록 API 구현 (#12)`
 4. **PR을 올릴 때는 `Closes #이슈번호`로 연결한다.** (PR 템플릿에 이미 자리 있음 → 머지 시 이슈 자동 닫힘)
+
+---
+
+## 11. 영수증·온라인 주문내역 등록 (#83)
+
+- `POST /api/me/receipts/scan`, `POST /api/me/online-orders/scan`: `{ imageId?, imageWidth, imageHeight, lines[] }`를 받아 각각 RECEIPT·ONLINE_ORDER 구매 DRAFT를 생성하고 201로 상세 정보를 반환한다. 같은 입력을 다시 보내면 새 DRAFT가 생성된다.
+- 이미지 크기는 1~10000, 줄 수는 1~300, 줄 텍스트는 1~200자다. 좌표는 음수가 아니며 `left <= right`, `top <= bottom`이어야 한다. 공백만 있는 줄은 파싱에서 무시한다. `imageId`는 본인의 업로드 완료된 RECEIPT 이미지만 허용하며 이미지 바이트나 S3에 접근하지 않는다.
+- 파서 결과는 최대 100개 유효 품목으로 제한한다. 품목명은 최대 200자, 수량은 소수 3자리로 정규화하고 저장 범위 초과 시 1개로 대체한다. 반올림 후 수량이 0 이하이거나 품목명이 유효하지 않으면 해당 품목을 제외한다. 금액은 음수·1억원 초과를 null로 처리한다. 유효 품목이 없으면 422 `SCAN_UNRECOGNIZABLE`이며 구매를 저장하지 않는다. OCR 원문 줄은 저장하거나 로그에 남기지 않는다.
+- 카탈로그는 공백 제거·소문자 기준 포함 여부로 매칭한다. 한 글자 이름은 공백으로 나눈 토큰과 정확히 같아야 한다. 가장 긴 이름을 우선하고 동률이면 작은 ID를 선택한다. 보관방법은 냉장→실온→냉동 순으로 소비기한 규칙을 찾으며, 추정 불가 시 냉장·소비기한 null로 DRAFT에 남긴다.
+- `POST /api/me/purchases/{purchaseId}/confirm`: 최종 품목 1~100개로 교체하고 재고를 생성한다. 구매일은 입력 시각을 Asia/Seoul로 변환한 날짜다. 소비기한은 기존 재고 등록 규칙으로 추정하며 추정할 수 없으면 400으로 전체 롤백한다. 이미 확정된 구매는 409 `PURCHASE_ALREADY_CONFIRMED`다.
+- `GET /api/me/purchases`: 유형·상태·구매 날짜로 필터링한다. `from`·`to`는 서울 날짜 기준 양 끝을 포함하며 최신 구매 시각·ID 순으로 반환한다. 품목 수는 목록 쿼리에서 함께 집계한다.
+- `GET /api/me/purchases/{purchaseId}`: 품목을 ID 순으로 반환하며 재료명은 카탈로그 ID 묶음 조회로 채운다. `DELETE`는 행 잠금 후 DRAFT와 품목만 삭제하고 원본 이미지는 보존한다. 삭제 성공은 200과 data=null이다. 타인·미존재 구매는 404 `PURCHASE_NOT_FOUND`다.
+- V8은 구매 유형·상태·이미지 ID·확정 시각 및 품목 보관방법·소비기한을 추가하고 기존 `image_url`·`ocr_status`를 제거한다. 구매 시각은 서울 현지 시각으로 저장하며 응답에는 `+09:00`을 붙인다.
+
+### 앱 연동 및 남은 검증
+
+- ML Kit Text Recognition v2의 한국어 인식기(`KoreanTextRecognizerOptions`)를 사용한다. 모든 `TextBlock → Line`을 평탄화해 원본 이미지 픽셀 기준 `{text, left, top, right, bottom}`과 같은 기준의 이미지 크기를 보낸다.
+- 확인 화면은 카탈로그 매칭 품목을 기본 선택하고 미매칭 품목은 기본 해제로 보여 주는 것을 권장한다. 사용자가 수정한 최종 목록을 confirm으로 전송한다.
+- confirm 시 `purchaseSourceId`를 보내지 않으면 null로 저장되므로, 앱은 확인 화면의 구매처를 항상 함께 보낸다.
+- 온라인 주문은 상품명과 가격 사이 배송 배지를 건너뛰고, 가격 줄에 함께 있는 배송 배지·수량도 처리한다. 배송비·쿠폰·적립 금액은 품목 가격에서 제외한다.
+- 현재 취소 표시는 직전 상품을 제외한다. 상품 위에 상태가 표시되는 실제 앱 사례는 아직 반영하지 않았으며 실제 인식 결과로 규칙을 조정해야 한다.
+- 파서 픽스처는 수작업 예시다. 전체 검증 명령은 `TZ=UTC ./gradlew clean test`이며 API·동시성 테스트는 H2 기반이다. 리뷰에서 실제 PostgreSQL 16에 V1~V8 Flyway 적용, 운영과 같은 `ddl-auto: validate` 설정으로 앱 기동, scan→confirm→조회→삭제 및 동시 확정 API 직접 호출까지 확인 완료했다. 남은 검증은 실제 앱 OCR 결과를 통한 파서 정확도 확인이다.

@@ -1,0 +1,41 @@
+{
+  "imageWidth": 1080,
+  "imageHeight": 2400,
+  "lines": [
+    {
+      "text": "GS25",
+      "left": 40,
+      "top": 40,
+      "right": 240,
+      "bottom": 70
+    },
+    {
+      "text": "2026.10.21",
+      "left": 40,
+      "top": 100,
+      "right": 240,
+      "bottom": 130
+    },
+    {
+      "text": "콜라 355ml*6 6,000",
+      "left": 40,
+      "top": 160,
+      "right": 240,
+      "bottom": 190
+    },
+    {
+      "text": "김밥 2 5,000",
+      "left": 40,
+      "top": 220,
+      "right": 240,
+      "bottom": 250
+    },
+    {
+      "text": "합계 11,000",
+      "left": 40,
+      "top": 280,
+      "right": 240,
+      "bottom": 310
+    }
+  ]
+}

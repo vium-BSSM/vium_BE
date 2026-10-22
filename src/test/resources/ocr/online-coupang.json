@@ -1,0 +1,139 @@
+{
+  "imageWidth": 1080,
+  "imageHeight": 2400,
+  "lines": [
+    {
+      "text": "쿠팡",
+      "left": 40,
+      "top": 40,
+      "right": 240,
+      "bottom": 70
+    },
+    {
+      "text": "배송 예정 2026-10-21",
+      "left": 40,
+      "top": 100,
+      "right": 240,
+      "bottom": 130
+    },
+    {
+      "text": "주문일 2026-10-19",
+      "left": 40,
+      "top": 160,
+      "right": 240,
+      "bottom": 190
+    },
+    {
+      "text": "서울우유 멸균우유",
+      "left": 40,
+      "top": 220,
+      "right": 240,
+      "bottom": 250
+    },
+    {
+      "text": "1L 2팩",
+      "left": 40,
+      "top": 280,
+      "right": 240,
+      "bottom": 310
+    },
+    {
+      "text": "8,000원 7,000원",
+      "left": 40,
+      "top": 340,
+      "right": 240,
+      "bottom": 370
+    },
+    {
+      "text": "2개",
+      "left": 40,
+      "top": 400,
+      "right": 240,
+      "bottom": 430
+    },
+    {
+      "text": "배송 완료",
+      "left": 40,
+      "top": 460,
+      "right": 240,
+      "bottom": 490
+    },
+    {
+      "text": "리뷰 쓰기",
+      "left": 40,
+      "top": 520,
+      "right": 240,
+      "bottom": 550
+    },
+    {
+      "text": "두부",
+      "left": 40,
+      "top": 580,
+      "right": 240,
+      "bottom": 610
+    },
+    {
+      "text": "300g",
+      "left": 40,
+      "top": 640,
+      "right": 240,
+      "bottom": 670
+    },
+    {
+      "text": "2,000원",
+      "left": 40,
+      "top": 700,
+      "right": 240,
+      "bottom": 730
+    },
+    {
+      "text": "1개",
+      "left": 40,
+      "top": 760,
+      "right": 240,
+      "bottom": 790
+    },
+    {
+      "text": "취소완료",
+      "left": 40,
+      "top": 820,
+      "right": 240,
+      "bottom": 850
+    },
+    {
+      "text": "친환경 감자",
+      "left": 40,
+      "top": 880,
+      "right": 240,
+      "bottom": 910
+    },
+    {
+      "text": "1kg",
+      "left": 40,
+      "top": 940,
+      "right": 240,
+      "bottom": 970
+    },
+    {
+      "text": "4,000원",
+      "left": 40,
+      "top": 1000,
+      "right": 240,
+      "bottom": 1030
+    },
+    {
+      "text": "2개",
+      "left": 40,
+      "top": 1060,
+      "right": 240,
+      "bottom": 1090
+    },
+    {
+      "text": "총 결제금액 15,000원",
+      "left": 40,
+      "top": 1120,
+      "right": 240,
+      "bottom": 1150
+    }
+  ]
+}

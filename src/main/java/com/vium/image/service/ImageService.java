@@ -95,6 +95,13 @@ public class ImageService {
 	}
 
 	@Transactional(readOnly = true)
+	public void requireReceiptImage(Long userId, Long imageId) {
+		if (imageId == null || imageId <= 0) throw new BusinessException(ErrorCode.INVALID_REQUEST);
+		images.findByIdAndUserIdAndPurposeAndReadyTrue(imageId, userId, ImagePurpose.RECEIPT)
+			.orElseThrow(() -> new BusinessException(ErrorCode.IMAGE_NOT_FOUND));
+	}
+
+	@Transactional(readOnly = true)
 	public ImageAccessResponse access(Long userId, Long id) {
 		users.getProfile(userId);
 		if (id <= 0) throw new BusinessException(ErrorCode.INVALID_REQUEST);

@@ -1,0 +1,62 @@
+{
+  "imageWidth": 1080,
+  "imageHeight": 2400,
+  "lines": [
+    {
+      "text": "동네 식료품점",
+      "left": 40,
+      "top": 40,
+      "right": 240,
+      "bottom": 70
+    },
+    {
+      "text": "26/10/19 10:20:30",
+      "left": 40,
+      "top": 100,
+      "right": 240,
+      "bottom": 130
+    },
+    {
+      "text": "상품명 단가 수량 금액",
+      "left": 40,
+      "top": 160,
+      "right": 240,
+      "bottom": 190
+    },
+    {
+      "text": "깐마늘",
+      "left": 40,
+      "top": 220,
+      "right": 240,
+      "bottom": 250
+    },
+    {
+      "text": "8801234567890 3,000 2 6,000",
+      "left": 40,
+      "top": 280,
+      "right": 240,
+      "bottom": 310
+    },
+    {
+      "text": "양파",
+      "left": 40,
+      "top": 340,
+      "right": 240,
+      "bottom": 370
+    },
+    {
+      "text": "8809876543210 1,500 1 1,500",
+      "left": 40,
+      "top": 400,
+      "right": 240,
+      "bottom": 430
+    },
+    {
+      "text": "합계 7,500",
+      "left": 40,
+      "top": 460,
+      "right": 240,
+      "bottom": 490
+    }
+  ]
+}
