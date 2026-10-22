@@ -1,0 +1,55 @@
+{
+  "imageWidth": 1080,
+  "imageHeight": 2400,
+  "lines": [
+    {
+      "text": "주문일",
+      "left": 40,
+      "top": 40,
+      "right": 240,
+      "bottom": 70
+    },
+    {
+      "text": "2026년 10월 18일",
+      "left": 40,
+      "top": 100,
+      "right": 240,
+      "bottom": 130
+    },
+    {
+      "text": "양파",
+      "left": 40,
+      "top": 160,
+      "right": 240,
+      "bottom": 190
+    },
+    {
+      "text": "1봉",
+      "left": 40,
+      "top": 220,
+      "right": 240,
+      "bottom": 250
+    },
+    {
+      "text": "3,000원",
+      "left": 40,
+      "top": 280,
+      "right": 240,
+      "bottom": 310
+    },
+    {
+      "text": "2개",
+      "left": 40,
+      "top": 340,
+      "right": 240,
+      "bottom": 370
+    },
+    {
+      "text": "총 상품금액 3,000원",
+      "left": 40,
+      "top": 400,
+      "right": 240,
+      "bottom": 430
+    }
+  ]
+}

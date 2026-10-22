@@ -1,0 +1,27 @@
+{
+  "imageWidth": 1080,
+  "imageHeight": 2400,
+  "lines": [
+    {
+      "text": "안녕하세요",
+      "left": 40,
+      "top": 40,
+      "right": 240,
+      "bottom": 70
+    },
+    {
+      "text": "오늘은 날씨가 좋습니다",
+      "left": 40,
+      "top": 100,
+      "right": 240,
+      "bottom": 130
+    },
+    {
+      "text": "즐거운 하루 보내세요",
+      "left": 40,
+      "top": 160,
+      "right": 240,
+      "bottom": 190
+    }
+  ]
+}

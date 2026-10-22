@@ -1,0 +1,237 @@
+{
+  "imageWidth": 1080,
+  "imageHeight": 2400,
+  "lines": [
+    {
+      "text": "이마트 OO점",
+      "left": 40,
+      "top": 40,
+      "right": 240,
+      "bottom": 70
+    },
+    {
+      "text": "2026-10-20 18:32",
+      "left": 40,
+      "top": 100,
+      "right": 240,
+      "bottom": 130
+    },
+    {
+      "text": "상품명",
+      "left": 40,
+      "top": 160,
+      "right": 240,
+      "bottom": 190
+    },
+    {
+      "text": "01 서울우유 1L",
+      "left": 40,
+      "top": 220,
+      "right": 240,
+      "bottom": 250
+    },
+    {
+      "text": "02 대란 30구",
+      "left": 40,
+      "top": 280,
+      "right": 240,
+      "bottom": 310
+    },
+    {
+      "text": "03 두부 300g",
+      "left": 40,
+      "top": 340,
+      "right": 240,
+      "bottom": 370
+    },
+    {
+      "text": "행사 할인",
+      "left": 40,
+      "top": 400,
+      "right": 240,
+      "bottom": 430
+    },
+    {
+      "text": "04 감자 1kg",
+      "left": 40,
+      "top": 460,
+      "right": 240,
+      "bottom": 490
+    },
+    {
+      "text": "봉투",
+      "left": 40,
+      "top": 520,
+      "right": 240,
+      "bottom": 550
+    },
+    {
+      "text": "소계",
+      "left": 40,
+      "top": 580,
+      "right": 240,
+      "bottom": 610
+    },
+    {
+      "text": "합계",
+      "left": 40,
+      "top": 640,
+      "right": 240,
+      "bottom": 670
+    },
+    {
+      "text": "결제금액",
+      "left": 40,
+      "top": 700,
+      "right": 240,
+      "bottom": 730
+    },
+    {
+      "text": "카드 승인 12345678",
+      "left": 40,
+      "top": 760,
+      "right": 240,
+      "bottom": 790
+    },
+    {
+      "text": "단가",
+      "left": 270,
+      "top": 162,
+      "right": 470,
+      "bottom": 192
+    },
+    {
+      "text": "3,500",
+      "left": 270,
+      "top": 222,
+      "right": 470,
+      "bottom": 252
+    },
+    {
+      "text": "9,000",
+      "left": 270,
+      "top": 282,
+      "right": 470,
+      "bottom": 312
+    },
+    {
+      "text": "2,000",
+      "left": 270,
+      "top": 342,
+      "right": 470,
+      "bottom": 372
+    },
+    {
+      "text": "-500",
+      "left": 270,
+      "top": 402,
+      "right": 470,
+      "bottom": 432
+    },
+    {
+      "text": "4,000",
+      "left": 270,
+      "top": 462,
+      "right": 470,
+      "bottom": 492
+    },
+    {
+      "text": "100",
+      "left": 270,
+      "top": 522,
+      "right": 470,
+      "bottom": 552
+    },
+    {
+      "text": "22,100",
+      "left": 270,
+      "top": 582,
+      "right": 470,
+      "bottom": 612
+    },
+    {
+      "text": "22,100",
+      "left": 270,
+      "top": 642,
+      "right": 470,
+      "bottom": 672
+    },
+    {
+      "text": "22,100",
+      "left": 270,
+      "top": 702,
+      "right": 470,
+      "bottom": 732
+    },
+    {
+      "text": "수량",
+      "left": 500,
+      "top": 162,
+      "right": 700,
+      "bottom": 192
+    },
+    {
+      "text": "1",
+      "left": 500,
+      "top": 222,
+      "right": 700,
+      "bottom": 252
+    },
+    {
+      "text": "1",
+      "left": 500,
+      "top": 282,
+      "right": 700,
+      "bottom": 312
+    },
+    {
+      "text": "1",
+      "left": 500,
+      "top": 342,
+      "right": 700,
+      "bottom": 372
+    },
+    {
+      "text": "2",
+      "left": 500,
+      "top": 462,
+      "right": 700,
+      "bottom": 492
+    },
+    {
+      "text": "금액",
+      "left": 730,
+      "top": 162,
+      "right": 930,
+      "bottom": 192
+    },
+    {
+      "text": "3,500",
+      "left": 730,
+      "top": 222,
+      "right": 930,
+      "bottom": 252
+    },
+    {
+      "text": "9,000",
+      "left": 730,
+      "top": 282,
+      "right": 930,
+      "bottom": 312
+    },
+    {
+      "text": "2,000",
+      "left": 730,
+      "top": 342,
+      "right": 930,
+      "bottom": 372
+    },
+    {
+      "text": "8,000",
+      "left": 730,
+      "top": 462,
+      "right": 930,
+      "bottom": 492
+    }
+  ]
+}

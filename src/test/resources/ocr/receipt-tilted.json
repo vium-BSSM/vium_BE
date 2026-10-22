@@ -1,0 +1,34 @@
+{
+  "imageWidth": 1080,
+  "imageHeight": 2400,
+  "lines": [
+    {
+      "text": "3,500",
+      "left": 800,
+      "top": 110,
+      "right": 1000,
+      "bottom": 130
+    },
+    {
+      "text": "우유 1L",
+      "left": 40,
+      "top": 100,
+      "right": 400,
+      "bottom": 120
+    },
+    {
+      "text": "두부 300g",
+      "left": 40,
+      "top": 200,
+      "right": 400,
+      "bottom": 220
+    },
+    {
+      "text": "2,000",
+      "left": 800,
+      "top": 211,
+      "right": 1000,
+      "bottom": 231
+    }
+  ]
+}
