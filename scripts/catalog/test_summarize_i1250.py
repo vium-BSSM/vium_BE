@@ -22,6 +22,17 @@ def snapshot():
 
 
 class SummaryTests(unittest.TestCase):
+    def test_filters_old_and_conditional_rows(self):
+        data = snapshot()
+        data["rows"] = [{"prms_dt": "20150101", "pog_daycnt": "14일"} for _ in range(23)]
+        data["rows"] += [{"prms_dt": "20141231", "pog_daycnt": "1일"}] * 50
+        data["rows"] += [{"prms_dt": "20260101", "pog_daycnt": "냉장 7일"}] * 50
+        result = summarize(data, "두부")
+        self.assertEqual(123, result["saved_rows"])
+        self.assertEqual(73, result["recent_rows"])
+        self.assertEqual(23, result["parsed_rows"])
+        self.assertEqual({"14": 23}, result["days"])
+
     def test_histogram_counts_and_filter_boundary(self):
         result = summarize(snapshot(), "두부")
         self.assertEqual(100, result["total_count"])
