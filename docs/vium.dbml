@@ -1,0 +1,414 @@
+// PickDo(비움) DB 스키마 — Flyway V1~V8 적용 결과 기준 (2026-10-22)
+Project PickDo {
+  database_type: "PostgreSQL"
+}
+
+Table users {
+  id bigint [pk, increment]
+  email varchar(255) [unique, not null]
+  display_name varchar(80) [not null]
+  password_hash varchar(255) [note: '소셜 전용 계정이면 NULL 허용']
+  expiry_alert_days smallint [not null, default: `2`, note: 'D-N 임박 알림 기준']
+  auto_dispose_enabled boolean [not null, default: `true`]
+  shopping_reminder_enabled boolean [not null, default: `false`]
+  push_enabled boolean [not null, default: `true`]
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+  deleted_at timestamp
+
+  Note: '''
+  (email = lower(btrim(email)))
+  '''
+}
+
+Table auth_providers {
+  id smallint [pk, increment]
+  code varchar(30) [unique, not null]
+  name varchar(50) [not null]
+}
+
+Table user_auth_accounts {
+  id bigint [pk, increment]
+  user_id bigint [not null]
+  auth_provider_id smallint [not null]
+  provider_user_key varchar(255) [not null]
+  created_at timestamp [not null]
+
+  indexes {
+    (auth_provider_id, provider_user_key) [unique]
+    user_id
+  }
+}
+
+Table user_sessions {
+  id bigint [pk, increment]
+  user_id bigint [not null]
+  refresh_token_hash varchar(255) [unique, not null]
+  issued_at timestamp [not null]
+  expires_at timestamp [not null]
+  revoked_at timestamp
+
+  indexes {
+    user_id
+  }
+}
+
+Table units {
+  id smallint [pk, increment]
+  code varchar(20) [unique, not null]
+  name varchar(40) [not null]
+}
+
+Table storage_methods {
+  id smallint [pk, increment]
+  code varchar(30) [unique, not null]
+  name varchar(50) [not null]
+}
+
+Table purchase_sources {
+  id smallint [pk, increment]
+  code varchar(30) [unique, not null]
+  name varchar(50) [not null]
+}
+
+Table item_statuses {
+  id smallint [pk, increment]
+  code varchar(20) [unique, not null]
+  name varchar(40) [not null]
+}
+
+Table event_sources {
+  id smallint [pk, increment]
+  code varchar(20) [unique, not null]
+  name varchar(40) [not null]
+}
+
+Table ingredient_categories {
+  id smallint [pk, increment]
+  name varchar(60) [unique, not null]
+  parent_id smallint
+
+  indexes {
+    parent_id
+  }
+}
+
+Table ingredient_catalog {
+  id bigint [pk, increment]
+  category_id smallint
+  default_unit_id smallint [not null]
+  name varchar(120) [unique, not null]
+  created_at timestamp [not null]
+
+  indexes {
+    category_id
+  }
+}
+
+Table expiry_estimation_rules {
+  id bigint [pk, increment]
+  ingredient_catalog_id bigint [not null]
+  storage_method_id smallint [not null]
+  shelf_life_days integer [not null]
+  source varchar(80)
+  effective_from date [not null]
+  effective_to date
+
+  indexes {
+    (ingredient_catalog_id, storage_method_id, effective_from) [unique]
+  }
+}
+
+Table purchases {
+  id bigint [pk, increment]
+  user_id bigint [not null]
+  purchase_source_id smallint
+  total_amount numeric(12,2)
+  purchased_at timestamp [not null]
+  created_at timestamp [not null]
+  type varchar(20) [not null]
+  status varchar(20) [not null]
+  image_id bigint
+  confirmed_at timestamp
+
+  indexes {
+    (user_id, purchased_at) [note: 'purchased_at DESC']
+    user_id
+  }
+
+  Note: '''
+  status IN ('DRAFT', 'CONFIRMED')
+  type IN ('RECEIPT', 'ONLINE_ORDER')
+  '''
+}
+
+Table purchase_items {
+  id bigint [pk, increment]
+  purchase_id bigint [not null]
+  ingredient_catalog_id bigint
+  raw_name varchar(200) [note: '영수증 원문 품목명(미매칭 대비)']
+  quantity numeric(12,3) [not null]
+  unit_id smallint [not null]
+  unit_price numeric(12,2)
+  amount numeric(12,2)
+  storage_method_id smallint
+  expires_on date
+
+  indexes {
+    ingredient_catalog_id
+    purchase_id
+  }
+}
+
+Table inventory_items {
+  id bigint [pk, increment]
+  user_id bigint [not null]
+  ingredient_catalog_id bigint
+  purchase_item_id bigint
+  custom_name varchar(120) [note: '카탈로그에 없는 재료 직접 입력용']
+  status_id smallint [not null]
+  storage_method_id smallint
+  unit_id smallint [not null]
+  initial_quantity numeric(12,3) [not null]
+  remaining_quantity numeric(12,3) [not null]
+  amount numeric(12,2) [note: '낭비 금액 집계용 취득가']
+  purchased_on date
+  expires_on date [note: '자동 추정값, 사용자가 수정 가능']
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+
+  indexes {
+    ingredient_catalog_id
+    (user_id, expires_on)
+    user_id
+    (user_id, status_id)
+  }
+
+  Note: '''
+  (ingredient_catalog_id IS NOT NULL) OR (custom_name IS NOT NULL)
+  '''
+}
+
+Table consumption_events {
+  id bigint [pk, increment]
+  inventory_item_id bigint [not null]
+  user_id bigint [not null]
+  event_type varchar(20) [not null, note: 'consumed / disposed']
+  event_source_id smallint [not null, note: 'manual / auto_estimated']
+  quantity numeric(12,3) [not null, note: '게이지로 조절한 처리량']
+  amount numeric(12,2) [note: '해당 처리량의 금액(낭비 집계용)']
+  occurred_at timestamp [not null]
+  created_at timestamp [not null]
+
+  indexes {
+    inventory_item_id
+    (user_id, event_type, occurred_at)
+  }
+}
+
+Table shopping_list_items {
+  id bigint [pk, increment]
+  user_id bigint [not null]
+  ingredient_catalog_id bigint
+  custom_name varchar(120)
+  suggested_quantity numeric(12,3) [note: '낭비 이력 기반 제안량']
+  unit_id smallint
+  reason varchar(200) [note: '예: \'지난달 절반을 버림 → 절반만\'']
+  is_checked boolean [not null, default: `false`]
+  created_at timestamp [not null]
+
+  indexes {
+    ingredient_catalog_id
+    user_id
+  }
+}
+
+Table notifications {
+  id bigint [pk, increment]
+  user_id bigint [not null]
+  type varchar(30) [not null, note: 'expiry / consume_check / shopping_reminder']
+  inventory_item_id bigint
+  title varchar(120) [not null]
+  body varchar(500)
+  scheduled_at timestamp [not null]
+  sent_at timestamp
+  read_at timestamp
+  created_at timestamp [not null]
+
+  indexes {
+    inventory_item_id
+    (user_id, scheduled_at)
+  }
+}
+
+Table recipes {
+  id bigint [pk, increment]
+  title varchar(200) [not null]
+  description varchar(1000)
+  source varchar(120)
+  created_at timestamp [not null]
+  category varchar(20) [not null]
+  cook_time integer [not null]
+  image_url varchar(1000)
+  image_author_name varchar(255)
+  image_author_url varchar(500)
+
+  indexes {
+    (source, category, created_at) [note: 'created_at DESC']
+  }
+
+  Note: '''
+  (cook_time >= 1) AND (cook_time <= 180)
+  category IN ('KOREAN', 'CHINESE', 'WESTERN', 'JAPANESE', 'DESSERT')
+  '''
+}
+
+Table recipe_ingredients {
+  id bigint [pk, increment]
+  recipe_id bigint [not null]
+  ingredient_catalog_id bigint [not null]
+
+  indexes {
+    (recipe_id, ingredient_catalog_id) [unique]
+  }
+}
+
+Table recipe_steps {
+  id bigint [not null, default: `nextval('recipe_steps_id_seq'`]
+  recipe_id bigint [not null]
+  step_order integer [not null]
+  description varchar(500) [not null]
+
+  indexes {
+    (recipe_id, step_order) [unique]
+  }
+
+  Note: '''
+  (step_order >= 1)
+  '''
+}
+
+Table recipe_suggestions {
+  id bigint [pk, increment]
+  user_id bigint [not null]
+  recipe_id bigint [not null]
+  suggested_at timestamp [not null]
+  reason varchar(200) [note: '임박 재료 조합 근거']
+  batch_id uuid [not null]
+  inventory_hash varchar(64) [not null]
+
+  indexes {
+    batch_id
+    (user_id, recipe_id)
+    recipe_id
+    (user_id, suggested_at)
+  }
+}
+
+Table uploaded_images {
+  id bigint [pk, increment]
+  user_id bigint [not null]
+  purpose varchar(20) [not null]
+  bucket varchar(63) [not null]
+  object_key varchar(200) [unique, not null]
+  content_type varchar(30) [not null]
+  size_bytes bigint [not null]
+  created_at timestamptz [not null]
+  ready boolean [not null, default: `false`]
+
+  indexes {
+    (ready, created_at)
+    user_id
+  }
+
+  Note: '''
+  S3 이미지 메타데이터. ready=false는 업로드 중 또는 정리 재시도 대상
+  content_type IN ('image/jpeg', 'image/png')
+  purpose IN ('RECEIPT', 'PROFILE', 'RECIPE')
+  (size_bytes >= 1) AND (size_bytes <= 5242880)
+  '''
+}
+
+Ref: consumption_events.event_source_id > event_sources.id
+Ref: consumption_events.inventory_item_id > inventory_items.id
+Ref: consumption_events.user_id > users.id
+Ref: expiry_estimation_rules.ingredient_catalog_id > ingredient_catalog.id
+Ref: expiry_estimation_rules.storage_method_id > storage_methods.id
+Ref: ingredient_catalog.category_id > ingredient_categories.id
+Ref: ingredient_catalog.default_unit_id > units.id
+Ref: ingredient_categories.parent_id > ingredient_categories.id
+Ref: inventory_items.ingredient_catalog_id > ingredient_catalog.id
+Ref: inventory_items.purchase_item_id > purchase_items.id
+Ref: inventory_items.status_id > item_statuses.id
+Ref: inventory_items.storage_method_id > storage_methods.id
+Ref: inventory_items.unit_id > units.id
+Ref: inventory_items.user_id > users.id
+Ref: notifications.inventory_item_id > inventory_items.id
+Ref: notifications.user_id > users.id
+Ref: purchase_items.ingredient_catalog_id > ingredient_catalog.id
+Ref: purchase_items.purchase_id > purchases.id
+Ref: purchase_items.storage_method_id > storage_methods.id
+Ref: purchase_items.unit_id > units.id
+Ref: purchases.image_id > uploaded_images.id
+Ref: purchases.purchase_source_id > purchase_sources.id
+Ref: purchases.user_id > users.id
+Ref: recipe_ingredients.ingredient_catalog_id > ingredient_catalog.id
+Ref: recipe_ingredients.recipe_id > recipes.id
+Ref: recipe_steps.recipe_id > recipes.id
+Ref: recipe_suggestions.recipe_id > recipes.id
+Ref: recipe_suggestions.user_id > users.id
+Ref: shopping_list_items.ingredient_catalog_id > ingredient_catalog.id
+Ref: shopping_list_items.unit_id > units.id
+Ref: shopping_list_items.user_id > users.id
+Ref: uploaded_images.user_id > users.id
+Ref: user_auth_accounts.auth_provider_id > auth_providers.id
+Ref: user_auth_accounts.user_id > users.id
+Ref: user_sessions.user_id > users.id
+
+TableGroup user {
+  users
+  auth_providers
+  user_auth_accounts
+  user_sessions
+}
+
+TableGroup code {
+  units
+  storage_methods
+  purchase_sources
+  item_statuses
+  event_sources
+  ingredient_categories
+}
+
+TableGroup ingredient {
+  ingredient_catalog
+  expiry_estimation_rules
+}
+
+TableGroup receipt {
+  purchases
+  purchase_items
+}
+
+TableGroup inventory_dispose {
+  inventory_items
+  consumption_events
+}
+
+TableGroup shopping_notification {
+  shopping_list_items
+  notifications
+}
+
+TableGroup recipe {
+  recipes
+  recipe_ingredients
+  recipe_steps
+  recipe_suggestions
+}
+
+TableGroup image {
+  uploaded_images
+}
+
