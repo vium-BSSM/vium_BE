@@ -274,3 +274,7 @@ com.vium
 - 통계 갱신은 `python3 scripts/catalog/summarize_i1250.py`, 시드 생성은 `python3 scripts/catalog/build_seed.py`, 일치 검사는 같은 명령에 `--check`를 붙인다. 스크립트 테스트는 `python3 -m unittest discover -s scripts/catalog -p 'test_*.py'`다.
 - 규칙 누락·선호 보관방법 불일치가 있으면 기본 V9에 쓰지 않는다. 초안은 `--output`으로 별도 경로에 생성한다. manual 우선순위와 상태별 한계는 README 및 각 행의 reason을 확인한다.
 - V9는 수동 편집하지 않는다. 적용된 이후 값 변경은 V10 이후 새 마이그레이션으로 처리하고 생성기·CI 비교 기준도 함께 갱신한다. 적용된 V9의 체크섬을 변경하지 않는다.
+
+## 13. 운영 모니터링 (#92)
+
+- Grafana Cloud로 메트릭을 OTLP/HTTP push한다. 기본 비활성이며 `OTLP_METRICS_ENABLED`로 켠다. 추가 프로세스·공개 포트 없이 운영 health 노출을 유지하며 설정·검증·대시보드·알림은 `docs/monitoring.md`를 따른다.
