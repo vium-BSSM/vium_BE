@@ -437,7 +437,9 @@ POST /api/me/recipes/{recipeId}/complete
 |---|---|---|---|
 | `usages` | Array | Y | 1~50개 |
 | `usages[].inventoryId` | Long | Y | 내 `active` 재고(`inventory_items.id`), 배열 안에서 중복 불가 |
-| `usages[].usageRate` | Integer | Y | 0~100 (슬라이더 값) |
+| `usages[].usageRate` | Integer | Y (또는 `usedQuantity`) | 0~100 (슬라이더 값). `usedQuantity`와 동시 사용 불가 |
+| `usages[].usedQuantity` | BigDecimal | Y (또는 `usageRate`) | 사용한 절대 수량(소수 3자리까지), `usageRate`와 동시 사용 불가 |
+| `usages[].wasteQuantity` | BigDecimal | N | 사용량과는 별개로 추가로 버린 수량(소수 3자리까지). `usedQuantity`/`usageRate` 기반 사용량에 **더해서** 재고에서 차감 |
 
 ```json
 {
@@ -470,6 +472,7 @@ POST /api/me/recipes/{recipeId}/complete
 | 3 | 404 | `INVENTORY_NOT_FOUND` | 재고 ID가 없음 |
 | 3 | 403 | `INVENTORY_ACCESS_DENIED` | 다른 사용자의 재고 |
 | 3 | 409 | `INVENTORY_NOT_ACTIVE` | 이미 소진·폐기된 재고 (`consumed`·`disposed`) |
+| 4 | 400 | `INVALID_REQUEST` | `usedQuantity`(또는 `usageRate` 환산값) + `wasteQuantity`의 합이 남은 수량을 초과 |
 
 - 1번은 Bean Validation(`@NotEmpty`, `@Size(max = 50)`, `@NotNull`, `@Min(0)`, `@Max(100)`)과 서비스 내 중복 검사로 처리합니다.
 - 3번에서 하나라도 실패하면 **아무것도 차감하지 않습니다.**
@@ -497,22 +500,26 @@ usageRate = 0   → 변경 없음 (호출도 안 함)
 | 3.000 (개) | 40% | 1.200 | 1.800 |
 | 0.500 (kg) | 100% | 0.500 | 0 → `consumed` |
 
-**기존 코드 호출 방식 (확정: B)**
+**구현 방식: `DisposeService.recordRecipeUsage`로 통합**
 
-기존 코드 확인 결과 `InventoryItem.updateStatus(quantity, statusId)`는 `remainingQuantity -= quantity` 후 **남은 양과 상관없이** 상태를 `statusId`로 바꿉니다. 그래서 부분 사용에는 쓸 수 없습니다.
+기존 코드 확인 결과 `InventoryItem.updateStatus(quantity, statusId)`는 `remainingQuantity -= quantity` 후 **남은 양과 상관없이** 상태를 `statusId`로 바꿉니다. 그래서 부분 사용에는 쓸 수 없습니다. 이를 위해 `InventoryItem`에 `decreaseRemainingQuantity(BigDecimal quantity)`를 추가했습니다.
 
-| 경우 | 구현 |
-|---|---|
-| 부분 사용 (새 남은 양 > 0) | `InventoryItem`에 새 메서드 `decreaseRemainingQuantity(BigDecimal quantity)`를 **추가**해서 남은 양만 줄임. 상태는 `active` 유지, `ConsumptionEvent` 없음 |
-| 전부 사용 (새 남은 양 ≤ 0) | 기존 `DisposeService.updateStatus`를 `statusId = consumed`, `quantity = 현재 remainingQuantity`로 호출 (기존 로직·`ConsumptionEvent` 그대로) |
+`wasteQuantity`(기본 0) 입력 여부와 관계없이, 사용량(`usedQuantity`/`usageRate` 환산값)이나 `wasteQuantity` 중 하나라도 0보다 크면 항상 `DisposeService.recordRecipeUsage(userId, inventoryItemId, usedQuantity, wasteQuantity, terminal)`를 호출합니다. 부분 사용(상태가 `active`로 유지되는 경우)도 예외가 아니며, 사용량만큼 `consumed` 이벤트가 남습니다.
+
+- `totalDeduction = usedQuantity + wasteQuantity`이며, `remainingQuantity`를 초과하면 `INVALID_REQUEST`(400)이고 아무것도 차감하지 않습니다.
+- `terminal = (remainingQuantity − totalDeduction) ≤ 0`
+  - `terminal`이면 `InventoryService.updateStatus(..., totalDeduction, consumedStatusId)`로 상태를 **항상 `consumed`로 종료**합니다(폐기분이 있어도 `disposed`로 바뀌지 않습니다 — 재고가 사라졌다는 사실만 상태에 반영하고, 어떻게 사라졌는지는 이벤트로 남깁니다).
+  - `terminal`이 아니면 `InventoryService.decreaseRemainingQuantity(..., totalDeduction)`로 상태는 `active` 유지, 수량만 차감합니다 (부분 사용).
+- `usedQuantity > 0`이면 `consumed` 이벤트, `wasteQuantity > 0`이면 `disposed` 이벤트를 각각 남깁니다(금액은 `ProportionalAmountCalculator`로 비례 계산). `event_source`는 기존과 동일하게 `manual`을 씁니다(레시피 전용 소스는 두지 않습니다).
+- 사용량과 `wasteQuantity`가 모두 0이면(기본값) 아무 이벤트도 남기지 않고 재고도 변경하지 않습니다.
+- `usedQuantity`가 0이고 `wasteQuantity`만 있는 요청도 허용합니다 (조리에는 안 썼지만 손질 중 버린 경우).
 
 `decreaseRemainingQuantity` 규칙:
-- `quantity`가 0 이하이거나 `remainingQuantity`보다 크거나 같으면 `IllegalArgumentException` (그 경우는 전부 사용 경로로 가야 함)
+- `quantity`가 0 이하이거나 `remainingQuantity`보다 크거나 같으면 `IllegalArgumentException` (그 경우는 `terminal` 경로로 가야 함)
 - `remainingQuantity = remainingQuantity − quantity`만 하고 다른 필드는 건드리지 않음
 
-- 기존 메서드(`updateStatus` 등)와 기존 서비스 코드는 **수정하지 않습니다.** `InventoryItem`에는 새 메서드만 추가합니다 (팀원에게 공유).
-- `DisposeService.updateStatus`는 `@Transactional`(기본 전파 `REQUIRED`)이라 완료 API의 트랜잭션에 합류합니다. 하나라도 실패하면 전체가 롤백됩니다.
-- 부분 사용은 `ConsumptionEvent`가 남지 않습니다 (부록 E, 리포트 기능 만들 때 구체화).
+- 기존 메서드(`updateStatus` 등)와 기존 서비스 코드는 **수정하지 않습니다.** `InventoryItem`에는 `decreaseRemainingQuantity` 메서드만 추가되어 있습니다.
+- `DisposeService.recordRecipeUsage`는 `@Transactional`(기본 전파 `REQUIRED`)이라 완료 API의 트랜잭션에 합류합니다. 하나라도 실패하면 전체가 롤백됩니다.
 
 5. 하나라도 실패하면 전체를 롤백합니다.
 

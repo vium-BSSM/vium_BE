@@ -1,10 +1,14 @@
 package com.vium.inventory.repository;
 
+import com.vium.inventory.dto.ActiveIngredientState;
+import com.vium.inventory.dto.IngredientDetailResponse;
 import com.vium.inventory.dto.IngredientListResponse;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -22,15 +26,13 @@ public class InventoryQueryRepository {
 
 	public List<IngredientListResponse.Item> findActiveIngredients(Long userId, LocalDate expiresThrough) {
 		String sql = """
-			select i.id, i.ingredient_catalog_id,
-			       coalesce(c.name, i.custom_name) as name, category.name as category_name,
-			       i.initial_quantity, i.remaining_quantity, i.amount, i.unit_id, u.name as unit,
-			       s.code as status_code, i.purchased_on, i.expires_on
+			select i.id, coalesce(c.name, i.custom_name) as name,
+			       i.remaining_quantity, i.storage_method_id, sm.name as storage_method_name,
+			       i.expires_on
 			from inventory_items i
 			join item_statuses s on s.id = i.status_id
-			join units u on u.id = i.unit_id
 			left join ingredient_catalog c on c.id = i.ingredient_catalog_id
-			left join ingredient_categories category on category.id = c.category_id
+			left join storage_methods sm on sm.id = i.storage_method_id
 			where i.user_id = ? and s.code = ?
 			""";
 		Object[] parameters = {userId, "active"};
@@ -39,21 +41,74 @@ public class InventoryQueryRepository {
 			parameters = new Object[] {userId, "active", expiresThrough};
 		}
 		sql += " order by i.expires_on asc nulls last, i.id asc";
-		return jdbcTemplate.query(sql, (rs, rowNum) -> {
-			var amount = rs.getBigDecimal("amount");
-			return new IngredientListResponse.Item(
-				rs.getLong("id"),
-				rs.getObject("ingredient_catalog_id", Long.class),
-				rs.getString("name"),
-				rs.getString("category_name"),
-				rs.getBigDecimal("initial_quantity"),
-				rs.getBigDecimal("remaining_quantity"),
-				amount == null ? null : amount.setScale(0, RoundingMode.HALF_UP).longValueExact(),
-				rs.getShort("unit_id"),
-				rs.getString("unit"),
-				rs.getString("status_code"),
-				rs.getObject("purchased_on", LocalDate.class),
-				rs.getObject("expires_on", LocalDate.class));
-		}, parameters);
+		return jdbcTemplate.query(sql, (rs, rowNum) -> new IngredientListResponse.Item(
+			rs.getLong("id"),
+			rs.getString("name"),
+			rs.getObject("expires_on", LocalDate.class),
+			rs.getBigDecimal("remaining_quantity"),
+			rs.getObject("storage_method_id", Short.class),
+			rs.getString("storage_method_name")
+		), parameters);
+	}
+
+	/**
+	 * 도메인 간 재고 참조용 내부 상태 조회. API 응답(IngredientListResponse)과 분리해
+	 * 다른 도메인(장보기 도우미 등)이 응답 필드 변경에 영향받지 않게 한다.
+	 */
+	public List<ActiveIngredientState> findActiveInventoryStates(Long userId) {
+		String sql = """
+			select i.ingredient_catalog_id, coalesce(c.name, i.custom_name) as name,
+			       i.unit_id, i.remaining_quantity
+			from inventory_items i
+			join item_statuses s on s.id = i.status_id
+			left join ingredient_catalog c on c.id = i.ingredient_catalog_id
+			where i.user_id = ? and s.code = ?
+			""";
+		return jdbcTemplate.query(sql, (rs, rowNum) -> new ActiveIngredientState(
+			rs.getObject("ingredient_catalog_id", Long.class),
+			rs.getString("name"),
+			rs.getShort("unit_id"),
+			rs.getBigDecimal("remaining_quantity")
+		), userId, "active");
+	}
+
+	public Optional<IngredientDetailResponse> findDetailByIdAndUserId(Long userId, Long inventoryItemId) {
+		String sql = """
+			select i.id, i.ingredient_catalog_id,
+			       coalesce(c.name, i.custom_name) as name, category.name as category_name,
+			       i.initial_quantity, i.remaining_quantity, i.amount, i.unit_id, u.name as unit,
+			       i.storage_method_id, sm.name as storage_method_name,
+			       s.code as status_code, i.purchased_on, i.expires_on
+			from inventory_items i
+			join item_statuses s on s.id = i.status_id
+			join units u on u.id = i.unit_id
+			left join ingredient_catalog c on c.id = i.ingredient_catalog_id
+			left join ingredient_categories category on category.id = c.category_id
+			left join storage_methods sm on sm.id = i.storage_method_id
+			where i.id = ? and i.user_id = ?
+			""";
+		try {
+			IngredientDetailResponse detail = jdbcTemplate.queryForObject(sql, (rs, rowNum) -> {
+				var amount = rs.getBigDecimal("amount");
+				return new IngredientDetailResponse(
+					rs.getLong("id"),
+					rs.getObject("ingredient_catalog_id", Long.class),
+					rs.getString("name"),
+					rs.getString("category_name"),
+					rs.getBigDecimal("initial_quantity"),
+					rs.getBigDecimal("remaining_quantity"),
+					amount == null ? null : amount.setScale(0, RoundingMode.HALF_UP).longValueExact(),
+					rs.getShort("unit_id"),
+					rs.getString("unit"),
+					rs.getObject("storage_method_id", Short.class),
+					rs.getString("storage_method_name"),
+					rs.getString("status_code"),
+					rs.getObject("purchased_on", LocalDate.class),
+					rs.getObject("expires_on", LocalDate.class));
+			}, inventoryItemId, userId);
+			return Optional.ofNullable(detail);
+		} catch (EmptyResultDataAccessException e) {
+			return Optional.empty();
+		}
 	}
 }

@@ -94,7 +94,43 @@ class ShoppingHelperIntegrationTest {
 			.andExpect(jsonPath("$.data.toBuy[0].ingredientName").value("우유"))
 			.andExpect(jsonPath("$.data.toBuy[0].unit").value("ea"))
 			// shortage = 소진(5) - 현재 보유(0, active 아님) = 5
-			.andExpect(jsonPath("$.data.toBuy[0].suggestedQuantity").value(5));
+			// 낭비 비율 반영: 5 × 소진(5) ÷ (소진(5)+폐기(2)) = 25/7 ≈ 3.571
+			.andExpect(jsonPath("$.data.toBuy[0].suggestedQuantity").value(3.571));
+	}
+
+	@Test
+	void shoppingHelperReducesSuggestedQuantityWhenWasteRatioIsHigh() throws Exception {
+		// Given: 지난달 소진(2)보다 폐기(8)가 훨씬 많은 재료 → 낭비 비율이 높을수록 추천량이 크게 줄어야 함
+		YearMonth lastMonth = YearMonth.now().minusMonths(1);
+		LocalDate monthStart = lastMonth.atDay(1);
+
+		Long wastefulItemId = 103L;
+		jdbcTemplate.update("""
+			insert into "inventory_items"
+			("id", "user_id", "custom_name", "status_id", "unit_id", "initial_quantity",
+			 "remaining_quantity", "created_at", "updated_at")
+			values (?, ?, '양상추', 3, 1, 10, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			""", wastefulItemId, userId);
+
+		jdbcTemplate.update("""
+			insert into "consumption_events"
+			("inventory_item_id", "user_id", "event_type", "event_source_id", "quantity", "occurred_at", "created_at")
+			values (?, ?, 'disposed', 1, 8, ?, CURRENT_TIMESTAMP)
+			""", wastefulItemId, userId, monthStart.atStartOfDay());
+		jdbcTemplate.update("""
+			insert into "consumption_events"
+			("inventory_item_id", "user_id", "event_type", "event_source_id", "quantity", "occurred_at", "created_at")
+			values (?, ?, 'consumed', 1, 2, ?, CURRENT_TIMESTAMP)
+			""", wastefulItemId, userId, monthStart.atStartOfDay());
+
+		// shortage = 소진(2) - 현재 보유(0) = 2
+		// 낭비 비율 반영: 2 × 소진(2) ÷ (소진(2)+폐기(8)) = 4/10 = 0.4
+		mockMvc.perform(get("/api/me/shopping-helper")
+				.header("Authorization", "Bearer " + tokenService.issue(userId).accessToken()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.toBuy.length()").value(1))
+			.andExpect(jsonPath("$.data.toBuy[0].ingredientName").value("양상추"))
+			.andExpect(jsonPath("$.data.toBuy[0].suggestedQuantity").value(0.4));
 	}
 
 	@Test

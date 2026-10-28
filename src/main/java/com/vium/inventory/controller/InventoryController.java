@@ -2,6 +2,7 @@ package com.vium.inventory.controller;
 
 import com.vium.global.common.ApiResponse;
 import com.vium.global.security.CurrentUserProvider;
+import com.vium.inventory.dto.IngredientDetailResponse;
 import com.vium.inventory.dto.IngredientListResponse;
 import com.vium.inventory.dto.IngredientRegisterRequest;
 import com.vium.inventory.dto.IngredientResponse;
@@ -37,6 +38,11 @@ public class InventoryController {
 	public ApiResponse<IngredientListResponse> list(
 			@RequestParam(defaultValue = "false") boolean expiringSoon) {
 		return ApiResponse.ok(inventoryService.list(currentUserProvider.getCurrentUserId(), expiringSoon));
+	}
+
+	@GetMapping("/{ingredientId}")
+	public ApiResponse<IngredientDetailResponse> getDetail(@PathVariable Long ingredientId) {
+		return ApiResponse.ok(inventoryService.getDetail(currentUserProvider.getCurrentUserId(), ingredientId));
 	}
 
 	@PostMapping

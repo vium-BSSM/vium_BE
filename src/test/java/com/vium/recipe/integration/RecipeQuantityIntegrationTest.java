@@ -118,6 +118,20 @@ class RecipeQuantityIntegrationTest {
 	}
 
 	@Test
+	void partialUsageWithoutWasteStillRecordsConsumedEventAndKeepsActive() throws Exception {
+		complete("""
+			{"usages":[{"inventoryId":1,"usedQuantity":1.5,"wasteQuantity":0}]}
+			""").andExpect(status().isOk());
+
+		assertThat(remaining(CARROT_INVENTORY_ID)).isEqualByComparingTo("2.5");
+		assertThat(statusId(CARROT_INVENTORY_ID)).isEqualTo(1);
+		assertThat(eventCount(CARROT_INVENTORY_ID)).isEqualTo(1);
+		assertThat(jdbc.queryForObject(
+			"select event_type from consumption_events where inventory_item_id = 1", String.class))
+			.isEqualTo("consumed");
+	}
+
+	@Test
 	void usedQuantityEqualToRemainingConsumesInventoryAndRecordsEvent() throws Exception {
 		complete("""
 			{"usages":[{"inventoryId":1,"usedQuantity":4}]}
@@ -159,6 +173,73 @@ class RecipeQuantityIntegrationTest {
 
 		assertThat(remaining(CARROT_INVENTORY_ID)).isEqualByComparingTo("0");
 		assertThat(statusId(CARROT_INVENTORY_ID)).isEqualTo(2);
+	}
+
+	// ===== 요리 완료: wasteQuantity =====
+
+	@Test
+	void wasteQuantityWithPartialUsageKeepsActiveAndRecordsBothEvents() throws Exception {
+		complete("""
+			{"usages":[{"inventoryId":1,"usedQuantity":1,"wasteQuantity":1}]}
+			""").andExpect(status().isOk());
+
+		assertThat(remaining(CARROT_INVENTORY_ID)).isEqualByComparingTo("2");
+		assertThat(statusId(CARROT_INVENTORY_ID)).isEqualTo(1);
+		assertThat(eventCount(CARROT_INVENTORY_ID)).isEqualTo(2);
+		assertThat(jdbc.queryForObject(
+			"select quantity from consumption_events where inventory_item_id = 1 and event_type = 'consumed'",
+			BigDecimal.class)).isEqualByComparingTo("1");
+		assertThat(jdbc.queryForObject(
+			"select quantity from consumption_events where inventory_item_id = 1 and event_type = 'disposed'",
+			BigDecimal.class)).isEqualByComparingTo("1");
+	}
+
+	@Test
+	void wasteQuantityConsumingEverythingEndsAsConsumedStatus() throws Exception {
+		complete("""
+			{"usages":[{"inventoryId":1,"usedQuantity":3,"wasteQuantity":1}]}
+			""").andExpect(status().isOk());
+
+		assertThat(remaining(CARROT_INVENTORY_ID)).isEqualByComparingTo("0");
+		assertThat(statusId(CARROT_INVENTORY_ID)).isEqualTo(2);
+		assertThat(eventCount(CARROT_INVENTORY_ID)).isEqualTo(2);
+	}
+
+	@Test
+	void wasteQuantityAloneWithoutUsedQuantityIsRecordedAsDisposedOnly() throws Exception {
+		complete("""
+			{"usages":[{"inventoryId":1,"usedQuantity":0,"wasteQuantity":1}]}
+			""").andExpect(status().isOk());
+
+		assertThat(remaining(CARROT_INVENTORY_ID)).isEqualByComparingTo("3");
+		assertThat(statusId(CARROT_INVENTORY_ID)).isEqualTo(1);
+		assertThat(eventCount(CARROT_INVENTORY_ID)).isEqualTo(1);
+		assertThat(jdbc.queryForObject(
+			"select event_type from consumption_events where inventory_item_id = 1", String.class))
+			.isEqualTo("disposed");
+	}
+
+	@Test
+	void usedQuantityPlusWasteQuantityOverRemainingIsRejected() throws Exception {
+		complete("""
+			{"usages":[{"inventoryId":1,"usedQuantity":3,"wasteQuantity":2}]}
+			""")
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+
+		assertThat(remaining(CARROT_INVENTORY_ID)).isEqualByComparingTo("4");
+		assertThat(eventCount(CARROT_INVENTORY_ID)).isZero();
+	}
+
+	@Test
+	void negativeWasteQuantityIsRejected() throws Exception {
+		complete("""
+			{"usages":[{"inventoryId":1,"usedQuantity":1,"wasteQuantity":-1}]}
+			""")
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+
+		assertThat(remaining(CARROT_INVENTORY_ID)).isEqualByComparingTo("4");
 	}
 
 	// ===== 요리 완료: 검증 실패 (400) =====
