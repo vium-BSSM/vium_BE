@@ -1,7 +1,6 @@
 package com.vium.recipe.service;
 
 import com.vium.dispose.service.DisposeService;
-import com.vium.dispose.dto.UpdateInventoryItemStatusRequest;
 import com.vium.global.code.ItemStatusRepository;
 import com.vium.global.exception.BusinessException;
 import com.vium.global.exception.ErrorCode;
@@ -64,35 +63,31 @@ public class RecipeCompletionService {
 
 			BigDecimal usedQuantity;
 			if (usage.usedQuantity() != null) {
-				if (usage.usedQuantity().signum() == 0) {
-					// 사용 수량 0 → 변경 없음
-					continue;
-				}
 				usedQuantity = usage.usedQuantity();
+			} else if (usage.usageRate() == 0) {
+				usedQuantity = BigDecimal.ZERO;
 			} else {
-				if (usage.usageRate() == 0) {
-					// 0% → 변경 없음
-					continue;
-				}
-
 				usedQuantity = item.getRemainingQuantity()
 					.multiply(BigDecimal.valueOf(usage.usageRate()))
 					.divide(BigDecimal.valueOf(100), 3, RoundingMode.HALF_UP);
 			}
 
-			BigDecimal newRemainingQuantity = item.getRemainingQuantity().subtract(usedQuantity);
+			BigDecimal wasteQuantity = usage.wasteQuantity() != null ? usage.wasteQuantity() : BigDecimal.ZERO;
 
-			if (newRemainingQuantity.compareTo(BigDecimal.ZERO) > 0) {
-				// 부분 사용 → 새 메서드로 상태 유지
-				item.decreaseRemainingQuantity(usedQuantity);
-				inventoryItemRepository.save(item);
-			} else {
-				// 전체 사용 (≤ 0) → DisposeService로 consumed 처리
-				UpdateInventoryItemStatusRequest disposeRequest = new UpdateInventoryItemStatusRequest(
-					STATUS_CONSUMED, item.getRemainingQuantity(), null, null
-				);
-				disposeService.updateStatus(userId, item.getId(), disposeRequest);
+			if (usedQuantity.signum() == 0 && wasteQuantity.signum() == 0) {
+				// 사용·폐기 없음 → 변경 없음
+				continue;
 			}
+
+			BigDecimal totalDeduction = usedQuantity.add(wasteQuantity);
+			if (totalDeduction.compareTo(item.getRemainingQuantity()) > 0) {
+				throw new InvalidRequestException("usedQuantity와 wasteQuantity의 합은 남은 수량을 초과할 수 없습니다.");
+			}
+
+			// 폐기량 입력 여부와 무관하게 항상 DisposeService를 거쳐 소진 이벤트를 남긴다.
+			BigDecimal newRemainingQuantity = item.getRemainingQuantity().subtract(totalDeduction);
+			boolean terminal = newRemainingQuantity.compareTo(BigDecimal.ZERO) <= 0;
+			disposeService.recordRecipeUsage(userId, item.getId(), usedQuantity, wasteQuantity, terminal);
 		}
 	}
 
@@ -118,6 +113,12 @@ public class RecipeCompletionService {
 			}
 			if (usage.usedQuantity() != null && usage.usedQuantity().scale() > 3) {
 				throw new InvalidRequestException("usedQuantity는 소수점 3자리까지 입력할 수 있습니다.");
+			}
+			if (usage.wasteQuantity() != null && usage.wasteQuantity().signum() < 0) {
+				throw new InvalidRequestException("wasteQuantity는 0 이상이어야 합니다.");
+			}
+			if (usage.wasteQuantity() != null && usage.wasteQuantity().scale() > 3) {
+				throw new InvalidRequestException("wasteQuantity는 소수점 3자리까지 입력할 수 있습니다.");
 			}
 		}
 	}

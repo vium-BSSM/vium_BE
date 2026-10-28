@@ -108,6 +108,46 @@ public class DisposeService {
 		return amount == null ? null : amount.setScale(0, RoundingMode.HALF_UP).intValueExact();
 	}
 
+	/**
+	 * 레시피 완료 시 사용분(consumed)과 폐기분(disposed)을 함께 기록한다.
+	 * terminal이면 재고 상태를 consumed로 종료하고, 아니면 상태는 active로 유지한 채 남은 수량만 줄인다.
+	 */
+	@Transactional
+	public void recordRecipeUsage(Long userId, Long inventoryItemId, BigDecimal usedQuantity,
+			BigDecimal wasteQuantity, boolean terminal) {
+		InventoryItemSnapshot snapshot = inventoryService.getSnapshotForUpdate(userId, inventoryItemId);
+
+		BigDecimal totalDeduction = usedQuantity.add(wasteQuantity);
+		if (totalDeduction.compareTo(snapshot.remainingQuantity()) > 0) {
+			throw new InvalidRequestException("usedQuantity와 wasteQuantity의 합은 남은 수량을 초과할 수 없습니다.");
+		}
+
+		if (terminal) {
+			inventoryService.updateStatus(userId, inventoryItemId, totalDeduction, getStatusIdByCode(STATUS_CONSUMED));
+		} else {
+			inventoryService.decreaseRemainingQuantity(userId, inventoryItemId, totalDeduction);
+		}
+
+		Short eventSourceId = eventSourceRepository.findByCode(EVENT_SOURCE_MANUAL)
+			.orElseThrow(() -> new NotFoundException("Event source not found: " + EVENT_SOURCE_MANUAL))
+			.getId();
+		LocalDateTime occurredAt = LocalDateTime.now(clock);
+
+		if (usedQuantity.signum() > 0) {
+			BigDecimal consumedAmount = ProportionalAmountCalculator.calculate(
+				snapshot.amount(), usedQuantity, snapshot.initialQuantity());
+			consumptionEventRepository.save(ConsumptionEvent.create(
+				inventoryItemId, userId, STATUS_CONSUMED, eventSourceId, usedQuantity, consumedAmount, occurredAt));
+		}
+
+		if (wasteQuantity.signum() > 0) {
+			BigDecimal wasteAmount = ProportionalAmountCalculator.calculate(
+				snapshot.amount(), wasteQuantity, snapshot.initialQuantity());
+			consumptionEventRepository.save(ConsumptionEvent.create(
+				inventoryItemId, userId, STATUS_DISPOSED, eventSourceId, wasteQuantity, wasteAmount, occurredAt));
+		}
+	}
+
 	@Transactional(readOnly = true)
 	public GetConsumptionEventsResponse getEvents(Long userId, LocalDate from, LocalDate to, String eventType) {
 		if (eventType != null && !STATUS_CONSUMED.equals(eventType) && !STATUS_DISPOSED.equals(eventType)) {
