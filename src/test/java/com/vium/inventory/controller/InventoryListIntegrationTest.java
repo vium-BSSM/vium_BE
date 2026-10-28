@@ -1,13 +1,11 @@
 package com.vium.inventory.controller;
 
 import com.vium.auth.service.TokenService;
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,19 +46,21 @@ class InventoryListIntegrationTest {
 			""");
 		jdbcTemplate.update("insert into ingredient_categories (id, name) values (1, '유제품')");
 		jdbcTemplate.update("""
+			insert into storage_methods (id, code, name) values (1, 'cold', '냉장'), (2, 'frozen', '냉동'), (3, 'room', '실온')
+			""");
+		jdbcTemplate.update("""
 			insert into ingredient_catalog (id, category_id, default_unit_id, name, created_at)
 			values (1, 1, 1, '우유', CURRENT_TIMESTAMP), (2, null, 1, '미분류 재료', CURRENT_TIMESTAMP)
 			""");
 	}
 
 	@Test
-	void list_returnsOnlyCurrentUsersActiveIngredientsWithResponseFields() throws Exception {
+	void list_returnsReducedFieldsForActiveIngredients() throws Exception {
 		LocalDate expiry = LocalDate.now().plusDays(2);
 		insertItem(10, 1, 1, 1L, null, expiry);
 		insertItem(11, 2, 1, 1L, null, expiry);
 		insertItem(12, 1, 2, 1L, null, expiry);
 		insertItem(13, 1, 3, 1L, null, expiry);
-		jdbcTemplate.update("update inventory_items set amount = 2500 where id = 10");
 
 		mockMvc.perform(get("/api/me/ingredients").header("Authorization", "Bearer " + tokenService.issue(1L).accessToken()))
 			.andExpect(status().isOk())
@@ -68,54 +68,23 @@ class InventoryListIntegrationTest {
 			.andExpect(jsonPath("$.error").value(nullValue()))
 			.andExpect(jsonPath("$.data.ingredients.length()").value(1))
 			.andExpect(jsonPath("$.data.ingredients[0].inventoryItemId").value(10))
-			.andExpect(jsonPath("$.data.ingredients[0].ingredientCatalogId").value(1))
 			.andExpect(jsonPath("$.data.ingredients[0].name").value("우유"))
-			.andExpect(jsonPath("$.data.ingredients[0].categoryName").value("유제품"))
-			.andExpect(jsonPath("$.data.ingredients[0].initialQuantity").value(2.5))
 			.andExpect(jsonPath("$.data.ingredients[0].remainingQuantity").value(1.25))
-			.andExpect(jsonPath("$.data.ingredients[0].amount").value(2500))
-			.andExpect(jsonPath("$.data.ingredients[0].unitId").value(1))
-			.andExpect(jsonPath("$.data.ingredients[0].unit").value("개"))
-			.andExpect(jsonPath("$.data.ingredients[0].statusCode").value("active"))
-			.andExpect(jsonPath("$.data.ingredients[0].purchasedOn").value("2026-01-01"))
+			.andExpect(jsonPath("$.data.ingredients[0].storageMethodId").value(nullValue()))
+			.andExpect(jsonPath("$.data.ingredients[0].storageMethodName").value(nullValue()))
 			.andExpect(jsonPath("$.data.ingredients[0].expiresOn").value(expiry.toString()));
 	}
 
 	@Test
-	void list_preservesNullAndZeroAmounts() throws Exception {
-		insertItem(10, 1, 1, null, "금액 미입력", LocalDate.now());
-		insertItem(11, 1, 1, null, "무료 재료", LocalDate.now());
-		jdbcTemplate.update("update inventory_items set amount = 0 where id = 11");
+	void list_returnsStorageMethodIdAndNameWhenSet() throws Exception {
+		LocalDate expiry = LocalDate.now().plusDays(2);
+		insertItem(10, 1, 1, 1L, null, expiry);
+		jdbcTemplate.update("update inventory_items set storage_method_id = 2 where id = 10");
 
-		mockMvc.perform(get("/api/me/ingredients")
-				.header("Authorization", "Bearer " + tokenService.issue(1L).accessToken()))
+		mockMvc.perform(get("/api/me/ingredients").header("Authorization", "Bearer " + tokenService.issue(1L).accessToken()))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.data.ingredients.length()").value(2))
-			.andExpect(jsonPath("$.data.ingredients[0]").value(org.hamcrest.Matchers.hasKey("amount")))
-			.andExpect(jsonPath("$.data.ingredients[0].amount").value(nullValue()))
-			.andExpect(jsonPath("$.data.ingredients[1].amount").value(0));
-	}
-
-	@Test
-	void list_returnsMixedAmountsWithoutFailingOnFractionalValues() throws Exception {
-		for (long id = 10; id <= 13; id++) {
-			insertItem(id, 1, 1, null, "재료", LocalDate.now());
-		}
-		jdbcTemplate.update("update inventory_items set amount = 0 where id = 11");
-		jdbcTemplate.update("update inventory_items set amount = 2500.49 where id = 12");
-		jdbcTemplate.update("update inventory_items set amount = 2500.50 where id = 13");
-
-		mockMvc.perform(get("/api/me/ingredients")
-				.header("Authorization", "Bearer " + tokenService.issue(1L).accessToken()))
-			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.data.ingredients.length()").value(4))
-			.andExpect(jsonPath("$.data.ingredients[0].amount").value(nullValue()))
-			.andExpect(jsonPath("$.data.ingredients[1].amount").value(0))
-			.andExpect(jsonPath("$.data.ingredients[2].amount").value(2500))
-			.andExpect(jsonPath("$.data.ingredients[3].amount").value(2501));
-		assertThat(jdbcTemplate.queryForObject(
-			"select amount from inventory_items where id = 13", BigDecimal.class))
-			.isEqualByComparingTo("2500.50");
+			.andExpect(jsonPath("$.data.ingredients[0].storageMethodId").value(2))
+			.andExpect(jsonPath("$.data.ingredients[0].storageMethodName").value("냉동"));
 	}
 
 	@Test
@@ -149,10 +118,7 @@ class InventoryListIntegrationTest {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.data.ingredients.length()").value(3))
 			.andExpect(jsonPath("$.data.ingredients[0].name").value("직접 만든 반찬"))
-			.andExpect(jsonPath("$.data.ingredients[0].ingredientCatalogId").value(nullValue()))
-			.andExpect(jsonPath("$.data.ingredients[0].categoryName").value(nullValue()))
 			.andExpect(jsonPath("$.data.ingredients[1].name").value("미분류 재료"))
-			.andExpect(jsonPath("$.data.ingredients[1].categoryName").value(nullValue()))
 			.andExpect(jsonPath("$.data.ingredients[2].name").value("우유"));
 	}
 

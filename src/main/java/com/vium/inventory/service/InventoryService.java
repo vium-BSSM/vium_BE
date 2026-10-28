@@ -9,7 +9,9 @@ import com.vium.global.exception.ErrorCode;
 import com.vium.global.exception.NotFoundException;
 import com.vium.ingredient.service.ExpiryEstimationService;
 import com.vium.ingredient.service.IngredientCatalogService;
+import com.vium.inventory.dto.ActiveIngredientState;
 import com.vium.inventory.dto.AutoDisposeCandidate;
+import com.vium.inventory.dto.IngredientDetailResponse;
 import com.vium.inventory.dto.IngredientListResponse;
 import com.vium.inventory.dto.IngredientRegisterRequest;
 import com.vium.inventory.dto.IngredientResponse;
@@ -80,6 +82,18 @@ public class InventoryService {
 	}
 
 	/**
+	 * 상태는 바꾸지 않고 남은 수량만 줄인다 (예: 레시피 완료의 부분 사용).
+	 */
+	@Transactional
+	public InventoryState decreaseRemainingQuantity(Long userId, Long inventoryItemId, BigDecimal quantity) {
+		InventoryItem item = inventoryItemRepository.findByIdAndUserId(inventoryItemId, userId)
+			.orElseThrow(() -> new NotFoundException("Inventory item not found"));
+		item.decreaseRemainingQuantity(quantity);
+		inventoryItemRepository.save(item);
+		return new InventoryState(item.getId(), item.getUserId(), item.getRemainingQuantity());
+	}
+
+	/**
 	 * 소비/폐기 PATCH용 스냅샷. 행에 PESSIMISTIC_WRITE 락을 걸어 같은 트랜잭션이 끝날 때까지
 	 * 다른 요청이 remainingQuantity를 읽거나 바꾸지 못하게 한다. 반드시 호출자 트랜잭션 안에서 사용한다.
 	 */
@@ -130,6 +144,17 @@ public class InventoryService {
 		LocalDate expiresThrough = expiringSoon
 			? LocalDate.now().plusDays(userSettingsService.getExpiryAlertDays(userId)) : null;
 		return new IngredientListResponse(inventoryQueryRepository.findActiveIngredients(userId, expiresThrough));
+	}
+
+	@Transactional(readOnly = true)
+	public List<ActiveIngredientState> listActiveStates(Long userId) {
+		return inventoryQueryRepository.findActiveInventoryStates(userId);
+	}
+
+	@Transactional(readOnly = true)
+	public IngredientDetailResponse getDetail(Long userId, Long inventoryItemId) {
+		return inventoryQueryRepository.findDetailByIdAndUserId(userId, inventoryItemId)
+			.orElseThrow(() -> new NotFoundException("식재료를 찾을 수 없습니다"));
 	}
 
 	@Transactional
