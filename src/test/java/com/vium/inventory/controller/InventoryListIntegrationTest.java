@@ -70,6 +70,8 @@ class InventoryListIntegrationTest {
 			.andExpect(jsonPath("$.data.ingredients[0].inventoryItemId").value(10))
 			.andExpect(jsonPath("$.data.ingredients[0].name").value("우유"))
 			.andExpect(jsonPath("$.data.ingredients[0].remainingQuantity").value(1.25))
+			.andExpect(jsonPath("$.data.ingredients[0].unitId").value(1))
+			.andExpect(jsonPath("$.data.ingredients[0].unit").value("개"))
 			.andExpect(jsonPath("$.data.ingredients[0].storageMethodId").value(nullValue()))
 			.andExpect(jsonPath("$.data.ingredients[0].storageMethodName").value(nullValue()))
 			.andExpect(jsonPath("$.data.ingredients[0].expiresOn").value(expiry.toString()));

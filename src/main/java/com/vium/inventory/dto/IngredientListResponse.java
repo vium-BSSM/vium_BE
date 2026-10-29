@@ -11,6 +11,8 @@ public record IngredientListResponse(List<Item> ingredients) {
 		String name,
 		LocalDate expiresOn,
 		BigDecimal remainingQuantity,
+		Short unitId,
+		String unit,
 		Short storageMethodId,
 		String storageMethodName
 	) {

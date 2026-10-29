@@ -70,31 +70,16 @@ public class DisposeService {
 		// 두 이벤트가 같은 시각을 쓰도록 Clock으로 한 번만 계산
 		LocalDateTime occurredAt = LocalDateTime.now(clock);
 
-		// 이벤트1: disposed면 폐기분, 아니면(consumed/zeroWaste) 전체 소진분
-		BigDecimal event1Amount = STATUS_DISPOSED.equals(effectiveStatus)
-			? (request.wasteAmount() != null
-				? BigDecimal.valueOf(request.wasteAmount())
-				: ProportionalAmountCalculator.calculate(snapshot.amount(), wasteQty, snapshot.initialQuantity()))
-			: ProportionalAmountCalculator.calculate(snapshot.amount(), wasteQty, snapshot.initialQuantity());
+		// disposed면 wasteQty만큼 폐기분, 아니면(consumed/zeroWaste) 폐기분 없음
+		BigDecimal disposedQty = STATUS_DISPOSED.equals(effectiveStatus) ? wasteQty : BigDecimal.ZERO;
+		BigDecimal consumedQty = request.quantity().subtract(disposedQty);
+		BigDecimal disposedAmount = resolveWasteAmount(snapshot, disposedQty, request.wasteAmount());
+		saveSplitEvents(inventoryItemId, userId, snapshot, eventSourceId, occurredAt, disposedQty, disposedAmount, consumedQty);
 
-		ConsumptionEvent event1 = ConsumptionEvent.create(
-			inventoryItemId, userId, effectiveStatus, eventSourceId, wasteQty, event1Amount, occurredAt);
-		consumptionEventRepository.save(event1);
-
-		// 부분 폐기 시 남은 수량에 대한 consumed 이벤트 추가 (disposed일 때만 해당)
-		BigDecimal remainedQty = request.quantity().subtract(wasteQty);
-		if (STATUS_DISPOSED.equals(effectiveStatus) && remainedQty.compareTo(BigDecimal.ZERO) > 0) {
-			BigDecimal remainedAmount = ProportionalAmountCalculator.calculate(
-				snapshot.amount(), remainedQty, snapshot.initialQuantity());
-			ConsumptionEvent event2 = ConsumptionEvent.create(
-				inventoryItemId, userId, STATUS_CONSUMED, eventSourceId, remainedQty, remainedAmount, occurredAt);
-			consumptionEventRepository.save(event2);
-		}
-
-		// 응답: wasteQuantity/wasteAmount는 저장된 폐기 이벤트(event1)의 값 (요청값이 아님). consumed면 둘 다 null
+		// 응답: wasteQuantity/wasteAmount는 저장된 폐기 이벤트의 값(요청값이 아님). consumed면 둘 다 null
 		BigDecimal responseWasteQuantity = STATUS_DISPOSED.equals(effectiveStatus) ? wasteQty : null;
 		Integer responseWasteAmount = STATUS_DISPOSED.equals(effectiveStatus)
-			? toResponseAmount(event1Amount) : null;
+			? toResponseAmount(disposedAmount) : null;
 
 		return new UpdateInventoryItemStatusResponse(
 			inventoryItemId,
@@ -109,23 +94,61 @@ public class DisposeService {
 	}
 
 	/**
-	 * 레시피 완료 시 사용분(consumed)과 폐기분(disposed)을 함께 기록한다.
-	 * terminal이면 재고 상태를 consumed로 종료하고, 아니면 상태는 active로 유지한 채 남은 수량만 줄인다.
+	 * 폐기분 금액: wasteAmount가 주어지면 그대로 쓰고, 아니면 비례 계산한다. 폐기분이 없으면 null(미사용).
+	 */
+	private BigDecimal resolveWasteAmount(InventoryItemSnapshot snapshot, BigDecimal disposedQty, Integer wasteAmount) {
+		if (disposedQty.signum() <= 0) {
+			return null;
+		}
+		return wasteAmount != null
+			? BigDecimal.valueOf(wasteAmount)
+			: ProportionalAmountCalculator.calculate(snapshot.amount(), disposedQty, snapshot.initialQuantity());
+	}
+
+	/**
+	 * 폐기분/소진분 이벤트를 각각 0보다 클 때만 기록한다. 일반 폐기와 레시피 완료가 공유하는 핵심 규칙.
+	 */
+	private void saveSplitEvents(Long inventoryItemId, Long userId, InventoryItemSnapshot snapshot,
+			Short eventSourceId, LocalDateTime occurredAt, BigDecimal disposedQty, BigDecimal disposedAmount,
+			BigDecimal consumedQty) {
+		if (disposedQty.signum() > 0) {
+			consumptionEventRepository.save(ConsumptionEvent.create(
+				inventoryItemId, userId, STATUS_DISPOSED, eventSourceId, disposedQty, disposedAmount, occurredAt));
+		}
+		if (consumedQty.signum() > 0) {
+			BigDecimal consumedAmount = ProportionalAmountCalculator.calculate(
+				snapshot.amount(), consumedQty, snapshot.initialQuantity());
+			consumptionEventRepository.save(ConsumptionEvent.create(
+				inventoryItemId, userId, STATUS_CONSUMED, eventSourceId, consumedQty, consumedAmount, occurredAt));
+		}
+	}
+
+	/**
+	 * 레시피 완료 시 일반 폐기와 동일한 규칙을 적용한다: usedQuantity가 전체 차감량이고,
+	 * wasteQuantity는 그중 버린 양이다(usedQuantity를 초과할 수 없다).
+	 * 남은 수량이 0이 되면(terminal) 전부 폐기(waste == used)면 disposed로, 아니면 consumed로 종료한다.
+	 * 남지 않으면 active를 유지한 채 남은 수량만 줄인다.
 	 */
 	@Transactional
 	public void recordRecipeUsage(Long userId, Long inventoryItemId, BigDecimal usedQuantity,
-			BigDecimal wasteQuantity, boolean terminal) {
+			BigDecimal wasteQuantity, Integer wasteAmount) {
 		InventoryItemSnapshot snapshot = inventoryService.getSnapshotForUpdate(userId, inventoryItemId);
 
-		BigDecimal totalDeduction = usedQuantity.add(wasteQuantity);
-		if (totalDeduction.compareTo(snapshot.remainingQuantity()) > 0) {
-			throw new InvalidRequestException("usedQuantity와 wasteQuantity의 합은 남은 수량을 초과할 수 없습니다.");
+		if (usedQuantity.compareTo(snapshot.remainingQuantity()) > 0) {
+			throw new InvalidRequestException("usedQuantity는 남은 수량을 초과할 수 없습니다.");
+		}
+		if (wasteQuantity.compareTo(usedQuantity) > 0) {
+			throw new InvalidRequestException("wasteQuantity는 usedQuantity를 초과할 수 없습니다.");
 		}
 
+		boolean terminal = usedQuantity.compareTo(snapshot.remainingQuantity()) == 0;
+		boolean fullyWasted = usedQuantity.signum() > 0 && wasteQuantity.compareTo(usedQuantity) == 0;
+
 		if (terminal) {
-			inventoryService.updateStatus(userId, inventoryItemId, totalDeduction, getStatusIdByCode(STATUS_CONSUMED));
+			String terminalStatus = fullyWasted ? STATUS_DISPOSED : STATUS_CONSUMED;
+			inventoryService.updateStatus(userId, inventoryItemId, usedQuantity, getStatusIdByCode(terminalStatus));
 		} else {
-			inventoryService.decreaseRemainingQuantity(userId, inventoryItemId, totalDeduction);
+			inventoryService.decreaseRemainingQuantity(userId, inventoryItemId, usedQuantity);
 		}
 
 		Short eventSourceId = eventSourceRepository.findByCode(EVENT_SOURCE_MANUAL)
@@ -133,19 +156,9 @@ public class DisposeService {
 			.getId();
 		LocalDateTime occurredAt = LocalDateTime.now(clock);
 
-		if (usedQuantity.signum() > 0) {
-			BigDecimal consumedAmount = ProportionalAmountCalculator.calculate(
-				snapshot.amount(), usedQuantity, snapshot.initialQuantity());
-			consumptionEventRepository.save(ConsumptionEvent.create(
-				inventoryItemId, userId, STATUS_CONSUMED, eventSourceId, usedQuantity, consumedAmount, occurredAt));
-		}
-
-		if (wasteQuantity.signum() > 0) {
-			BigDecimal wasteAmount = ProportionalAmountCalculator.calculate(
-				snapshot.amount(), wasteQuantity, snapshot.initialQuantity());
-			consumptionEventRepository.save(ConsumptionEvent.create(
-				inventoryItemId, userId, STATUS_DISPOSED, eventSourceId, wasteQuantity, wasteAmount, occurredAt));
-		}
+		BigDecimal consumedQuantity = usedQuantity.subtract(wasteQuantity);
+		BigDecimal disposedAmount = resolveWasteAmount(snapshot, wasteQuantity, wasteAmount);
+		saveSplitEvents(inventoryItemId, userId, snapshot, eventSourceId, occurredAt, wasteQuantity, disposedAmount, consumedQuantity);
 	}
 
 	@Transactional(readOnly = true)

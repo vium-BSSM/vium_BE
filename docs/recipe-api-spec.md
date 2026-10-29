@@ -439,7 +439,8 @@ POST /api/me/recipes/{recipeId}/complete
 | `usages[].inventoryId` | Long | Y | 내 `active` 재고(`inventory_items.id`), 배열 안에서 중복 불가 |
 | `usages[].usageRate` | Integer | Y (또는 `usedQuantity`) | 0~100 (슬라이더 값). `usedQuantity`와 동시 사용 불가 |
 | `usages[].usedQuantity` | BigDecimal | Y (또는 `usageRate`) | 사용한 절대 수량(소수 3자리까지), `usageRate`와 동시 사용 불가 |
-| `usages[].wasteQuantity` | BigDecimal | N | 사용량과는 별개로 추가로 버린 수량(소수 3자리까지). `usedQuantity`/`usageRate` 기반 사용량에 **더해서** 재고에서 차감 |
+| `usages[].wasteQuantity` | BigDecimal | N | `usedQuantity`(또는 `usageRate` 환산값) 중 버린 양(일반 폐기와 동일한 규칙, 기본 0, 소수 3자리까지). `usedQuantity`를 초과할 수 없음(별도로 더 차감되지 않음) |
+| `usages[].wasteAmount` | Integer | N | 폐기분 금액(원 단위). 지정하면 폐기 이벤트 금액으로 그대로 쓰고, 없으면 `ProportionalAmountCalculator`로 비례 계산(일반 폐기와 동일) |
 
 ```json
 {
@@ -472,7 +473,7 @@ POST /api/me/recipes/{recipeId}/complete
 | 3 | 404 | `INVENTORY_NOT_FOUND` | 재고 ID가 없음 |
 | 3 | 403 | `INVENTORY_ACCESS_DENIED` | 다른 사용자의 재고 |
 | 3 | 409 | `INVENTORY_NOT_ACTIVE` | 이미 소진·폐기된 재고 (`consumed`·`disposed`) |
-| 4 | 400 | `INVALID_REQUEST` | `usedQuantity`(또는 `usageRate` 환산값) + `wasteQuantity`의 합이 남은 수량을 초과 |
+| 4 | 400 | `INVALID_REQUEST` | `usedQuantity`(또는 `usageRate` 환산값)가 남은 수량을 초과, 또는 `wasteQuantity`가 `usedQuantity`를 초과 |
 
 - 1번은 Bean Validation(`@NotEmpty`, `@Size(max = 50)`, `@NotNull`, `@Min(0)`, `@Max(100)`)과 서비스 내 중복 검사로 처리합니다.
 - 3번에서 하나라도 실패하면 **아무것도 차감하지 않습니다.**
@@ -504,15 +505,17 @@ usageRate = 0   → 변경 없음 (호출도 안 함)
 
 기존 코드 확인 결과 `InventoryItem.updateStatus(quantity, statusId)`는 `remainingQuantity -= quantity` 후 **남은 양과 상관없이** 상태를 `statusId`로 바꿉니다. 그래서 부분 사용에는 쓸 수 없습니다. 이를 위해 `InventoryItem`에 `decreaseRemainingQuantity(BigDecimal quantity)`를 추가했습니다.
 
-`wasteQuantity`(기본 0) 입력 여부와 관계없이, 사용량(`usedQuantity`/`usageRate` 환산값)이나 `wasteQuantity` 중 하나라도 0보다 크면 항상 `DisposeService.recordRecipeUsage(userId, inventoryItemId, usedQuantity, wasteQuantity, terminal)`를 호출합니다. 부분 사용(상태가 `active`로 유지되는 경우)도 예외가 아니며, 사용량만큼 `consumed` 이벤트가 남습니다.
+레시피 완료의 `wasteQuantity`는 일반 폐기(`PATCH /api/me/ingredients/{id}/status`)와 동일한 규칙을 따릅니다: **`usedQuantity`가 재고에서 차감되는 전체 양이고, `wasteQuantity`는 그중 버린 양**입니다(별도로 더해져 추가 차감되지 않습니다).
 
-- `totalDeduction = usedQuantity + wasteQuantity`이며, `remainingQuantity`를 초과하면 `INVALID_REQUEST`(400)이고 아무것도 차감하지 않습니다.
-- `terminal = (remainingQuantity − totalDeduction) ≤ 0`
-  - `terminal`이면 `InventoryService.updateStatus(..., totalDeduction, consumedStatusId)`로 상태를 **항상 `consumed`로 종료**합니다(폐기분이 있어도 `disposed`로 바뀌지 않습니다 — 재고가 사라졌다는 사실만 상태에 반영하고, 어떻게 사라졌는지는 이벤트로 남깁니다).
-  - `terminal`이 아니면 `InventoryService.decreaseRemainingQuantity(..., totalDeduction)`로 상태는 `active` 유지, 수량만 차감합니다 (부분 사용).
-- `usedQuantity > 0`이면 `consumed` 이벤트, `wasteQuantity > 0`이면 `disposed` 이벤트를 각각 남깁니다(금액은 `ProportionalAmountCalculator`로 비례 계산). `event_source`는 기존과 동일하게 `manual`을 씁니다(레시피 전용 소스는 두지 않습니다).
+`wasteQuantity`(기본 0) 입력 여부와 관계없이, 사용량(`usedQuantity`/`usageRate` 환산값)이나 `wasteQuantity` 중 하나라도 0보다 크면 항상 `DisposeService.recordRecipeUsage(userId, inventoryItemId, usedQuantity, wasteQuantity, wasteAmount)`를 호출합니다. 부분 사용(상태가 `active`로 유지되는 경우)도 예외가 아니며, 사용량만큼 `consumed` 이벤트가 남습니다.
+
+- `wasteQuantity`가 `usedQuantity`를 초과하면 `INVALID_REQUEST`(400)이고 아무것도 차감하지 않습니다.
+- `terminal = (usedQuantity == remainingQuantity)`
+  - `terminal`이면 `InventoryService.updateStatus(..., usedQuantity, statusId)`로 상태를 종료합니다. **전부 폐기(`wasteQuantity == usedQuantity`)면 `disposed`로, 아니면 `consumed`로 종료**합니다.
+  - `terminal`이 아니면 `InventoryService.decreaseRemainingQuantity(..., usedQuantity)`로 상태는 `active` 유지, 수량만 차감합니다 (부분 사용).
+- `consumedQuantity = usedQuantity − wasteQuantity`이며, `wasteQuantity > 0`이면 `disposed` 이벤트, `consumedQuantity > 0`이면 `consumed` 이벤트를 각각 남깁니다(둘 다 0보다 클 때만). `disposed` 이벤트 금액은 `wasteAmount`가 있으면 그대로 쓰고 없으면 `ProportionalAmountCalculator`로 비례 계산하며, `consumed` 이벤트 금액은 항상 비례 계산합니다. `event_source`는 기존과 동일하게 `manual`을 씁니다(레시피 전용 소스는 두지 않습니다). 이 이벤트 기록 로직(`saveSplitEvents`)은 일반 폐기와 공유합니다.
 - 사용량과 `wasteQuantity`가 모두 0이면(기본값) 아무 이벤트도 남기지 않고 재고도 변경하지 않습니다.
-- `usedQuantity`가 0이고 `wasteQuantity`만 있는 요청도 허용합니다 (조리에는 안 썼지만 손질 중 버린 경우).
+- `usedQuantity`가 0이면 `wasteQuantity`도 0이어야 합니다(`wasteQuantity`가 `usedQuantity`를 초과할 수 없으므로). 사용량 없이 폐기만 기록하는 요청은 더 이상 지원하지 않습니다 — 일반 폐기 플로우(`PATCH /api/me/ingredients/{id}/status`)를 사용합니다.
 
 `decreaseRemainingQuantity` 규칙:
 - `quantity`가 0 이하이거나 `remainingQuantity`보다 크거나 같으면 `IllegalArgumentException` (그 경우는 `terminal` 경로로 가야 함)
