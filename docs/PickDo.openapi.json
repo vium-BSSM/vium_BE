@@ -811,7 +811,7 @@
       "get": {
         "summary": "식재료 조회",
         "deprecated": false,
-        "description": "목록은 inventoryItemId, name, expiresOn, remainingQuantity, storageMethodId, storageMethodName만 반환한다. 나머지 필드는 상세 조회(GET /api/me/ingredients/{ingredientId})에서 확인한다.",
+        "description": "목록은 inventoryItemId, name, expiresOn, remainingQuantity, unitId, unit, storageMethodId, storageMethodName만 반환한다. 나머지 필드는 상세 조회(GET /api/me/ingredients/{ingredientId})에서 확인한다.",
         "tags": [],
         "parameters": [
           {
@@ -856,6 +856,14 @@
                               "remainingQuantity": {
                                 "type": "number"
                               },
+                              "unitId": {
+                                "type": "integer",
+                                "description": "고정 단위 ID: 1=개, 2=g, 3=kg, 4=ml, 5=L, 6=팩, 7=봉, 8=병, 9=캔, 10=통."
+                              },
+                              "unit": {
+                                "type": "string",
+                                "description": "단위 텍스트"
+                              },
                               "storageMethodId": {
                                 "type": "integer",
                                 "nullable": true,
@@ -893,6 +901,8 @@
                         "name": "우유",
                         "expiresOn": "2026-08-20",
                         "remainingQuantity": 1,
+                        "unitId": 1,
+                        "unit": "개",
                         "storageMethodId": 1,
                         "storageMethodName": "냉장"
                       }
@@ -1949,7 +1959,7 @@
       "post": {
         "summary": "요리 완료 (재료 사용량 반영)",
         "deprecated": false,
-        "description": "사용량 조사 화면의 슬라이더 값을 재고에 반영합니다.\n\n- usageRate: 현재 남은 양의 몇 %를 썼는지 (0~100 정수)\n- 0 → 변경 없음 / 계산 후 남은 양 > 0 → 남은 양만 차감 / 남은 양 ≤ 0 (100% 포함) → 소진(consumed) 처리\n- wasteQuantity: 사용량과 별개로 조리 중 추가로 버린 수량(선택). 0보다 크면 사용분(consumed)·폐기분(disposed) 이벤트를 각각 기록하고, usedQuantity/usageRate 사용량과 wasteQuantity의 합만큼 재고에서 차감합니다. 합이 남은 수량을 초과하면 400입니다. 차감 후 남은 수량이 0이 되면 상태는 consumed로 종료됩니다.\n- inventoryId는 레시피 재료가 아니어도 됩니다 (재료 추가 화면에서 고른 재료 포함).\n- 하나라도 실패하면 아무것도 차감하지 않습니다.\n- 중복 차감 방지를 위해 요청 중에는 완료 버튼을 비활성화해 주세요.",
+        "description": "사용량 조사 화면의 슬라이더 값을 재고에 반영합니다.\n\n- usageRate: 현재 남은 양의 몇 %를 썼는지 (0~100 정수). usedQuantity/usageRate로 계산된 사용량이 재고에서 차감되는 전체 양입니다.\n- 0 → 변경 없음 / 계산 후 남은 양 > 0 → 남은 양만 차감 / 남은 양 ≤ 0 (100% 포함) → 종료 처리\n- wasteQuantity: usedQuantity 중 버린 양(일반 폐기와 동일한 규칙, 선택, 기본 0). usedQuantity를 초과할 수 없으며 초과하면 400입니다. 0보다 크면 사용분(consumed, usedQuantity - wasteQuantity)과 폐기분(disposed, wasteQuantity) 이벤트를 각각 기록합니다(둘 다 0보다 클 때만). 차감 후 남은 수량이 0이 되면, 전부 폐기(wasteQuantity == usedQuantity)면 disposed로, 아니면 consumed로 종료됩니다.\n- wasteAmount: 폐기분 금액(선택, 원 단위 정수). 지정하면 폐기 이벤트 금액으로 그대로 쓰고, 없으면 일반 폐기와 동일하게 비례 계산합니다.\n- inventoryId는 레시피 재료가 아니어도 됩니다 (재료 추가 화면에서 고른 재료 포함).\n- 하나라도 실패하면 아무것도 차감하지 않습니다.\n- 중복 차감 방지를 위해 요청 중에는 완료 버튼을 비활성화해 주세요.",
         "operationId": "completeRecipe",
         "tags": [
           "Recipe"
@@ -1985,7 +1995,7 @@
                   },
                   {
                     "inventoryId": 57,
-                    "usageRate": 30,
+                    "usedQuantity": 30,
                     "wasteQuantity": 20
                   }
                 ]
@@ -4362,8 +4372,7 @@
       "RecipeUsage": {
         "type": "object",
         "required": [
-          "inventoryId",
-          "usageRate"
+          "inventoryId"
         ],
         "properties": {
           "inventoryId": {
@@ -4375,13 +4384,26 @@
             "type": "integer",
             "minimum": 0,
             "maximum": 100,
-            "description": "현재 남은 양 중 사용한 비율(%)"
+            "nullable": true,
+            "description": "현재 남은 양 중 사용한 비율(%). usedQuantity와 함께 보낼 수 없고 둘 중 하나는 필수입니다."
+          },
+          "usedQuantity": {
+            "type": "number",
+            "minimum": 0,
+            "nullable": true,
+            "description": "사용한 수량(선택, 소수 3자리까지). usageRate와 함께 보낼 수 없고 둘 중 하나는 필수이며, 남은 수량을 초과할 수 없습니다."
           },
           "wasteQuantity": {
             "type": "number",
             "minimum": 0,
             "nullable": true,
-            "description": "사용량과는 별개로 조리 중 버린 수량(선택, 소수 3자리까지). usageRate로 계산한 사용량에 더해 재고에서 차감되며, 합이 남은 수량을 초과하면 400입니다. 0보다 크면 사용분은 consumed, 폐기분은 disposed 이벤트로 각각 기록됩니다."
+            "description": "usedQuantity 중 버린 양(일반 폐기와 동일한 규칙, 선택, 기본 0, 소수 3자리까지). usedQuantity를 초과할 수 없으며 초과하면 400입니다. 0보다 크면 사용분은 consumed(usedQuantity - wasteQuantity), 폐기분은 disposed(wasteQuantity) 이벤트로 각각 기록됩니다(둘 다 0보다 클 때만)."
+          },
+          "wasteAmount": {
+            "type": "integer",
+            "minimum": 0,
+            "nullable": true,
+            "description": "폐기분 금액(선택, 원 단위 정수). 지정하면 폐기 이벤트 금액으로 그대로 쓰고, 없으면 비례 계산합니다."
           }
         }
       },

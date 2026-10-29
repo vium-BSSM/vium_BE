@@ -27,10 +27,12 @@ public class InventoryQueryRepository {
 	public List<IngredientListResponse.Item> findActiveIngredients(Long userId, LocalDate expiresThrough) {
 		String sql = """
 			select i.id, coalesce(c.name, i.custom_name) as name,
-			       i.remaining_quantity, i.storage_method_id, sm.name as storage_method_name,
+			       i.remaining_quantity, i.unit_id, u.name as unit,
+			       i.storage_method_id, sm.name as storage_method_name,
 			       i.expires_on
 			from inventory_items i
 			join item_statuses s on s.id = i.status_id
+			join units u on u.id = i.unit_id
 			left join ingredient_catalog c on c.id = i.ingredient_catalog_id
 			left join storage_methods sm on sm.id = i.storage_method_id
 			where i.user_id = ? and s.code = ?
@@ -46,6 +48,8 @@ public class InventoryQueryRepository {
 			rs.getString("name"),
 			rs.getObject("expires_on", LocalDate.class),
 			rs.getBigDecimal("remaining_quantity"),
+			rs.getObject("unit_id", Short.class),
+			rs.getString("unit"),
 			rs.getObject("storage_method_id", Short.class),
 			rs.getString("storage_method_name")
 		), parameters);
