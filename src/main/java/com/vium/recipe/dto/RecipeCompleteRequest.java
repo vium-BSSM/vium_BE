@@ -22,6 +22,8 @@ public record RecipeCompleteRequest(
 		@Max(value = 100, message = "사용률은 100 이하여야 합니다.")
 		Integer usageRate,
 		@DecimalMin(value = "0", message = "사용 수량은 0 이상이어야 합니다.")
-		BigDecimal usedQuantity
+		BigDecimal usedQuantity,
+		@DecimalMin(value = "0", message = "폐기 수량은 0 이상이어야 합니다.")
+		BigDecimal wasteQuantity
 	) {}
 }

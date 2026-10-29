@@ -8,11 +8,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.vium.inventory.dto.IngredientListResponse;
+import com.vium.inventory.dto.IngredientDetailResponse;
 import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.List;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.NullSource;
@@ -28,11 +27,11 @@ class InventoryQueryRepositoryTest {
 		var resultSet = mock(ResultSet.class);
 		BigDecimal amount = value == null ? null : new BigDecimal(value);
 		when(resultSet.getBigDecimal("amount")).thenReturn(amount);
-		var repository = repositoryWithRow(resultSet);
+		var repository = repositoryWithDetailRow(resultSet);
 
-		var items = repository.findActiveIngredients(1L, null);
+		var detail = repository.findDetailByIdAndUserId(1L, 1L);
 
-		assertThat(items).singleElement().satisfies(item ->
+		assertThat(detail).isPresent().get().satisfies(item ->
 			assertThat(item.amount()).isEqualTo(amount == null ? null : amount.longValueExact()));
 		verify(resultSet).getBigDecimal("amount");
 		verify(resultSet, never()).getObject("amount", Long.class);
@@ -44,22 +43,23 @@ class InventoryQueryRepositoryTest {
 	void roundsFractionalAmountToWholeWon(String value, long expected) throws Exception {
 		var resultSet = mock(ResultSet.class);
 		when(resultSet.getBigDecimal("amount")).thenReturn(new BigDecimal(value));
-		var repository = repositoryWithRow(resultSet);
+		var repository = repositoryWithDetailRow(resultSet);
 
-		assertThat(repository.findActiveIngredients(1L, null)).singleElement()
+		assertThat(repository.findDetailByIdAndUserId(1L, 1L)).isPresent().get()
 			.satisfies(item -> assertThat(item.amount()).isEqualTo(expected));
 	}
 
-	private InventoryQueryRepository repositoryWithRow(ResultSet resultSet) throws Exception {
+	private InventoryQueryRepository repositoryWithDetailRow(ResultSet resultSet) throws Exception {
 		var jdbcTemplate = mock(JdbcTemplate.class);
 		// Match pgjdbc's rejection of numeric -> Long, including SQL NULL.
 		when(resultSet.getObject("amount", Long.class))
 			.thenThrow(new SQLException("conversion to class java.lang.Long from numeric not supported"));
-		when(jdbcTemplate.query(anyString(), org.mockito.ArgumentMatchers.<RowMapper<IngredientListResponse.Item>>any(),
-				any(Object[].class))).thenAnswer(invocation -> {
-			RowMapper<IngredientListResponse.Item> mapper = invocation.getArgument(1);
-			return List.of(mapper.mapRow(resultSet, 0));
-		});
+		when(jdbcTemplate.queryForObject(anyString(),
+				org.mockito.ArgumentMatchers.<RowMapper<IngredientDetailResponse>>any(), any(Object[].class)))
+			.thenAnswer(invocation -> {
+				RowMapper<IngredientDetailResponse> mapper = invocation.getArgument(1);
+				return mapper.mapRow(resultSet, 0);
+			});
 		return new InventoryQueryRepository(jdbcTemplate);
 	}
 }

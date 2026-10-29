@@ -266,3 +266,15 @@ com.vium
 - 온라인 주문은 상품명과 가격 사이 배송 배지를 건너뛰고, 가격 줄에 함께 있는 배송 배지·수량도 처리한다. 배송비·쿠폰·적립 금액은 품목 가격에서 제외한다.
 - 현재 취소 표시는 직전 상품을 제외한다. 상품 위에 상태가 표시되는 실제 앱 사례는 아직 반영하지 않았으며 실제 인식 결과로 규칙을 조정해야 한다.
 - 파서 픽스처는 수작업 예시다. 전체 검증 명령은 `TZ=UTC ./gradlew clean test`이며 API·동시성 테스트는 H2 기반이다. 리뷰에서 실제 PostgreSQL 16에 V1~V8 Flyway 적용, 운영과 같은 `ddl-auto: validate` 설정으로 앱 기동, scan→confirm→조회→삭제 및 동시 확정 API 직접 호출까지 확인 완료했다. 남은 검증은 실제 앱 OCR 결과를 통한 파서 정확도 확인이다.
+
+## 12. 재료 카탈로그·소비기한 시드 (#87)
+
+- V9는 `scripts/catalog/build_seed.py`가 생성하는 411개 재료·612개 소비기한 규칙 시드다. FoodKeeper v128(CC0), I1250 식품유형별 통계, 직접 정한 manual 규칙을 사용한다.
+- 입력·출처·적용 상태와 상세 재생성 절차는 `data/catalog/README.md`를 따른다. I1250 원본은 Git 제외 로컬 캐시이며 CI·생성기는 `data/catalog/i1250_stats.json`만 사용한다. 앱 실행 중 외부 공공 API를 호출하지 않는다.
+- 통계 갱신은 `python3 scripts/catalog/summarize_i1250.py`, 시드 생성은 `python3 scripts/catalog/build_seed.py`, 일치 검사는 같은 명령에 `--check`를 붙인다. 스크립트 테스트는 `python3 -m unittest discover -s scripts/catalog -p 'test_*.py'`다.
+- 규칙 누락·선호 보관방법 불일치가 있으면 기본 V9에 쓰지 않는다. 초안은 `--output`으로 별도 경로에 생성한다. manual 우선순위와 상태별 한계는 README 및 각 행의 reason을 확인한다.
+- V9는 수동 편집하지 않는다. 적용된 이후 값 변경은 V10 이후 새 마이그레이션으로 처리하고 생성기·CI 비교 기준도 함께 갱신한다. 적용된 V9의 체크섬을 변경하지 않는다.
+
+## 13. 운영 모니터링 (#92)
+
+- Grafana Cloud로 메트릭을 OTLP/HTTP push한다. 기본 비활성이며 `OTLP_METRICS_ENABLED`로 켠다. 추가 프로세스·공개 포트 없이 운영 health 노출을 유지하며 설정·검증·대시보드·알림은 `docs/monitoring.md`를 따른다.

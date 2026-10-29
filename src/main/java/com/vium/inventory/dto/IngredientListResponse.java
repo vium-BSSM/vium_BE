@@ -8,17 +8,11 @@ public record IngredientListResponse(List<Item> ingredients) {
 
 	public record Item(
 		Long inventoryItemId,
-		Long ingredientCatalogId,
 		String name,
-		String categoryName,
-		BigDecimal initialQuantity,
+		LocalDate expiresOn,
 		BigDecimal remainingQuantity,
-		Long amount,
-		Short unitId,
-		String unit,
-		String statusCode,
-		LocalDate purchasedOn,
-		LocalDate expiresOn
+		Short storageMethodId,
+		String storageMethodName
 	) {
 	}
 }

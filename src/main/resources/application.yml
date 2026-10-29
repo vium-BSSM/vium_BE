@@ -48,6 +48,27 @@ management:
       probes:
         enabled: true
 
+  metrics:
+    tags:
+      application: ${spring.application.name}
+      env: ${DEPLOY_ENV:local}
+    distribution:
+      slo:
+        http.server.requests: 50ms,100ms,200ms,500ms,1s,2s,5s
+  otlp:
+    metrics:
+      export:
+        enabled: ${OTLP_METRICS_ENABLED:false}
+        url: ${OTLP_METRICS_URL:}
+        headers:
+          Authorization: ${OTLP_METRICS_AUTHORIZATION:}
+        step: 1m
+        base-time-unit: seconds
+        compression-mode: gzip
+  opentelemetry:
+    resource-attributes:
+      deployment.environment.name: ${DEPLOY_ENV:local}
+
 logging:
   level:
     org.hibernate.SQL: debug

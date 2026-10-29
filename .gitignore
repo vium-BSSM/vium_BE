@@ -12,6 +12,7 @@ build/
 !.env.prod.example
 deploy/certs/
 __pycache__/
+data/raw/i1250/
 
 ### STS ###
 .apt_generated
