@@ -1,9 +1,7 @@
 package com.vium.global;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.web.servlet.resource.NoResourceFoundException;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -26,10 +24,7 @@ class MonitoringEndpointExposureTest {
     void metricsEndpointsRemainUnexposedInProduction() throws Exception {
         for (String endpoint : new String[]{"metrics", "prometheus"}) {
             mockMvc.perform(get("/actuator/" + endpoint).with(jwt()))
-                    // The existing catch-all advice maps missing resources to 500.
-                    // Verify the missing handler independently of that error mapping.
-                    .andExpect(result -> assertThat(result.getResolvedException())
-                            .isInstanceOf(NoResourceFoundException.class));
+                    .andExpect(status().isNotFound());
         }
         mockMvc.perform(get("/actuator/health")).andExpect(status().isOk());
     }

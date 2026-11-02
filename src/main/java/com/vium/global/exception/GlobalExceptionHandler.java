@@ -5,12 +5,16 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.MultipartException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -61,6 +65,22 @@ public class GlobalExceptionHandler {
 		return ResponseEntity.status(415).body(ApiResponse.fail(new ApiResponse.ErrorObject(
 			request.getRequestURI().equals("/api/me/images") ? "UNSUPPORTED_IMAGE_TYPE" : "INVALID_REQUEST",
 			"지원하지 않는 Content-Type입니다.")));
+	}
+
+	@ExceptionHandler({NoResourceFoundException.class, NoHandlerFoundException.class})
+	public ResponseEntity<ApiResponse<Void>> handleNotFound(Exception e) {
+		return handleBusinessException(new BusinessException(ErrorCode.NOT_FOUND));
+	}
+
+	@ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+	public ResponseEntity<ApiResponse<Void>> handleMethodNotSupported(HttpRequestMethodNotSupportedException e) {
+		ErrorCode errorCode = ErrorCode.METHOD_NOT_ALLOWED;
+		var headers = new HttpHeaders();
+		if (e.getSupportedHttpMethods() != null) {
+			headers.setAllow(e.getSupportedHttpMethods());
+		}
+		return ResponseEntity.status(errorCode.getStatus()).headers(headers)
+			.body(ApiResponse.fail(new ApiResponse.ErrorObject(errorCode.name(), errorCode.getDefaultMessage())));
 	}
 
 	@ExceptionHandler(Exception.class)
