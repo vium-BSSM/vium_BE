@@ -15,7 +15,8 @@ PR/develop에는 배포하지 않는다. 대기 중 새 main이 생긴 오래된
 - 신뢰 정책: audience `sts.amazonaws.com`, main의 OIDC subject만 허용.
   GitHub Environment는 현재 사용하지 않는다. 추후 환경을 사용하면 subject와
   환경의 허용 브랜치/승인 정책을 함께 변경해야 한다.
-- EC2 `vium-ec2-role`: AmazonSSMManagedInstanceCore 및 해당 저장소 pull 권한.
+- EC2 `vium-ec2-role`: AmazonSSMManagedInstanceCore 및 해당 저장소 pull 권한,
+  이미지 저장소용 S3 권한([배포 안내](deployment.md) 참고).
   SSM Agent online, AWS CLI, Docker Compose, Python 3, curl, flock 필요.
 - GitHub repository Variables: `AWS_ROLE_ARN`, `AWS_REGION`,
   `ECR_REPOSITORY`, `EC2_INSTANCE_ID`. 장기 액세스 키는 사용하지 않는다.

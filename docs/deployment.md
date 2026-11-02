@@ -30,7 +30,57 @@ RDS URL의 `sslmode=verify-full`은 인증서와 호스트를 검증한다. 인�
 
 `DISPOSAL_AUTO_DISPOSE_ENABLED=true`로 설정하면 매일 00:10(Asia/Seoul)에 소비기한이 지난 미처리 재료를 자동 폐기 추정 처리한다. 기본값은 false이며, 운영 `.env.prod`에서 활성화해야 낭비 리포트·장보기 도우미 데이터가 쌓인다. 활성 여부는 기동 로그 `자동 폐기 스케줄러 활성화`로, 실행 결과는 `자동 폐기 배치 완료: 처리 N건, 스킵 N건, 실패 N건` 로그로 확인한다. 운영 Compose는 `DISPOSAL_AUTO_DISPOSE_CRON`과 `DISPOSAL_AUTO_DISPOSE_TIMEZONE`을 전달하지 않으므로 `.env.prod`에 두 값을 넣어도 적용되지 않는다. 실행 일정은 `application.yml`의 기본값을 사용하며, 운영에서 변경하려면 Compose의 환경변수 전달 설정도 추가해야 한다.
 
+`IMAGE_STORAGE_ENABLED=true`로 설정하면 S3 이미지 업로드를 사용한다. 활성화 전 `vium-ec2-role`에 두 운영 버킷의 `images/*`에 한정한 PutObject·DeleteObject와 private 버킷의 GetObject 권한을 부여하고, 아래 Nginx 업로드 제한을 적용해야 한다. Docker bridge 컨테이너에서 인스턴스 역할 자격 증명을 받을 수 있도록 EC2 IMDSv2의 `HttpPutResponseHopLimit`은 2로 설정하고 `HttpTokens=required`를 유지한다. 자격 증명은 인스턴스 역할을 사용하며 `.env.prod`에 AWS 액세스 키를 넣지 않는다.
+
+`AWS_REGION`, `S3_PRIVATE_BUCKET`, `S3_PUBLIC_BUCKET`, `IMAGE_PUBLIC_BASE_URL`을 실제 운영 값과 대조한다. 활성화 시 버킷 이름 형식이 잘못되거나 두 버킷이 같거나 공개 URL이 경로 없는 HTTPS 형식이 아니면 앱 기동이 실패한다. CD 전환 후에는 `/opt/vium/shared/.env.prod`(권한 600)를 수정하고 현재 릴리스의 컨테이너를 재생성해 반영한다([CD 안내](cd.md)).
+
 `OTLP_METRICS_ENABLED`, `OTLP_METRICS_URL`, `OTLP_METRICS_AUTHORIZATION`는 선택 사항이며 Grafana Cloud 메트릭 전송은 기본 비활성이다. 활성화·대시보드·알림 절차는 [운영 모니터링](monitoring.md)을 따른다.
+
+### IMDS hop limit 확인
+
+관리자 자격 증명을 사용하는 AWS CLI에서 실제 운영 인스턴스 ID로 확인한다.
+
+```bash
+aws ec2 describe-instances --instance-ids '<EC2_INSTANCE_ID>' \
+  --query 'Reservations[0].Instances[0].MetadataOptions'
+```
+
+`HttpPutResponseHopLimit`이 1이면 2로 올린다(IMDSv2 required는 유지).
+
+```bash
+aws ec2 modify-instance-metadata-options --instance-id '<EC2_INSTANCE_ID>' \
+  --http-tokens required --http-put-response-hop-limit 2
+```
+
+
+### S3 이미지 저장소 권한
+
+`vium-ec2-role`의 기존 정책을 먼저 확인하고, `AmazonS3FullAccess`처럼 다른 버킷까지 허용하는 정책은 제거한다. 다음 인라인 정책(예: `vium-prod-image-storage`)을 적용한다.
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "WriteImages",
+      "Effect": "Allow",
+      "Action": ["s3:PutObject", "s3:DeleteObject"],
+      "Resource": [
+        "arn:aws:s3:::vium-prod-private-243919538384/images/*",
+        "arn:aws:s3:::vium-prod-public-assets-243919538384/images/*"
+      ]
+    },
+    {
+      "Sid": "ReadPrivateImages",
+      "Effect": "Allow",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::vium-prod-private-243919538384/images/*"
+    }
+  ]
+}
+```
+
+`GetObject`는 private 이미지의 presigned URL 서명 주체에 필요하다. public 이미지는 CloudFront OAC로 조회한다. 앱은 목록을 조회하지 않으므로 `ListBucket`은 부여하지 않는다. 두 버킷의 기본 암호화가 고객 관리 키를 사용하는 SSE-KMS라면 해당 키 ARN에 한정해 `kms:GenerateDataKey`, `kms:Decrypt` 권한도 추가한다. SSE-S3는 추가 권한이 필요 없다. 버킷 정책에 역할을 차단하는 Deny가 없는지, public 버킷 정책이 CloudFront OAC의 `GetObject`를 허용하는지 확인한다.
 
 ## 릴리스 이미지 빌드 — 로컬 또는 별도 빌드 머신
 
@@ -138,20 +188,36 @@ server {
     ssl_certificate_key /etc/letsencrypt/live/api.example.com/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
 
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-Port $server_port;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Forwarded-Prefix "";
+    proxy_set_header Forwarded "";
+
+    location = /api/me/images {
+        client_max_body_size 6m;
+        error_page 413 = @image_too_large;
+        proxy_pass http://127.0.0.1:8080;
+    }
+
     location / {
         proxy_pass http://127.0.0.1:8080;
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-Host $host;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-Port $server_port;
-        proxy_set_header X-Forwarded-For $remote_addr;
-        proxy_set_header X-Forwarded-Prefix "";
-        proxy_set_header Forwarded "";
+    }
+
+    location @image_too_large {
+        default_type application/json;
+        return 413 '{"success":false,"data":null,"error":{"code":"IMAGE_TOO_LARGE","message":"이미지는 최대 5MiB까지 업로드할 수 있습니다."}}';
     }
 }
 ```
 
-`nginx -t`로 검사 후 reload한다. 80은 HTTPS로 리다이렉트한다. 프록시가 전달 헤더를 덮어쓰므로 외부 요청의 임의 전달 헤더를 신뢰하지 않는다. HTTPS 설정 전에는 실제 계정으로 로그인하지 않는다.
+업로드 경로의 `client_max_body_size 6m`은 앱의 `max-request-size: 6MB`와 같은 6MiB다. 제한은 파일 크기가 아니라 multipart 경계·필드를 포함한 전체 요청 본문 크기에 적용된다. 파일이 5MiB를 초과하되 전체 본문이 6MiB 이하인 요청은 앱이 거절하고, 전체 본문이 6MiB를 초과하면 Nginx가 `IMAGE_TOO_LARGE` JSON으로 응답한다. 앱의 요청 한도를 넘는 본문을 프록시하지 않아 Tomcat의 미소비 본문 처리 한도로 응답 전달이 실패할 가능성을 줄인다. 다른 경로는 기본 1MiB 제한을 유지하고, `proxy_set_header`는 하위 location에서 재선언할 때 상속이 끊기는 것을 피하도록 server 블록에 두어 두 프록시 location이 공유한다.
+
+Nginx가 직접 반환하는 413에는 앱의 CORS 헤더가 붙지 않는다. 웹 프론트를 연결할 때는 허용 Origin 정책에 맞춰 이 오류 응답의 CORS도 설정해야 브라우저에서 JSON을 읽을 수 있다.
+
+기존 설정 파일을 백업하고 `nginx -t`로 검사 후 `systemctl reload nginx`로 반영한다. 80은 HTTPS로 리다이렉트한다. 프록시가 전달 헤더를 덮어쓰므로 외부 요청의 임의 전달 헤더를 신뢰하지 않는다. HTTPS 설정 전에는 실제 계정으로 로그인하지 않는다.
 
 ## 배포 확인 및 복구
 
@@ -159,6 +225,7 @@ server {
 2. 운영 확인용 계정으로 회원가입 → 로그인 → 인증이 필요한 재고 조회 → 토큰 갱신 → 최신 Refresh Token으로 로그아웃 확인.
 3. 토큰 없는 보호 API는 401, 허용한 프론트 Origin의 preflight는 성공하는지 확인.
 4. 컨테이너 재시작 후에도 기존 계정과 데이터가 유지되는지 확인.
+5. 이미지 업로드 → 임시 조회 URL → 크기 초과 413 JSON 확인. RECEIPT 업로드 후 임시 URL로 조회하고, PROFILE 업로드 후 공개 URL로 조회한다. 파일이 5MiB 초과이고 전체 multipart 본문은 6MiB 이하인 경우(예: 5.5MiB 파일)는 앱의 413 `IMAGE_TOO_LARGE` JSON을, 전체 본문이 6MiB를 초과하는 경우는 Nginx의 같은 JSON과 `Content-Type: application/json`을 확인한다. 토큰·presigned URL 전체는 출력에 남기지 않는다.
 
 ```sh
 IMAGE_TAG='<현재-배포한-전체-커밋-SHA>' docker compose --env-file .env.prod -f compose.prod.yml -f compose.micro.yml logs --tail 100 app
