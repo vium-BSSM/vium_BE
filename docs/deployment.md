@@ -87,11 +87,16 @@ aws ec2 modify-instance-metadata-options --instance-id '<EC2_INSTANCE_ID>' \
 ROLE_ARN='arn:aws:iam::243919538384:role/vium-ec2-role'
 aws iam simulate-principal-policy --policy-source-arn "$ROLE_ARN" \
   --action-names s3:PutObject s3:DeleteObject s3:GetObject \
-  --resource-arns arn:aws:s3:::vium-prod-private-243919538384/images/x arn:aws:s3:::some-other-bucket/images/x \
+  --resource-arns \
+    arn:aws:s3:::vium-prod-private-243919538384/images/x \
+    arn:aws:s3:::vium-prod-public-assets-243919538384/images/x \
+    arn:aws:s3:::some-other-bucket/images/x \
   --query 'EvaluationResults[].[EvalActionName,EvalResourceName,EvalDecision]' --output table
 ```
 
-운영 private 버킷은 3개 모두 `allowed`, 다른 버킷은 모두 `implicitDeny`여야 한다.
+운영 private 버킷은 3개 모두 `allowed`, public 버킷은 PutObject·DeleteObject만 `allowed`이고 GetObject는 `implicitDeny`, 다른 버킷은 모두 `implicitDeny`여야 한다.
+
+이 시뮬레이션만으로 버킷 정책·KMS 키 정책까지 검증되지는 않는다. 아래 "배포 확인 및 복구" 5번에서 실제 업로드·조회를 통해 함께 검증한다.
 
 ## 릴리스 이미지 빌드 — 로컬 또는 별도 빌드 머신
 
