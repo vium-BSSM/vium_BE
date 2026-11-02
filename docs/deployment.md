@@ -52,7 +52,6 @@ aws ec2 modify-instance-metadata-options --instance-id '<EC2_INSTANCE_ID>' \
   --http-tokens required --http-put-response-hop-limit 2
 ```
 
-
 ### S3 이미지 저장소 권한
 
 `vium-ec2-role`의 기존 정책을 먼저 확인하고, `AmazonS3FullAccess`처럼 다른 버킷까지 허용하는 정책은 제거한다. 다음 인라인 정책(예: `vium-prod-image-storage`)을 적용한다.
@@ -81,6 +80,18 @@ aws ec2 modify-instance-metadata-options --instance-id '<EC2_INSTANCE_ID>' \
 ```
 
 `GetObject`는 private 이미지의 presigned URL 서명 주체에 필요하다. public 이미지는 CloudFront OAC로 조회한다. 앱은 목록을 조회하지 않으므로 `ListBucket`은 부여하지 않는다. 두 버킷의 기본 암호화가 고객 관리 키를 사용하는 SSE-KMS라면 해당 키 ARN에 한정해 `kms:GenerateDataKey`, `kms:Decrypt` 권한도 추가한다. SSE-S3는 추가 권한이 필요 없다. 버킷 정책에 역할을 차단하는 Deny가 없는지, public 버킷 정책이 CloudFront OAC의 `GetObject`를 허용하는지 확인한다.
+
+로컬 관리자 자격 증명으로 역할의 IAM 권한을 시뮬레이션한다.
+
+```bash
+ROLE_ARN='arn:aws:iam::243919538384:role/vium-ec2-role'
+aws iam simulate-principal-policy --policy-source-arn "$ROLE_ARN" \
+  --action-names s3:PutObject s3:DeleteObject s3:GetObject \
+  --resource-arns arn:aws:s3:::vium-prod-private-243919538384/images/x arn:aws:s3:::some-other-bucket/images/x \
+  --query 'EvaluationResults[].[EvalActionName,EvalResourceName,EvalDecision]' --output table
+```
+
+운영 private 버킷은 3개 모두 `allowed`, 다른 버킷은 모두 `implicitDeny`여야 한다.
 
 ## 릴리스 이미지 빌드 — 로컬 또는 별도 빌드 머신
 
