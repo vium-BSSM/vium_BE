@@ -6,7 +6,6 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.MultipartException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -68,19 +67,20 @@ public class GlobalExceptionHandler {
 	}
 
 	@ExceptionHandler({NoResourceFoundException.class, NoHandlerFoundException.class})
-	public ResponseEntity<ApiResponse<Void>> handleNotFound(Exception e) {
-		return handleBusinessException(new BusinessException(ErrorCode.NOT_FOUND));
+	public ResponseEntity<ApiResponse<Void>> handleNotFound() {
+		ErrorCode errorCode = ErrorCode.NOT_FOUND;
+		return ResponseEntity.status(errorCode.getStatus()).body(failureBody(errorCode));
 	}
 
 	@ExceptionHandler(HttpRequestMethodNotSupportedException.class)
 	public ResponseEntity<ApiResponse<Void>> handleMethodNotSupported(HttpRequestMethodNotSupportedException e) {
 		ErrorCode errorCode = ErrorCode.METHOD_NOT_ALLOWED;
-		var headers = new HttpHeaders();
-		if (e.getSupportedHttpMethods() != null) {
-			headers.setAllow(e.getSupportedHttpMethods());
-		}
-		return ResponseEntity.status(errorCode.getStatus()).headers(headers)
-			.body(ApiResponse.fail(new ApiResponse.ErrorObject(errorCode.name(), errorCode.getDefaultMessage())));
+		return ResponseEntity.status(errorCode.getStatus()).headers(e.getHeaders())
+			.body(failureBody(errorCode));
+	}
+
+	private ApiResponse<Void> failureBody(ErrorCode errorCode) {
+		return ApiResponse.fail(new ApiResponse.ErrorObject(errorCode.name(), errorCode.getDefaultMessage()));
 	}
 
 	@ExceptionHandler(Exception.class)
