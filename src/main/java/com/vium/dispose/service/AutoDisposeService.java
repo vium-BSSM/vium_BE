@@ -10,6 +10,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
@@ -18,6 +19,7 @@ import org.springframework.stereotype.Service;
  * disposal.auto-dispose.enabled 값과 무관하게 항상 빈으로 존재해야 하므로
  * 활성화 여부에 대한 조건은 이 클래스가 아니라 {@link AutoDisposeScheduler}에 둔다.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AutoDisposeService {
@@ -53,12 +55,30 @@ public class AutoDisposeService {
 		LocalDateTime now = LocalDateTime.now(clock);
 
 		int processedCount = 0;
+		int skippedCount = 0;
+		int failedCount = 0;
 		for (AutoDisposeCandidate candidate : candidates) {
-			boolean disposed = itemProcessor.disposeOneItem(
-				candidate, activeStatusId, disposedStatusId, eventSourceId, now);
-			if (disposed) {
-				processedCount++;
+			try {
+				boolean disposed = itemProcessor.disposeOneItem(
+					candidate, activeStatusId, disposedStatusId, eventSourceId, now);
+				if (disposed) {
+					processedCount++;
+				} else {
+					skippedCount++;
+				}
+			} catch (Exception e) {
+				failedCount++;
+				log.error("자동 폐기 처리 실패: inventoryItemId={}, userId={}",
+					candidate.inventoryItemId(), candidate.userId(), e);
 			}
+		}
+
+		String summary = String.format(
+			"자동 폐기 배치 완료: 처리 %d건, 스킵 %d건, 실패 %d건", processedCount, skippedCount, failedCount);
+		if (failedCount > 0) {
+			log.warn(summary);
+		} else {
+			log.info(summary);
 		}
 
 		return processedCount;

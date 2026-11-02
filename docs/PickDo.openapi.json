@@ -16,7 +16,8 @@
       "name": "logic"
     },
     {
-      "name": "dispose"
+      "name": "dispose",
+      "description": "소진·폐기 이벤트 및 자동 폐기 배치. 자동 폐기(disposeExpiredItems)는 내부 스케줄러(cron, disposal.auto-dispose.*)로만 실행되며 별도의 HTTP 엔드포인트가 없습니다."
     },
     {
       "name": "Recipe"
@@ -698,6 +699,75 @@
         "description": "",
         "tags": [],
         "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "quantity",
+                  "unitId"
+                ],
+                "properties": {
+                  "ingredientCatalogId": {
+                    "type": "integer",
+                    "format": "int64",
+                    "nullable": true,
+                    "description": "식재료 카탈로그 ID. customName과 둘 중 하나는 필수."
+                  },
+                  "customName": {
+                    "type": "string",
+                    "maxLength": 120,
+                    "nullable": true,
+                    "description": "사용자 지정 재료명(공백 제거 후 저장). ingredientCatalogId와 둘 중 하나는 필수."
+                  },
+                  "quantity": {
+                    "type": "number",
+                    "minimum": 0.001,
+                    "description": "등록 수량. 0.001 이상, 정수부 최대 9자리, 소수부 최대 3자리."
+                  },
+                  "unitId": {
+                    "type": "integer",
+                    "description": "존재하는 unitId (units 코드 테이블 참고. 예: 1=개, 2=g, 3=kg, 4=ml, 5=L, 6=팩, 7=봉, 8=병, 9=캔, 10=통)"
+                  },
+                  "storageMethodId": {
+                    "type": "integer",
+                    "nullable": true,
+                    "description": "존재하는 storageMethodId (1=냉장, 2=냉동, 3=실온). 생략 가능."
+                  },
+                  "purchasedOn": {
+                    "type": "string",
+                    "format": "date",
+                    "nullable": true,
+                    "description": "구매일. 오늘이거나 그 이전이어야 함. 생략 시 오늘 날짜."
+                  },
+                  "expiresOn": {
+                    "type": "string",
+                    "format": "date",
+                    "nullable": true,
+                    "description": "소비기한. 생략 시 expiry_estimation_rules로 자동 추정. purchasedOn보다 빠를 수 없음."
+                  },
+                  "amount": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "nullable": true,
+                    "description": "구매 금액(원). 생략 가능."
+                  }
+                }
+              },
+              "example": {
+                "ingredientCatalogId": 5,
+                "customName": null,
+                "quantity": 1000,
+                "unitId": 4,
+                "storageMethodId": 1,
+                "purchasedOn": "2026-08-20",
+                "expiresOn": null,
+                "amount": 3200
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "",
@@ -800,6 +870,44 @@
               }
             },
             "headers": {}
+          },
+          "400": {
+            "description": "필수 필드 누락/형식 오류, 존재하지 않는 unitId·storageMethodId, ingredientCatalogId·customName 둘 다 없음, expiresOn이 purchasedOn보다 빠름",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "INVALID_REQUEST",
+                    "message": "ingredientCatalogId 또는 customName 중 하나는 필요합니다"
+                  }
+                }
+              }
+            },
+            "headers": {}
+          },
+          "404": {
+            "description": "존재하지 않는 ingredientCatalogId",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "NOT_FOUND",
+                    "message": "존재하지 않는 ingredientCatalogId 입니다"
+                  }
+                }
+              }
+            },
+            "headers": {}
           }
         },
         "security": [
@@ -811,7 +919,7 @@
       "get": {
         "summary": "식재료 조회",
         "deprecated": false,
-        "description": "목록은 inventoryItemId, name, expiresOn, remainingQuantity, storageMethodId, storageMethodName만 반환한다. 나머지 필드는 상세 조회(GET /api/me/ingredients/{ingredientId})에서 확인한다.",
+        "description": "목록은 inventoryItemId, name, expiresOn, remainingQuantity, unitId, unit, storageMethodId, storageMethodName만 반환한다. 나머지 필드는 상세 조회(GET /api/me/ingredients/{ingredientId})에서 확인한다.",
         "tags": [],
         "parameters": [
           {
@@ -856,6 +964,14 @@
                               "remainingQuantity": {
                                 "type": "number"
                               },
+                              "unitId": {
+                                "type": "integer",
+                                "description": "고정 단위 ID: 1=개, 2=g, 3=kg, 4=ml, 5=L, 6=팩, 7=봉, 8=병, 9=캔, 10=통."
+                              },
+                              "unit": {
+                                "type": "string",
+                                "description": "단위 텍스트"
+                              },
                               "storageMethodId": {
                                 "type": "integer",
                                 "nullable": true,
@@ -893,6 +1009,8 @@
                         "name": "우유",
                         "expiresOn": "2026-08-20",
                         "remainingQuantity": 1,
+                        "unitId": 1,
+                        "unit": "개",
                         "storageMethodId": 1,
                         "storageMethodName": "냉장"
                       }
@@ -1495,60 +1613,6 @@
         "security": []
       }
     },
-    "/api/ingredients/auto-dispose": {
-      "post": {
-        "summary": "식재료 자동 폐기",
-        "deprecated": false,
-        "description": "내부 배치 스케줄러, 클라이언트 직접 호출 없음",
-        "tags": [],
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "disposedCount": {
-                          "type": "integer"
-                        }
-                      },
-                      "required": [
-                        "disposedCount"
-                      ]
-                    },
-                    "error": {
-                      "type": "null"
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data",
-                    "error"
-                  ]
-                },
-                "example": {
-                  "success": true,
-                  "data": {
-                    "disposedCount": 3
-                  },
-                  "error": null
-                }
-              }
-            },
-            "headers": {}
-          }
-        },
-        "security": []
-      }
-    },
     "/api/me/waste-reports": {
       "get": {
         "summary": "폐기량 리포트 조회",
@@ -1589,6 +1653,49 @@
                               },
                               "totalSavedAmount": {
                                 "type": "integer"
+                              },
+                              "registeredCount": {
+                                "type": "integer",
+                                "description": "해당 월에 소진 또는 폐기로 종결된 재고 건수(= consumedCount + expiredCount)"
+                              },
+                              "consumedCount": {
+                                "type": "integer",
+                                "description": "해당 월에 소진(consumed)으로 종결된 재고 건수. registeredCount - expiredCount"
+                              },
+                              "expiredCount": {
+                                "type": "integer",
+                                "description": "해당 월에 폐기(disposed)로 종결된 재고 건수"
+                              },
+                              "topWastedItems": {
+                                "type": "array",
+                                "description": "해당 월 폐기 금액 상위 재료 최대 3개(금액 내림차순, 동률이면 재고 ID 오름차순). 폐기 금액이 없거나 0 이하인 재료는 제외.",
+                                "maxItems": 3,
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "rank": {
+                                      "type": "integer",
+                                      "description": "1부터 시작하는 순위"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    },
+                                    "lossAmount": {
+                                      "type": "integer",
+                                      "description": "폐기 금액 합계(원)"
+                                    },
+                                    "purchaseAmount": {
+                                      "type": "integer",
+                                      "nullable": true,
+                                      "description": "구매 금액(원). 재고에 금액이 없으면 null"
+                                    },
+                                    "wasteRatio": {
+                                      "type": "number",
+                                      "nullable": true,
+                                      "description": "lossAmount / purchaseAmount, 소수 4자리(0~1 범위 비율, 퍼센트 아님). purchaseAmount가 null이거나 0 이하면 null"
+                                    }
+                                  }
+                                }
                               }
                             }
                           }
@@ -1617,7 +1724,19 @@
                         "periodStart": "2026-07-01",
                         "periodEnd": "2026-07-31",
                         "totalWastedAmount": 15000,
-                        "totalSavedAmount": 42000
+                        "totalSavedAmount": 42000,
+                        "registeredCount": 12,
+                        "consumedCount": 9,
+                        "expiredCount": 3,
+                        "topWastedItems": [
+                          {
+                            "rank": 1,
+                            "name": "상추",
+                            "lossAmount": 4000,
+                            "purchaseAmount": 5000,
+                            "wasteRatio": 0.8
+                          }
+                        ]
                       }
                     ]
                   },
@@ -1840,6 +1959,25 @@
               }
             },
             "headers": {}
+          },
+          "400": {
+            "description": "eventType이 consumed/disposed가 아님",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "INVALID_REQUEST",
+                    "message": "eventType must be 'consumed' or 'disposed'"
+                  }
+                }
+              }
+            },
+            "headers": {}
           }
         },
         "security": []
@@ -1849,7 +1987,7 @@
       "get": {
         "summary": "레시피 상세",
         "deprecated": false,
-        "description": "추천받은 레시피의 상세 정보.\n\n- 재료별 inventoryId: 같은 재료의 active 재고 중 소비기한이 가장 빠른 것. 보유하지 않으면 null (사용량 조사 슬라이더에서 제외).\n- imageUrl이 null이면 기본 회색 박스를 표시합니다.\n- 추천받지 않은 레시피는 404입니다.",
+        "description": "추천받은 레시피의 상세 정보.\n\n- 재료별 inventoryId: 같은 재료의 active 재고 중 소비기한이 가장 빠른 것. 보유하지 않으면 null (사용량 조사 슬라이더에서 제외).\n- remainingQuantity, unit: inventoryId가 있는 재료에만 값이 있고, 없으면 null입니다. 값은 GET /api/me/ingredients의 같은 재고 값과 같습니다.\n- imageUrl이 null이면 기본 회색 박스를 표시합니다.\n- 추천받지 않은 레시피는 404입니다.",
         "operationId": "getRecipeDetail",
         "tags": [
           "Recipe"
@@ -1899,17 +2037,23 @@
                       {
                         "ingredientCatalogId": 3,
                         "inventoryId": 21,
-                        "name": "당근"
+                        "name": "당근",
+                        "remainingQuantity": 3,
+                        "unit": "개"
                       },
                       {
                         "ingredientCatalogId": 7,
                         "inventoryId": 22,
-                        "name": "감자"
+                        "name": "감자",
+                        "remainingQuantity": 500,
+                        "unit": "g"
                       },
                       {
                         "ingredientCatalogId": 11,
                         "inventoryId": null,
-                        "name": "파스타면"
+                        "name": "파스타면",
+                        "remainingQuantity": null,
+                        "unit": null
                       }
                     ],
                     "steps": [
@@ -1949,7 +2093,7 @@
       "post": {
         "summary": "요리 완료 (재료 사용량 반영)",
         "deprecated": false,
-        "description": "사용량 조사 화면의 슬라이더 값을 재고에 반영합니다.\n\n- usageRate: 현재 남은 양의 몇 %를 썼는지 (0~100 정수)\n- 0 → 변경 없음 / 계산 후 남은 양 > 0 → 남은 양만 차감 / 남은 양 ≤ 0 (100% 포함) → 소진(consumed) 처리\n- wasteQuantity: 사용량과 별개로 조리 중 추가로 버린 수량(선택). 0보다 크면 사용분(consumed)·폐기분(disposed) 이벤트를 각각 기록하고, usedQuantity/usageRate 사용량과 wasteQuantity의 합만큼 재고에서 차감합니다. 합이 남은 수량을 초과하면 400입니다. 차감 후 남은 수량이 0이 되면 상태는 consumed로 종료됩니다.\n- inventoryId는 레시피 재료가 아니어도 됩니다 (재료 추가 화면에서 고른 재료 포함).\n- 하나라도 실패하면 아무것도 차감하지 않습니다.\n- 중복 차감 방지를 위해 요청 중에는 완료 버튼을 비활성화해 주세요.",
+        "description": "사용량 조사 화면의 슬라이더 값을 재고에 반영합니다.\n\n- usageRate: 현재 남은 양의 몇 %를 썼는지 (0~100 정수). usedQuantity/usageRate로 계산된 사용량이 재고에서 차감되는 전체 양입니다.\n- 0 → 변경 없음 / 계산 후 남은 양 > 0 → 남은 양만 차감 / 남은 양 ≤ 0 (100% 포함) → 종료 처리\n- wasteQuantity: usedQuantity 중 버린 양(일반 폐기와 동일한 규칙, 선택, 기본 0). usedQuantity를 초과할 수 없으며 초과하면 400입니다. 0보다 크면 사용분(consumed, usedQuantity - wasteQuantity)과 폐기분(disposed, wasteQuantity) 이벤트를 각각 기록합니다(둘 다 0보다 클 때만). 차감 후 남은 수량이 0이 되면, 전부 폐기(wasteQuantity == usedQuantity)면 disposed로, 아니면 consumed로 종료됩니다.\n- wasteAmount: 폐기분 금액(선택, 원 단위 정수). 지정하면 폐기 이벤트 금액으로 그대로 쓰고, 없으면 일반 폐기와 동일하게 비례 계산합니다.\n- inventoryId는 레시피 재료가 아니어도 됩니다 (재료 추가 화면에서 고른 재료 포함).\n- 하나라도 실패하면 아무것도 차감하지 않습니다.\n- 중복 차감 방지를 위해 요청 중에는 완료 버튼을 비활성화해 주세요.",
         "operationId": "completeRecipe",
         "tags": [
           "Recipe"
@@ -1985,7 +2129,7 @@
                   },
                   {
                     "inventoryId": 57,
-                    "usageRate": 30,
+                    "usedQuantity": 30,
                     "wasteQuantity": 20
                   }
                 ]
@@ -4280,7 +4424,9 @@
         "required": [
           "ingredientCatalogId",
           "inventoryId",
-          "name"
+          "name",
+          "remainingQuantity",
+          "unit"
         ],
         "properties": {
           "ingredientCatalogId": {
@@ -4295,6 +4441,16 @@
           },
           "name": {
             "type": "string"
+          },
+          "remainingQuantity": {
+            "type": "number",
+            "description": "해당 재고의 현재 남은 수량. inventoryId가 null이면 null. GET /api/me/ingredients의 remainingQuantity와 같은 값",
+            "nullable": true
+          },
+          "unit": {
+            "type": "string",
+            "description": "재고 단위 이름 (예: 개, g, ml). inventoryId가 null이면 null. GET /api/me/ingredients의 unit과 같은 값",
+            "nullable": true
           }
         }
       },
@@ -4362,8 +4518,7 @@
       "RecipeUsage": {
         "type": "object",
         "required": [
-          "inventoryId",
-          "usageRate"
+          "inventoryId"
         ],
         "properties": {
           "inventoryId": {
@@ -4375,13 +4530,26 @@
             "type": "integer",
             "minimum": 0,
             "maximum": 100,
-            "description": "현재 남은 양 중 사용한 비율(%)"
+            "nullable": true,
+            "description": "현재 남은 양 중 사용한 비율(%). usedQuantity와 함께 보낼 수 없고 둘 중 하나는 필수입니다."
+          },
+          "usedQuantity": {
+            "type": "number",
+            "minimum": 0,
+            "nullable": true,
+            "description": "사용한 수량(선택, 소수 3자리까지). usageRate와 함께 보낼 수 없고 둘 중 하나는 필수이며, 남은 수량을 초과할 수 없습니다."
           },
           "wasteQuantity": {
             "type": "number",
             "minimum": 0,
             "nullable": true,
-            "description": "사용량과는 별개로 조리 중 버린 수량(선택, 소수 3자리까지). usageRate로 계산한 사용량에 더해 재고에서 차감되며, 합이 남은 수량을 초과하면 400입니다. 0보다 크면 사용분은 consumed, 폐기분은 disposed 이벤트로 각각 기록됩니다."
+            "description": "usedQuantity 중 버린 양(일반 폐기와 동일한 규칙, 선택, 기본 0, 소수 3자리까지). usedQuantity를 초과할 수 없으며 초과하면 400입니다. 0보다 크면 사용분은 consumed(usedQuantity - wasteQuantity), 폐기분은 disposed(wasteQuantity) 이벤트로 각각 기록됩니다(둘 다 0보다 클 때만)."
+          },
+          "wasteAmount": {
+            "type": "integer",
+            "minimum": 0,
+            "nullable": true,
+            "description": "폐기분 금액(선택, 원 단위 정수). 지정하면 폐기 이벤트 금액으로 그대로 쓰고, 없으면 비례 계산합니다."
           }
         }
       },

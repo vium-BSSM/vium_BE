@@ -74,20 +74,18 @@ public class RecipeCompletionService {
 
 			BigDecimal wasteQuantity = usage.wasteQuantity() != null ? usage.wasteQuantity() : BigDecimal.ZERO;
 
+			// wasteQuantity는 usedQuantity 중 버린 양이다(일반 폐기와 동일한 규칙) → usedQuantity를 초과할 수 없다.
+			if (wasteQuantity.compareTo(usedQuantity) > 0) {
+				throw new InvalidRequestException("wasteQuantity는 usedQuantity를 초과할 수 없습니다.");
+			}
+
 			if (usedQuantity.signum() == 0 && wasteQuantity.signum() == 0) {
 				// 사용·폐기 없음 → 변경 없음
 				continue;
 			}
 
-			BigDecimal totalDeduction = usedQuantity.add(wasteQuantity);
-			if (totalDeduction.compareTo(item.getRemainingQuantity()) > 0) {
-				throw new InvalidRequestException("usedQuantity와 wasteQuantity의 합은 남은 수량을 초과할 수 없습니다.");
-			}
-
 			// 폐기량 입력 여부와 무관하게 항상 DisposeService를 거쳐 소진 이벤트를 남긴다.
-			BigDecimal newRemainingQuantity = item.getRemainingQuantity().subtract(totalDeduction);
-			boolean terminal = newRemainingQuantity.compareTo(BigDecimal.ZERO) <= 0;
-			disposeService.recordRecipeUsage(userId, item.getId(), usedQuantity, wasteQuantity, terminal);
+			disposeService.recordRecipeUsage(userId, item.getId(), usedQuantity, wasteQuantity, usage.wasteAmount());
 		}
 	}
 
