@@ -28,6 +28,8 @@ RDS URL의 `sslmode=verify-full`은 인증서와 호스트를 검증한다. 인�
 
 `CORS_ALLOWED_ORIGINS`에는 실제 프론트 주소를 쉼표로 구분해 입력한다. 예: `https://app.example.com,https://www.example.com`. 경로·끝 슬래시·와일드카드는 넣지 않는다. 비워 두면 교차 출처 요청을 허용하지 않는다. 현재 인증은 Bearer 헤더 방식이므로 쿠키 credentials는 허용하지 않는다. 로컬 프론트 연동에는 로컬 환경변수로 별도 주소를 설정한다. 빈 값에서도 앱 기동은 정상이며, 다른 도메인의 웹 프론트를 연결할 때 반드시 허용 주소를 설정하고 preflight를 확인한다.
 
+`DISPOSAL_AUTO_DISPOSE_ENABLED=true`로 설정하면 매일 00:10(Asia/Seoul)에 소비기한이 지난 미처리 재료를 자동 폐기 추정 처리한다. 기본값은 false이며, 운영 `.env.prod`에서 활성화해야 낭비 리포트·장보기 도우미 데이터가 쌓인다. 활성 여부는 기동 로그 `자동 폐기 스케줄러 활성화`로, 실행 결과는 `자동 폐기 배치 완료: 처리 N건, 스킵 N건, 실패 N건` 로그로 확인한다.
+
 `OTLP_METRICS_ENABLED`, `OTLP_METRICS_URL`, `OTLP_METRICS_AUTHORIZATION`는 선택 사항이며 Grafana Cloud 메트릭 전송은 기본 비활성이다. 활성화·대시보드·알림 절차는 [운영 모니터링](monitoring.md)을 따른다.
 
 ## 릴리스 이미지 빌드 — 로컬 또는 별도 빌드 머신

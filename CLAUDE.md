@@ -61,6 +61,7 @@
 3. **소진/폐기 처리 (핵심)** — `PATCH /api/me/ingredients/{ingredientId}/status`
     - status를 consumed/disposed로 바꿀 때 **consumption_events에 이벤트 1건 자동 적재**.
     - disposed면 wasteQuantity/wasteAmount를 함께 이벤트에 기록.
+    - 자동 폐기 배치는 `DISPOSAL_AUTO_DISPOSE_ENABLED`로 켜며 운영 `.env.prod`에서 활성화한다.
 4. **낭비 집계/패턴** — `GET /api/me/waste-patterns`, `GET /api/me/waste-reports`
     - `waste_reports` 같은 별도 테이블에 미리 만들어두지 않고, `consumption_events`를 기간·카테고리별로
       **요청 시점에 집계**해서 반환한다. 자주 버리는 위험 품목도 이 집계에서 자동 발견.

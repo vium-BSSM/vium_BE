@@ -1,6 +1,8 @@
 package com.vium.dispose.service;
 
-import lombok.RequiredArgsConstructor;
+import jakarta.annotation.PostConstruct;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -13,10 +15,25 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @ConditionalOnProperty(name = "disposal.auto-dispose.enabled", havingValue = "true", matchIfMissing = false)
-@RequiredArgsConstructor
+@Slf4j
 public class AutoDisposeScheduler {
 
 	private final AutoDisposeService autoDisposeService;
+	private final String cron;
+	private final String timeZone;
+
+	public AutoDisposeScheduler(AutoDisposeService autoDisposeService,
+		@Value("${disposal.auto-dispose.cron:0 10 0 * * *}") String cron,
+		@Value("${disposal.auto-dispose.time-zone:Asia/Seoul}") String timeZone) {
+		this.autoDisposeService = autoDisposeService;
+		this.cron = cron;
+		this.timeZone = timeZone;
+	}
+
+	@PostConstruct
+	void logActivation() {
+		log.info("자동 폐기 스케줄러 활성화: cron={}, zone={}", cron, timeZone);
+	}
 
 	@Scheduled(cron = "${disposal.auto-dispose.cron:0 10 0 * * *}", zone = "${disposal.auto-dispose.time-zone:Asia/Seoul}")
 	public void run() {
