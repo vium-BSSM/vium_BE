@@ -1,5 +1,4 @@
 from pathlib import Path
-import re
 import unittest
 
 
@@ -15,18 +14,24 @@ REQUIRED_KEYS = (
 class ComposeTests(unittest.TestCase):
     def test_production_app_passes_required_environment_variables(self):
         compose = (ROOT / "compose.prod.yml").read_text(encoding="utf-8")
-        app = re.search(r"^  app:\n(?:(?:^ {4,}.*|^\s*)\n)*", compose, re.MULTILINE)
-        self.assertIsNotNone(app, "compose.prod.yml is missing app")
-        environment = re.search(
-            r"^    environment:\n((?:^ {6,}.*\n)*)", app.group(), re.MULTILINE
-        )
-        self.assertIsNotNone(environment, "app is missing environment")
-        for key in REQUIRED_KEYS:
-            with self.subTest(key=key):
-                self.assertRegex(
-                    environment.group(1), rf"(?m)^\s{{6}}{key}:",
-                    f"app.environment is missing {key}",
-                )
+        path = []
+        keys = set()
+        for line in compose.splitlines():
+            stripped = line.lstrip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            indent = len(line) - len(stripped)
+            while path and path[-1][0] >= indent:
+                path.pop()
+            key, separator, value = stripped.partition(":")
+            if not separator:
+                continue
+            if [entry[1] for entry in path] == ["services", "app", "environment"]:
+                keys.add(key)
+            if not value.strip():
+                path.append((indent, key))
+        self.assertFalse(set(REQUIRED_KEYS) - keys,
+                         f"app.environment is missing {sorted(set(REQUIRED_KEYS) - keys)}")
 
     def test_production_env_example_documents_required_variables(self):
         example = (ROOT / ".env.prod.example").read_text(encoding="utf-8")
