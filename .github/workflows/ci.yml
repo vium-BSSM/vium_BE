@@ -90,7 +90,6 @@ jobs:
           export JWT_SECRET
           java -jar build/libs/app.jar > "$RUNNER_TEMP/app.log" 2>&1 &
           pid=$!
-          echo "$pid" > "$RUNNER_TEMP/app.pid"
           deadline=$((SECONDS + 180))
           while (( SECONDS < deadline )); do
             if ! kill -0 "$pid" 2>/dev/null; then
@@ -113,9 +112,9 @@ jobs:
         run: |
           set -euo pipefail
           latest=$(python3 -c 'import pathlib,re; print(max(int(m.group(1)) for p in pathlib.Path("src/main/resources/db/migration").iterdir() if (m := re.fullmatch(r"V(\d+)__.*\.sql", p.name))))')
-          failed=$(docker exec "$POSTGRES_CONTAINER" psql -U vium -d vium -v ON_ERROR_STOP=1 -tAc 'select count(*) from flyway_schema_history where not success')
-          applied=$(docker exec "$POSTGRES_CONTAINER" psql -U vium -d vium -v ON_ERROR_STOP=1 -tAc 'select max(version::int) from flyway_schema_history where version is not null')
-          repeatable=$(docker exec "$POSTGRES_CONTAINER" psql -U vium -d vium -v ON_ERROR_STOP=1 -tAc "select count(*) from flyway_schema_history where script like 'R\_\_%'")
+          history=$(docker exec "$POSTGRES_CONTAINER" psql -U vium -d vium -tA -F ' ' -v ON_ERROR_STOP=1 -c \
+            "select count(*) filter (where not success), max(version::int), count(*) filter (where script like 'R\_\_%') from flyway_schema_history")
+          read -r failed applied repeatable <<< "$history"
           echo "Flyway: failed=$failed, latest=$applied (expected $latest), repeatable=$repeatable"
           test "$failed" = 0
           test "$applied" = "$latest"
@@ -127,17 +126,3 @@ jobs:
           if [ -f "$RUNNER_TEMP/app.log" ]; then
             tail -n 200 "$RUNNER_TEMP/app.log"
           fi
-
-      - name: Stop app
-        if: always()
-        run: |
-          (
-            if [ -f "$RUNNER_TEMP/app.pid" ]; then
-              pid=$(cat "$RUNNER_TEMP/app.pid")
-              kill -TERM "$pid" 2>/dev/null || true
-              deadline=$((SECONDS + 40))
-              while kill -0 "$pid" 2>/dev/null && (( SECONDS < deadline )); do
-                sleep 1
-              done
-            fi
-          ) || true
