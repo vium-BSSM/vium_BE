@@ -266,7 +266,7 @@ com.vium
 - confirm 시 `purchaseSourceId`를 보내지 않으면 null로 저장되므로, 앱은 확인 화면의 구매처를 항상 함께 보낸다.
 - 온라인 주문은 상품명과 가격 사이 배송 배지를 건너뛰고, 가격 줄에 함께 있는 배송 배지·수량도 처리한다. 배송비·쿠폰·적립 금액은 품목 가격에서 제외한다.
 - 현재 취소 표시는 직전 상품을 제외한다. 상품 위에 상태가 표시되는 실제 앱 사례는 아직 반영하지 않았으며 실제 인식 결과로 규칙을 조정해야 한다.
-- 파서 픽스처는 수작업 예시다. 전체 검증 명령은 `TZ=UTC ./gradlew clean test`이며 API·동시성 테스트는 H2 기반이다. 리뷰에서 실제 PostgreSQL 16에 V1~V8 Flyway 적용, 운영과 같은 `ddl-auto: validate` 설정으로 앱 기동, scan→confirm→조회→삭제 및 동시 확정 API 직접 호출까지 확인 완료했다. 남은 검증은 실제 앱 OCR 결과를 통한 파서 정확도 확인이다.
+- 파서 픽스처는 수작업 예시다. 전체 검증 명령은 `TZ=UTC ./gradlew clean test`이며 API·동시성 테스트는 H2 기반이다. PR CI의 `PostgreSQL migration check`가 PostgreSQL 16 빈 DB에 Flyway 적용과 prod 기동을 검증한다. 리뷰에서 실제 PostgreSQL 16에 V1~V8 Flyway 적용, 운영과 같은 `ddl-auto: validate` 설정으로 앱 기동, scan→confirm→조회→삭제 및 동시 확정 API 직접 호출까지 확인 완료했다. 남은 검증은 실제 앱 OCR 결과를 통한 파서 정확도 확인이다.
 
 ## 12. 재료 카탈로그·소비기한 시드 (#87)
 

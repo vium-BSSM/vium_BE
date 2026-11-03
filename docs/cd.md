@@ -179,5 +179,6 @@ printf "Bootstrap files present\n"
 5. 같은 main에서 수동 재실행해 불변 태그 재사용을 확인한다.
 
 로컬 문법/모의 테스트는 실제 IAM, ECR, SSM, RDS 연결을 검증하지 않는다.
-현재 애플리케이션 테스트는 H2 기반이며 PostgreSQL Flyway 사전 검증 job은
-별도 후속 작업이다.
+애플리케이션 테스트는 H2 기반이다. PostgreSQL Flyway·`ddl-auto: validate` 사전 검증은
+PR CI의 `PostgreSQL migration check`가 빈 DB 기준으로 수행한다([CI 안내](ci.md)).
+CD 자체는 이 검사를 다시 실행하지 않는다.

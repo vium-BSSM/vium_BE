@@ -41,3 +41,103 @@ jobs:
         run: |
           python3 -m unittest discover -s scripts/catalog -p 'test_*.py'
           python3 scripts/catalog/build_seed.py --check
+
+  postgres-migration:
+    name: PostgreSQL migration check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: vium
+          POSTGRES_USER: vium
+          POSTGRES_PASSWORD: vium-ci # Ephemeral CI container only.
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U vium -d vium"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Java 21
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Build application jar
+        run: ./gradlew --no-daemon bootJar
+
+      - name: Start app on PostgreSQL with prod profile
+        env:
+          SPRING_PROFILES_ACTIVE: prod
+          DEPLOY_ENV: ci
+          DB_URL: jdbc:postgresql://localhost:5432/vium
+          DB_USERNAME: vium
+          DB_PASSWORD: vium-ci
+          GEMINI_API_KEY: ci-unused
+          UNSPLASH_ACCESS_KEY: ci-unused
+          JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Seoul
+        run: |
+          set -euo pipefail
+          JWT_SECRET="$(openssl rand -base64 32)"
+          export JWT_SECRET
+          java -jar build/libs/app.jar > "$RUNNER_TEMP/app.log" 2>&1 &
+          pid=$!
+          echo "$pid" > "$RUNNER_TEMP/app.pid"
+          deadline=$((SECONDS + 180))
+          while (( SECONDS < deadline )); do
+            if ! kill -0 "$pid" 2>/dev/null; then
+              echo "Application exited before becoming healthy" >&2
+              exit 1
+            fi
+            if curl --silent --max-time 5 http://127.0.0.1:8080/actuator/health |
+              python3 -c 'import json,sys; sys.exit(0 if json.load(sys.stdin).get("status") == "UP" else 1)' 2>/dev/null; then
+              echo "Application health is UP"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Application did not become healthy within 180 seconds" >&2
+          exit 1
+
+      - name: Check Flyway history
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          set -euo pipefail
+          latest=$(python3 -c 'import pathlib,re; print(max(int(m.group(1)) for p in pathlib.Path("src/main/resources/db/migration").iterdir() if (m := re.fullmatch(r"V(\d+)__.*\.sql", p.name))))')
+          failed=$(docker exec "$POSTGRES_CONTAINER" psql -U vium -d vium -v ON_ERROR_STOP=1 -tAc 'select count(*) from flyway_schema_history where not success')
+          applied=$(docker exec "$POSTGRES_CONTAINER" psql -U vium -d vium -v ON_ERROR_STOP=1 -tAc 'select max(version::int) from flyway_schema_history where version is not null')
+          repeatable=$(docker exec "$POSTGRES_CONTAINER" psql -U vium -d vium -v ON_ERROR_STOP=1 -tAc "select count(*) from flyway_schema_history where script like 'R\_\_%'")
+          echo "Flyway: failed=$failed, latest=$applied (expected $latest), repeatable=$repeatable"
+          test "$failed" = 0
+          test "$applied" = "$latest"
+          test "$repeatable" = 0
+
+      - name: Show app log
+        if: failure()
+        run: |
+          if [ -f "$RUNNER_TEMP/app.log" ]; then
+            tail -n 200 "$RUNNER_TEMP/app.log"
+          fi
+
+      - name: Stop app
+        if: always()
+        run: |
+          (
+            if [ -f "$RUNNER_TEMP/app.pid" ]; then
+              pid=$(cat "$RUNNER_TEMP/app.pid")
+              kill -TERM "$pid" 2>/dev/null || true
+              deadline=$((SECONDS + 40))
+              while kill -0 "$pid" 2>/dev/null && (( SECONDS < deadline )); do
+                sleep 1
+              done
+            fi
+          ) || true
