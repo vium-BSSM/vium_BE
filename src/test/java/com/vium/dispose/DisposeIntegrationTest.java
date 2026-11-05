@@ -558,6 +558,68 @@ class DisposeIntegrationTest {
 	}
 
 	@Test
+	void getWastePatternsEndpoint_DisposedWithoutAmount() throws Exception {
+		mockMvc.perform(patch("/api/me/ingredients/100/status")
+				.header("Authorization", "Bearer " + tokenService.issue(42L).accessToken())
+				.contentType(MediaType.APPLICATION_JSON).content("""
+				{"status":"disposed","quantity":2}
+				"""))
+			.andExpect(status().isOk());
+
+		mockMvc.perform(get("/api/me/waste-patterns")
+				.header("Authorization", "Bearer " + tokenService.issue(42L).accessToken()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.success").value(true))
+			.andExpect(jsonPath("$.data.patterns.length()").value(1))
+			.andExpect(jsonPath("$.data.patterns[0].categoryId").doesNotExist())
+			.andExpect(jsonPath("$.data.patterns[0].wasteCount").value(1))
+			.andExpect(jsonPath("$.data.patterns[0].totalWastedAmount").value(0))
+			.andExpect(jsonPath("$.data.patterns[0].wasteRatio").value(0.0));
+	}
+
+	@Test
+	void getWastePatternsEndpoint_DisposedWithZeroAmount() throws Exception {
+		jdbcTemplate.update("update inventory_items set amount = 0 where id = 100");
+		mockMvc.perform(patch("/api/me/ingredients/100/status")
+				.header("Authorization", "Bearer " + tokenService.issue(42L).accessToken())
+				.contentType(MediaType.APPLICATION_JSON).content("""
+				{"status":"disposed","quantity":2}
+				"""))
+			.andExpect(status().isOk());
+
+		mockMvc.perform(get("/api/me/waste-patterns")
+				.header("Authorization", "Bearer " + tokenService.issue(42L).accessToken()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.success").value(true))
+			.andExpect(jsonPath("$.data.patterns.length()").value(1))
+			.andExpect(jsonPath("$.data.patterns[0].categoryId").doesNotExist())
+			.andExpect(jsonPath("$.data.patterns[0].wasteCount").value(1))
+			.andExpect(jsonPath("$.data.patterns[0].totalWastedAmount").value(0))
+			.andExpect(jsonPath("$.data.patterns[0].wasteRatio").value(0.0));
+	}
+
+	@Test
+	void getWastePatternsEndpoint_DisposedWithZeroWasteAmount() throws Exception {
+		jdbcTemplate.update("update inventory_items set amount = 3000 where id = 100");
+		mockMvc.perform(patch("/api/me/ingredients/100/status")
+				.header("Authorization", "Bearer " + tokenService.issue(42L).accessToken())
+				.contentType(MediaType.APPLICATION_JSON).content("""
+				{"status":"disposed","quantity":2,"wasteAmount":0}
+				"""))
+			.andExpect(status().isOk());
+
+		mockMvc.perform(get("/api/me/waste-patterns")
+				.header("Authorization", "Bearer " + tokenService.issue(42L).accessToken()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.success").value(true))
+			.andExpect(jsonPath("$.data.patterns.length()").value(1))
+			.andExpect(jsonPath("$.data.patterns[0].categoryId").doesNotExist())
+			.andExpect(jsonPath("$.data.patterns[0].wasteCount").value(1))
+			.andExpect(jsonPath("$.data.patterns[0].totalWastedAmount").value(0))
+			.andExpect(jsonPath("$.data.patterns[0].wasteRatio").value(0.0));
+	}
+
+	@Test
 	void getWastePatternsEndpoint_Unauthorized() throws Exception {
 		mockMvc.perform(get("/api/me/waste-patterns"))
 			.andExpect(status().isUnauthorized())
