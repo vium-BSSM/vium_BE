@@ -2033,40 +2033,78 @@
                     "category": "WESTERN",
                     "cookTime": 20,
                     "imageUrl": "https://images.unsplash.com/photo-xxxx?w=1080",
+                    "detailReady": true,
                     "ingredients": [
                       {
                         "ingredientCatalogId": 3,
                         "inventoryId": 21,
                         "name": "당근",
                         "remainingQuantity": 3,
-                        "unit": "개"
+                        "unit": "개",
+                        "amount": "1개"
                       },
                       {
                         "ingredientCatalogId": 7,
                         "inventoryId": 22,
                         "name": "감자",
                         "remainingQuantity": 500,
-                        "unit": "g"
+                        "unit": "g",
+                        "amount": "200g"
                       },
                       {
                         "ingredientCatalogId": 11,
                         "inventoryId": null,
                         "name": "파스타면",
                         "remainingQuantity": null,
-                        "unit": null
+                        "unit": null,
+                        "amount": "200g"
+                      },
+                      {
+                        "ingredientCatalogId": 5,
+                        "inventoryId": null,
+                        "name": "무지방 우유",
+                        "remainingQuantity": null,
+                        "unit": null,
+                        "amount": "200ml"
+                      }
+                    ],
+                    "seasonings": [
+                      {
+                        "name": "버터",
+                        "amount": "10g"
+                      },
+                      {
+                        "name": "소금",
+                        "amount": "1/2작은술"
+                      },
+                      {
+                        "name": "후추",
+                        "amount": "약간"
                       }
                     ],
                     "steps": [
                       {
                         "step": 1,
-                        "description": "끓는 물에 면을 넣어 삶아주세요!"
+                        "description": "끓는 물에 소금 1/2작은술을 넣고 파스타면 200g을 8분간 삶아주세요"
                       },
                       {
                         "step": 2,
-                        "description": "면을 건져내고 다른 재료들과 볶아주세요"
+                        "description": "팬에 버터 10g을 녹이고 채 썬 당근 1개와 감자 200g을 넣어 중불에서 5분간 볶아주세요"
                       },
                       {
                         "step": 3,
+                        "description": "무지방 우유 200ml를 붓고 약한 불에서 3분간 걸쭉해질 때까지 끓여주세요"
+                      },
+                      {
+                        "step": 4,
+                        "description": "삶은 면을 소스에 넣고 후추를 약간 뿌려 1분간 섞어주세요"
+                      },
+                      {
+                        "step": 5,
+                        "description": "면에 소스가 고루 배면 불을 끄세요"
+                      },
+                      {
+                        "step": 6,
                         "description": "접시에 플레이팅하세요! 완성입니다."
                       }
                     ]
