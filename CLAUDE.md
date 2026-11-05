@@ -89,7 +89,8 @@
 - 로그인·회원가입·토큰 갱신의 POST 경로는 동일한 RequestMatcher로 공개 허용 및 Bearer 검증 생략을 적용한다. 만료되거나 잘못된 Authorization 헤더가 붙어도 요청 본문을 검증한다. 다른 메서드와 보호 경로의 Bearer 검증은 유지한다.
 - `POST /api/auth/token/refresh`는 Refresh Token을 본문으로 받아 새 토큰 쌍과 `expiresIn`(Access Token 유효기간 초)을 반환한다. 세션 행의 비관적 쓰기 잠금으로 동시 재사용을 막고, 만료·폐기·탈퇴 사용자 토큰을 거부한다. 기존 세션 폐기와 새 세션 저장은 동일 트랜잭션이다. 새 Refresh Token 만료는 재발급 시점부터 계산하며 기존 Access Token은 만료까지 유지된다. 재사용 시 요청만 거부하고 토큰 계보 전체 폐기는 지원하지 않는다. 교체 커밋 후 응답이 유실되면 다시 로그인해야 한다.
 - `POST /api/auth/logout`은 유효한 Access Token 인증이 필요하며 본문으로 받은 본인 Refresh Token 세션 하나만 잠금 후 폐기한다. 미존재 토큰·이미 폐기된 본인 토큰은 200, 다른 사용자 세션은 403이다. 만료된 본인 Refresh Token도 폐기 가능하다. 기존 Access Token과 다른 세션은 유지된다. 재발급과 로그아웃은 클라이언트에서 직렬화하고 최신 Refresh Token으로 로그아웃한 뒤 로컬 토큰을 삭제한다.
-- **미구현:** 토큰 계보 기반 재사용 탐지·일괄 폐기 및 만료 세션 정리.
+- 만료 후 30일이 지난 세션은 `SessionCleanupScheduler`가 매일 04:30(Asia/Seoul)에 1000건 단위로 삭제한다(`AUTH_SESSION_CLEANUP_ENABLED`, 앱 기본 false·운영 compose 기본 true). 삭제 기준은 `expires_at`뿐이므로 토큰을 쓸 수 있는 동안에는 폐기된 행도 남는다. 삭제된 토큰은 미존재 토큰과 같이 처리된다(갱신 401, 로그아웃 200).
+- **미구현:** 토큰 계보 기반 재사용 탐지·일괄 폐기.
 
 ---
 
@@ -156,9 +157,11 @@ com.vium
 │   ├── entity           Purchase, PurchaseItem, PurchaseType, PurchaseStatus
 │   └── repository       PurchaseRepository, PurchaseItemRepository, PurchaseQueryRepository
 ├── auth
+│   ├── config           SessionCleanupProperties
 │   ├── controller       AuthController
 │   ├── dto              LoginRequest, LoginResponse
-│   ├── service          AuthService, TokenService
+│   ├── service          AuthService, TokenService,
+│   │                    SessionCleanupService, SessionCleanupScheduler
 │   ├── entity           UserSession
 │   └── repository       UserSessionRepository
 ├── user

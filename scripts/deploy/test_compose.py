@@ -4,6 +4,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 REQUIRED_KEYS = (
+    "AUTH_SESSION_CLEANUP_ENABLED",
     "DISPOSAL_AUTO_DISPOSE_ENABLED",
     "OTLP_METRICS_ENABLED",
     "OTLP_METRICS_URL",

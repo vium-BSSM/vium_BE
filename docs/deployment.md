@@ -30,6 +30,8 @@ RDS URL의 `sslmode=verify-full`은 인증서와 호스트를 검증한다. 인�
 
 `DISPOSAL_AUTO_DISPOSE_ENABLED=true`로 설정하면 매일 00:10(Asia/Seoul)에 소비기한이 지난 미처리 재료를 자동 폐기 추정 처리한다. 기본값은 false이며, 운영 `.env.prod`에서 활성화해야 낭비 리포트·장보기 도우미 데이터가 쌓인다. 활성 여부는 기동 로그 `자동 폐기 스케줄러 활성화`로, 실행 결과는 `자동 폐기 배치 완료: 처리 N건, 스킵 N건, 실패 N건` 로그로 확인한다. 운영 Compose는 `DISPOSAL_AUTO_DISPOSE_CRON`과 `DISPOSAL_AUTO_DISPOSE_TIMEZONE`을 전달하지 않으므로 `.env.prod`에 두 값을 넣어도 적용되지 않는다. 실행 일정은 `application.yml`의 기본값을 사용하며, 운영에서 변경하려면 Compose의 환경변수 전달 설정도 추가해야 한다.
 
+`AUTH_SESSION_CLEANUP_ENABLED`는 운영 Compose에서 기본 true이므로 `.env.prod`에 값이 없어도 매일 04:30(Asia/Seoul)에 만료 후 30일이 지난 리프레시 토큰 세션을 1000건씩 삭제한다. 일시 중지하려면 `.env.prod`에 `AUTH_SESSION_CLEANUP_ENABLED=false`를 넣고 컨테이너를 재생성한다. 활성 여부는 기동 로그 `세션 정리 스케줄러 활성화`, 실행 결과는 `세션 정리 배치 완료: 삭제 N건`으로 확인한다. 일정·보존 기간·청크 크기는 `application.yml` 고정값이며 전용 환경변수로 변경할 수 없다.
+
 `IMAGE_STORAGE_ENABLED=true`로 설정하면 S3 이미지 업로드를 사용한다. 활성화 전 `vium-ec2-role`에 두 운영 버킷의 `images/*`에 한정한 PutObject·DeleteObject와 private 버킷의 GetObject 권한을 부여하고, 아래 Nginx 업로드 제한을 적용해야 한다. Docker bridge 컨테이너에서 인스턴스 역할 자격 증명을 받을 수 있도록 EC2 IMDSv2의 `HttpPutResponseHopLimit`은 2로 설정하고 `HttpTokens=required`를 유지한다. 자격 증명은 인스턴스 역할을 사용하며 `.env.prod`에 AWS 액세스 키를 넣지 않는다.
 
 `AWS_REGION`, `S3_PRIVATE_BUCKET`, `S3_PUBLIC_BUCKET`, `IMAGE_PUBLIC_BASE_URL`을 실제 운영 값과 대조한다. 활성화 시 버킷 이름 형식이 잘못되거나 두 버킷이 같거나 공개 URL이 경로 없는 HTTPS 형식이 아니면 앱 기동이 실패한다. CD 전환 후에는 `/opt/vium/shared/.env.prod`(권한 600)를 수정하고 현재 릴리스의 컨테이너를 재생성해 반영한다([CD 안내](cd.md)).
