@@ -71,9 +71,8 @@ HTTP 요청도 발생시킨 후 `http_server_requests_seconds_count`와 `_bucket
 
 끄려면 `OTLP_METRICS_ENABLED=false`로 바꾸고 재배포한다.
 `/actuator/health` 정상 응답과 인증된 요청에서 `/actuator/metrics`,
-`/actuator/prometheus`의 비노출을 확인한다. #97 수정이 배포된 버전에서는
-인증된 미존재 경로 요청에 공통 형식의 404를 반환한다.
-배포 전 버전은 해당 요청을 500으로 변환할 수 있다. 인증 없는 요청은 보안 필터가
+`/actuator/prometheus`의 비노출을 확인한다. 인증된 미존재 경로 요청은 공통 형식의
+404를 반환한다. 인증 없는 요청은 보안 필터가
 먼저 401을 반환할 수 있으므로 상태 코드만으로 비노출을 판단하지 않는다.
 
 배포 전후 `docker stats --no-stream vium-prod-app-1`로 메모리를 비교하고 배포 기록에
@@ -141,8 +140,6 @@ pending이 2분이라는 뜻이며, 연속 장애 2분을 요구하는 규칙은
 - 활성 시리즈는 `grafanacloud-usage`에서 스택 `1896975`를 조회하며
   **8,000 초과, pending 5분**이다. 무료 계획 기준 10,000개의 80%이며
   Trial의 서비스 제한을 뜻하지 않는다. 플랜 변경 시 기준을 재검토한다.
-- #97 운영 배포 전에는 5xx 평가를 중지한다.
-  [배포 시 재개 체크리스트](cd.md#97-배포-시-5xx-알림-재개-100)를 배포 PR에 복사해 추적한다.
 
 규칙을 UI에서 변경하면 `vium-prod-1m` 그룹을 YAML로 다시 export해 함께 리뷰한다.
 연락처는 비밀 값이 포함될 수 있으므로 export하지 않는다.

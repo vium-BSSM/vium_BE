@@ -324,9 +324,9 @@ groups:
           execErrState: Error
           for: 5m
           annotations:
-            description: 'Actuator를 제외한 최근 5분 요청 수가 20건 이상일 때 HTTP 5xx 비율 5% 초과가 5분 지속됨. 서버 오류 로그를 확인하세요. #97 운영 배포 확인 후 평가를 재개하세요.'
+            description: Actuator를 제외한 최근 5분 요청 수가 20건 이상일 때 HTTP 5xx 비율 5% 초과가 5분 지속됨. 서버 오류 로그를 확인하세요.
             summary: Vium 운영 HTTP 5xx 응답 비율이 5%를 초과했습니다.
-          isPaused: true
+          isPaused: false
           notification_settings:
             receiver: vium-discord-daily-scrum
         - uid: bg3c15ye7ij28e
