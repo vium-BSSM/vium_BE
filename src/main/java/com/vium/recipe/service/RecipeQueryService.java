@@ -10,12 +10,15 @@ import com.vium.inventory.entity.InventoryItem;
 import com.vium.inventory.repository.InventoryItemRepository;
 import com.vium.recipe.dto.RecipeDetailResponse;
 import com.vium.recipe.dto.RecipeDetailResponse.IngredientResponse;
+import com.vium.recipe.dto.RecipeDetailResponse.SeasoningResponse;
 import com.vium.recipe.dto.RecipeDetailResponse.StepResponse;
 import com.vium.recipe.entity.Recipe;
+import com.vium.recipe.entity.RecipeDetailStatus;
 import com.vium.recipe.entity.RecipeIngredient;
 import com.vium.recipe.entity.RecipeStep;
 import com.vium.recipe.repository.RecipeIngredientRepository;
 import com.vium.recipe.repository.RecipeRepository;
+import com.vium.recipe.repository.RecipeSeasoningRepository;
 import com.vium.recipe.repository.RecipeSuggestionRepository;
 import com.vium.recipe.repository.RecipeStepRepository;
 import java.util.Collection;
@@ -36,6 +39,7 @@ public class RecipeQueryService {
 	private final RecipeRepository recipeRepository;
 	private final RecipeIngredientRepository recipeIngredientRepository;
 	private final RecipeStepRepository recipeStepRepository;
+	private final RecipeSeasoningRepository recipeSeasoningRepository;
 	private final RecipeSuggestionRepository recipeSuggestionRepository;
 	private final InventoryItemRepository inventoryItemRepository;
 	private final IngredientCatalogService ingredientCatalogService;
@@ -64,6 +68,10 @@ public class RecipeQueryService {
 		List<RecipeIngredient> ingredients = recipeIngredientRepository.findByRecipeIdOrderByIdAsc(
 			recipeId);
 		List<RecipeStep> steps = recipeStepRepository.findByRecipeIdOrderByStepOrderAsc(recipeId);
+		List<SeasoningResponse> seasoningResponses = recipeSeasoningRepository.findByRecipeIdOrderBySortOrderAsc(recipeId)
+			.stream()
+			.map(seasoning -> new SeasoningResponse(seasoning.getName(), seasoning.getAmount()))
+			.toList();
 
 		// 3. 재고 매핑 (3-4의 3): inventoryId와 함께 남은 수량·단위를 내려준다
 		Map<Long, InventoryItem> catalogIdToInventory = mapCatalogIdToInventory(userId, ingredients);
@@ -84,7 +92,9 @@ public class RecipeQueryService {
 			recipe.getCategory().name(),
 			recipe.getCookTime(),
 			recipe.getImageUrl(),
+			recipe.getDetailStatus() == RecipeDetailStatus.DETAILED,
 			ingredientResponses,
+			seasoningResponses,
 			stepResponses
 		);
 	}
@@ -93,14 +103,16 @@ public class RecipeQueryService {
 		Map<Short, String> unitNames) {
 		Long catalogId = ingredient.getIngredientCatalogId();
 		if (inventory == null) {
-			return new IngredientResponse(catalogId, null, getIngredientName(catalogId), null, null);
+			return new IngredientResponse(catalogId, null, getIngredientName(catalogId), null, null,
+				ingredient.getAmount());
 		}
 		return new IngredientResponse(
 			catalogId,
 			inventory.getId(),
 			getIngredientName(catalogId),
 			inventory.getRemainingQuantity(),
-			unitNames.get(inventory.getUnitId())
+			unitNames.get(inventory.getUnitId()),
+			ingredient.getAmount()
 		);
 	}
 

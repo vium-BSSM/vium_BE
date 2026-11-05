@@ -7,4 +7,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface RecipeStepRepository extends JpaRepository<RecipeStep, Long> {
 
 	List<RecipeStep> findByRecipeIdOrderByStepOrderAsc(Long recipeId);
+
+	void deleteByRecipeId(Long recipeId);
 }

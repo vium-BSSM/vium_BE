@@ -1,7 +1,7 @@
 # PickDo(비움) 레시피 API 명세서
 
 > 대상 화면: `recipe` · `recipe/detail` · `recipe/detail/add` · `recipe/detail/delete`
-> 추천 방식: DB의 AI 레시피 재사용 + 모자란 만큼 Gemini(Vertex AI, API 키)로 생성 / 이미지: Unsplash 검색
+> 추천 방식: DB의 AI 레시피 재사용 + 모자란 만큼 Gemini(Generative Language API, API 키)로 생성 / 이미지: Unsplash 검색
 > 스택: Spring Boot(Java) · PostgreSQL
 
 ---
@@ -335,10 +335,15 @@ GET /api/me/recipes/{recipeId}
 | `imageUrl` | String | ○ | Unsplash 사진 URL. 못 찾으면 `null` (프론트는 회색 박스 표시) |
 | `imageAuthorName` | String | ○ | 사진 작가 이름. `imageUrl`이 `null`이면 `null` |
 | `imageAuthorUrl` | String | ○ | 작가 Unsplash 프로필 링크 (UTM 포함). `imageUrl`이 `null`이면 `null` |
+| `detailReady` | Boolean | ✕ | `true`면 재료 분량·양념·6~12단계 상세 보강 완료. `false`면 기본 생성분(steps 2~6개)만 있고 `ingredients[].amount`/`seasonings`는 비어 있음. 자세한 내용은 부록 B-4 |
 | `ingredients` | Array | ✕ | 사용재료 |
 | `ingredients[].ingredientCatalogId` | Long | ✕ | 재료 마스터 ID |
 | `ingredients[].inventoryId` | Long | ○ | 차감에 쓸 사용자 재고 ID. 보유하지 않으면 `null` |
 | `ingredients[].name` | String | ✕ | 재료 이름 |
+| `ingredients[].amount` | String | ○ | 1인분 기준 이 레시피에서 쓰는 분량(자유 텍스트). `detailReady`가 `false`면 `null` |
+| `seasonings` | Array | ✕ | 기본 양념(소금·설탕·간장 등) 목록. `detailReady`가 `false`면 빈 배열 |
+| `seasonings[].name` | String | ✕ | 양념 이름 |
+| `seasonings[].amount` | String | ✕ | 1인분 기준 분량(자유 텍스트) |
 | `steps` | Array | ✕ | 조리방법 |
 | `steps[].step` | Integer | ✕ | 1부터 시작 |
 | `steps[].description` | String | ✕ | 단계 설명 |
@@ -354,21 +359,28 @@ GET /api/me/recipes/{recipeId}
     "imageUrl": "https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9?ixid=...&w=1080",
     "imageAuthorName": "Hong Gildong",
     "imageAuthorUrl": "https://unsplash.com/@hong?utm_source=pickdo&utm_medium=referral",
+    "detailReady": true,
     "ingredients": [
-      { "ingredientCatalogId": 3, "inventoryId": 21, "name": "당근" },
-      { "ingredientCatalogId": 7, "inventoryId": 22, "name": "감자" },
-      { "ingredientCatalogId": 5, "inventoryId": 34, "name": "무지방 우유" },
-      { "ingredientCatalogId": 11, "inventoryId": null, "name": "파스타면" }
+      { "ingredientCatalogId": 3, "inventoryId": 21, "name": "당근", "amount": "1/2개(약 80g)" },
+      { "ingredientCatalogId": 7, "inventoryId": 22, "name": "감자", "amount": "1개(약 150g)" },
+      { "ingredientCatalogId": 5, "inventoryId": 34, "name": "무지방 우유", "amount": "종이컵 1컵(180ml)" },
+      { "ingredientCatalogId": 11, "inventoryId": null, "name": "파스타면", "amount": "100g" }
+    ],
+    "seasonings": [
+      { "name": "소금", "amount": "한 꼬집" },
+      { "name": "후추", "amount": "약간" }
     ],
     "steps": [
-      { "step": 1, "description": "끓는 물에 면을 넣어 삶아주세요!" },
-      { "step": 2, "description": "면을 건져내고 다른 재료들과 볶아주세요" },
+      { "step": 1, "description": "냄비에 물을 넉넉히 넣고 센 불로 끓입니다. 물이 끓어오르면 소금을 넣습니다." },
+      { "step": 2, "description": "끓는 물에 면을 넣고 중간 불로 8분간 삶습니다. 면이 부드러워지면 건져냅니다." },
       { "step": 3, "description": "접시에 플레이팅하세요! 완성입니다." }
     ]
   },
   "error": null
 }
 ```
+
+> `detailReady: false`인 예시(최초 열람 직후, 아직 기본 생성분만 있는 경우)는 `ingredients[].amount`가 전부 `null`이고 `seasonings`는 `[]`이며, `steps`는 2~6개입니다.
 
 - **출처 표시 (프론트, 필수):** `imageUrl`이 있으면 이미지 영역 오른쪽 아래에 작은 반투명 글씨로 `Photo by {imageAuthorName} on Unsplash`를 표시합니다. 작가 이름은 `imageAuthorUrl`, "Unsplash"는 `https://unsplash.com/?utm_source=pickdo&utm_medium=referral`로 연결합니다. 레이아웃은 바꾸지 않습니다.
 - 예시의 파스타면 `inventoryId: null`은 추천을 받은 뒤 파스타면을 소진·폐기한 경우입니다. 추천되는 레시피는 새로 생성한 것이든 재사용한 것이든 보유 재료만 쓰므로, 추천 직후에는 모든 재료에 `inventoryId`가 있습니다.
@@ -383,12 +395,13 @@ GET /api/me/recipes/{recipeId}
 
 ### 3-4. 처리 로직
 
-1. `recipe_suggestions`에 (`user_id = 나`, `recipe_id`) 행이 **날짜와 상관없이** 1개라도 있는지 확인합니다. 없으면 `404`입니다.
-2. `recipes`, `recipe_ingredients`(id 오름차순), `recipe_steps`(`step_order` 오름차순)를 조회합니다.
+1. `recipe_suggestions`에 (`user_id = 나`, `recipe_id`) 행이 **날짜와 상관없이** 1개라도 있는지 확인합니다. 없으면 `404`입니다. **LLM 호출은 이 확인 이후에만 일어납니다.**
+2. `recipes`, `recipe_ingredients`(id 오름차순), `recipe_steps`(`step_order` 오름차순), `recipe_seasonings`(`sort_order` 오름차순)를 조회합니다.
 3. **`inventoryId` 매핑:** 재료마다 같은 `ingredient_catalog_id`를 가진 사용자의 `active` 재고를 찾습니다.
     - 여러 건이면 소비기한이 가장 빠른 것 (소비기한 없음은 뒤) → 같으면 재고 ID가 작은 것
     - 없으면 `null`
-4. LLM·Unsplash는 호출하지 않습니다.
+4. **상세 지연 생성(lazy):** `recipes.detail_status`가 `BASIC`이면 이 열람 요청이 Gemini를 1회 호출해 재료 분량·양념·6~12단계를 보강합니다. 이미 `DETAILED`이거나 다른 요청이 선점해 처리 중(`GENERATING`)이면 호출하지 않고 2번에서 조회한 값을 그대로 응답합니다. 보강에 성공하면 응답을 다시 조회해 반영하고, 실패하면 `BASIC` 상태로 되돌리고 기존 값을 그대로 응답합니다(요청 자체는 항상 200). 자세한 내용은 부록 B-4.
+5. Unsplash는 호출하지 않습니다(이미지는 추천 시점에만 검색).
 
 ---
 
@@ -626,6 +639,39 @@ CREATE INDEX idx_recipe_suggestions_user_recipe ON recipe_suggestions (user_id, 
 
 > AI 레시피는 **모든 사용자가 공유**합니다 (재사용). 사용자별 접근은 `recipe_suggestions`로 판단합니다.
 
+### A-6. 레시피 상세 지연 생성 컬럼 추가 (V10)
+
+레시피 상세(재료 분량·양념·6~12단계)를 추천 시점이 아니라 **상세를 처음 열람하는 시점**에 레시피 1건씩 생성하도록 바꾸면서 추가된 컬럼·테이블입니다. 자세한 동작은 3-4의 4, 부록 B-4를 참고하세요.
+
+```sql
+-- V10__recipe_detail_lazy_generation.sql
+ALTER TABLE recipes
+  ADD COLUMN detail_status VARCHAR(20) NOT NULL DEFAULT 'BASIC'
+    CHECK (detail_status IN ('BASIC', 'GENERATING', 'DETAILED')),
+  ADD COLUMN detail_generation_started_at TIMESTAMPTZ;
+
+ALTER TABLE recipe_ingredients
+  ADD COLUMN amount VARCHAR(50);
+
+CREATE TABLE recipe_seasonings (
+  id          BIGSERIAL PRIMARY KEY,
+  recipe_id   BIGINT       NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+  name        VARCHAR(30)  NOT NULL,
+  amount      VARCHAR(50)  NOT NULL,
+  sort_order  INT          NOT NULL CHECK (sort_order >= 1),
+  UNIQUE (recipe_id, sort_order)
+);
+```
+
+| 컬럼/테이블 | 용도 | 비고 |
+|---|---|---|
+| `recipes.detail_status` | 상세 보강 진행 상태 | `BASIC`(기본 생성분만 있음) → `GENERATING`(다른 요청이 보강 중, 선점) → `DETAILED`(완료). `DEFAULT 'BASIC'`을 유지합니다 — 기존 raw insert가 전부 이 컬럼을 명시하지는 않습니다 |
+| `recipes.detail_generation_started_at` | 마지막 선점 시도 시각 | 동시 요청 중 1건만 보강하도록 원자적 `UPDATE ... WHERE`에 사용. 재시도 쿨다운(30초)과 멈춘 `GENERATING` 재선점 기준(2분 이상, 상세 타임아웃에 비례)이 이 한 컬럼을 서로 다른 두 기준으로 비교합니다 |
+| `recipe_ingredients.amount` | 재료 1인분 분량 | 보강 전엔 `null`. 양념은 이 테이블이 아니라 `recipe_seasonings`로 분리(카탈로그 밖 자유 텍스트라 `ingredient_catalog_id` FK와 맞지 않음) |
+| `recipe_seasonings` | 기본 양념(소금·설탕·간장 등) + 분량 | 보강 성공 시에만 행이 생기므로 `amount`는 `NOT NULL`. `recipe_steps`와 같은 구조(`sort_order`로 순서 보장) |
+
+> `recipe_ingredients`/`recipe_seasonings` 모두 기존 `RecipeIngredient`/`RecipeStep` 패턴을 따릅니다 — 순서 보장과 검증을 DB 레벨 제약으로 처리합니다.
+
 ---
 
 ## 부록 B. LLM 연동
@@ -634,18 +680,18 @@ CREATE INDEX idx_recipe_suggestions_user_recipe ON recipe_suggestions (user_id, 
 
 | 항목 | 값 |
 |---|---|
-| 서비스 | Google Cloud **Vertex AI**의 Gemini 모델 (Cloud 콘솔 → Agent Platform → 설정 → API 키에서 발급, 제한사항: Agent Platform API) |
+| 서비스 | Google AI의 Gemini 모델, **Generative Language API**(`generativelanguage.googleapis.com`)로 직접 호출 (Vertex AI가 아님 — AI Studio에서 발급한 API 키 사용) |
 | 결제 | Google Cloud 무료 체험 크레딧에서 차감 (크레딧 만료: 2026-12-30). 예산 알림 설정 필수 |
 | 모델 | `gemini-2.5-flash` (호출 테스트 완료). 설정값 `gemini.model`로 분리 |
 | 환경변수 | `GEMINI_API_KEY` (코드·Git에 넣지 않음) |
-| 요청 | `POST https://aiplatform.googleapis.com/v1/publishers/google/models/{model}:generateContent` |
+| 요청 | `POST https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent` |
 | 헤더 | `x-goog-api-key: {GEMINI_API_KEY}`, `Content-Type: application/json` |
-| 호출 단위 | 추천 묶음 1개당 **최대 1회** (재시도 제외) |
-| 출력 형식 | `generationConfig.responseMimeType = "application/json"` + `responseSchema`(B-2)로 JSON 강제 |
-| 사고(thinking) | `generationConfig.thinkingConfig.thinkingBudget = 0` (끔) |
-| `maxOutputTokens` | 8192 (1회에 레시피 최대 15개) |
-| 타임아웃 | 60초 |
-| 재시도 | 2-4의 4-b 규칙 (1회, `429`면 2초 뒤) |
+| 호출 단위 | 추천 묶음 1개당 **최대 1회**(재시도 제외) + 레시피 상세 최초 열람마다 **최대 1회**(B-4, 지연 생성) |
+| 출력 형식 | `generationConfig.responseMimeType = "application/json"` + `responseSchema`(B-2/B-4)로 JSON 강제 |
+| 사고(thinking) | `generationConfig.thinkingConfig.thinkingBudget = 0` (끔) — 배치·상세 보강 양쪽 요청 모두 적용 |
+| `maxOutputTokens` | 8192 (1회에 레시피 최대 15개, 상세 보강은 레시피 1건이라 여유 있음) |
+| 타임아웃 | 배치 추천: `gemini.timeout-seconds`(기본 60초) / 상세 보강: `gemini.detail-timeout-seconds`(기본 25초, 20~30초 권장) — 서로 다른 `RestClient` 인스턴스를 씀 |
+| 재시도 | 2-4의 4-b 규칙 (1회, `429`면 2초 뒤). 상세 보강은 재시도하지 않고 실패 시 `BASIC`으로 되돌린 뒤 쿨다운(30초) 후 다음 열람에서 재시도(B-4) |
 | 클라이언트 | Spring `RestClient` (또는 기존 프로젝트의 HTTP 클라이언트) |
 
 > **thinking을 끄는 이유:** 테스트 호출에서 답변 485토큰에 사고 토큰이 1,972토큰 추가로 쓰였습니다. 사고 토큰도 비용과 응답 시간에 포함되고 `maxOutputTokens` 한도도 잡아먹으므로, JSON 생성 작업에서는 끕니다. 결과 품질이 너무 낮으면 `thinkingBudget`을 작게(예: 512) 켜서 비교합니다.
@@ -654,7 +700,7 @@ CREATE INDEX idx_recipe_suggestions_user_recipe ON recipe_suggestions (user_id, 
 
 ```json
 {
-  "systemInstruction": { "parts": [{ "text": "B-3의 System instruction" }] },
+  "system_instruction": { "parts": [{ "text": "B-3의 System instruction" }] },
   "contents": [{ "role": "user", "parts": [{ "text": "B-3의 User 프롬프트" }] }],
   "generationConfig": {
     "responseMimeType": "application/json",
@@ -665,7 +711,7 @@ CREATE INDEX idx_recipe_suggestions_user_recipe ON recipe_suggestions (user_id, 
 }
 ```
 
-> Vertex AI에서는 `contents`에 `"role": "user"`를 꼭 넣습니다.
+> Generative Language API는 요청 바디 키가 `system_instruction`(snake_case)입니다. `contents`에는 `"role": "user"`를 꼭 넣습니다.
 
 **LLM 교체 대비:** `LlmRecipeClient` 인터페이스를 두고 `GeminiRecipeClient`로 구현합니다. 나중에 다른 모델로 바꿀 때 구현체만 교체합니다.
 
@@ -752,12 +798,88 @@ CREATE INDEX idx_recipe_suggestions_user_recipe ON recipe_suggestions (user_id, 
    가진 재료로 그럴듯한 레시피를 만들기 어려우면 더 적게 만들어도 되고, 0개여도 됩니다.
 2. 재료는 ingredients의 catalogId만 사용하세요. 목록에 없는 재료는 쓰지 마세요.
    소금, 설탕, 식용유 같은 기본 양념은 ingredientCatalogIds에 넣지 말고 steps에서만 언급하세요.
+   (이 배치 추천 단계에서는 양념을 구조화된 필드로 받지 않습니다. 재료 분량·양념 구조화는 B-4의 상세 보강 단계에서 처리합니다.)
 3. expireInDays가 작은 재료를 우선 사용하세요.
 4. cookTime은 1~180 사이 정수(분)입니다.
 5. steps는 2~6단계로, 요리 초보도 따라 할 수 있게 한국어로 짧게 쓰세요.
 6. imageKeyword는 음식 사진 검색용 영어 음식 이름입니다. (예: "carrot cream pasta")
 7. reason은 이 레시피를 추천하는 이유를 한국어 한 문장으로 쓰세요.
 ```
+
+### B-4. 상세 보강(지연 생성) 프롬프트
+
+레시피 상세를 **처음 열람할 때** 레시피 1건씩 호출합니다(3-4의 4, A-6). 배치 추천과 달리 호출당 레시피 1개뿐이라 `maxOutputTokens` 여유가 크고, 동시에 여러 요청이 같은 레시피를 열람해도 `recipes.detail_status`를 원자적으로 선점해 1건만 실제로 호출합니다.
+
+**System instruction** — B-3과 동일합니다.
+
+**User** (`{...}`는 서버가 채움. 기존 레시피의 title/category/ingredients를 그대로 넣음)
+
+```
+아래 레시피에 1인분 기준 재료 분량과 양념, 상세 조리 단계를 추가해 주세요.
+
+{"title": "...", "category": "...", "ingredients": [{"catalogId": .., "name": ".."}, ...]}
+
+규칙:
+1. ingredients 목록의 catalogId를 그대로 전부 사용하세요. 추가하거나 빼지 마세요.
+   소금, 설탕, 간장, 식초, 후추, 식용유 같은 기본 양념은 ingredients에 넣지 말고 seasonings에 분량과 함께 쓰세요.
+2. 모든 분량(ingredients의 amount, seasonings의 amount)은 1인분 기준으로 계산하세요.
+3. 분량은 다음과 같은 형식 중 상황에 맞는 걸 골라 쓰세요: "한 숟가락(15ml)", "두 숟가락", "10g", "1/2개(약 80g)",
+   "종이컵 1컵(180ml)", "한 꼬집", "약간". 가능하면 숫자와 단위를 함께 쓰고, 정확히 재기 어려운 경우에만
+   "한 꼬집"이나 "약간"을 쓰세요.
+4. seasonings의 각 항목은 name과 amount(3번 형식)를 반드시 포함하세요. 쓰지 않는 레시피면 빈 배열로 두세요.
+5. steps는 6~12단계로 작성하세요. 각 단계마다 다음을 포함해 요리 초보도 실패하지 않고 따라 할 수 있게 쓰세요.
+   - 불을 쓰는 단계는 불 세기(센 불/중간 불/약한 불 중 하나)
+   - 걸리는 시간(예: "3분간")
+   - 다음 단계로 넘어가도 되는 상태 기준(예: "가장자리가 노릇해지면", "물이 끓어오르면")
+   각 단계는 500자 이하로 쓰세요.
+```
+
+**응답 예시**
+
+```json
+{
+  "ingredients": [{ "catalogId": 3, "amount": "1/2개(약 80g)" }],
+  "seasonings": [{ "name": "소금", "amount": "한 꼬집" }],
+  "steps": ["냄비에 물을 넉넉히 넣고 센 불로 끓입니다. 물이 끓어오르면 소금을 넣습니다.", "..."]
+}
+```
+
+**`responseSchema`**
+
+```json
+{
+  "type": "OBJECT",
+  "properties": {
+    "ingredients": {
+      "type": "ARRAY",
+      "items": {
+        "type": "OBJECT",
+        "properties": { "catalogId": { "type": "INTEGER" }, "amount": { "type": "STRING" } },
+        "required": ["catalogId", "amount"]
+      }
+    },
+    "seasonings": {
+      "type": "ARRAY",
+      "items": {
+        "type": "OBJECT",
+        "properties": { "name": { "type": "STRING" }, "amount": { "type": "STRING" } },
+        "required": ["name", "amount"]
+      }
+    },
+    "steps": { "type": "ARRAY", "items": { "type": "STRING" } }
+  },
+  "required": ["ingredients", "seasonings", "steps"]
+}
+```
+
+**검증(B-2의 4-c와 별개로 적용)**
+- `ingredients`의 `catalogId` 집합이 레시피가 원래 가진 재료 ID 집합과 정확히 같아야 합니다(추가/누락 불가). 다르면 보강 전체를 버립니다.
+- `steps`는 6~12개, 각 500자 이하.
+- `seasonings`는 최대 10개, `name` 30자 이하·`amount` 50자 이하, 둘 다 공백이면 안 됩니다.
+- `seasonings[].name`이 레시피가 이미 가진 재료 이름과 겹치면(trim 비교) **그 항목만 조용히 제거**합니다(전체를 버리지 않음).
+- 위 규칙을 어기면(중복 제거 제외) 예외를 던져 보강 전체를 버리고 레시피를 `BASIC`으로 되돌립니다. 기존 조회 응답은 그대로 유지되며, 이 요청 자체는 실패하지 않습니다(200 OK, `detailReady: false`).
+
+**동시성**: `recipes.detail_status`를 `UPDATE ... WHERE id=? AND (...)` 한 번으로 원자적으로 선점합니다. `BASIC`이거나, `GENERATING`인데 선점 시작 시각이 stale 기준(상세 타임아웃×2+여유, 최소 2분) 이전이면 선점에 성공합니다. 선점 실패(이미 처리 중/쿨다운 중)는 그냥 현재 값을 그대로 응답합니다.
 
 ---
 
