@@ -103,16 +103,18 @@ notification policy를 연결한다. 평가 간격은 1분으로 시작한다.
 | 이름 | PromQL 조건 | 지속 |
 |---|---|---|
 | 앱 메트릭 끊김 | `absent_over_time(jvm_memory_used_bytes{application="vium-be",env="prod"}[5m]) > 0` | 5m |
-| 5xx 비율 | `sum(rate(http_server_requests_seconds_count{application="vium-be",env="prod",status=~"5.."}[5m])) / sum(rate(http_server_requests_seconds_count{application="vium-be",env="prod"}[5m])) > 0.05` | 5m |
-| p95 지연 | `histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{application="vium-be",env="prod"}[5m]))) > 2` | 10m |
+| 5xx 비율 | `sum(rate(http_server_requests_seconds_count{application="vium-be",env="prod",uri!~"/actuator.*",status=~"5.."}[5m])) / sum(rate(http_server_requests_seconds_count{application="vium-be",env="prod",uri!~"/actuator.*"}[5m])) > 0.05` | 5m |
+| p95 지연 | `histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{application="vium-be",env="prod",uri!~"/actuator.*"}[5m]))) > 2` | 10m |
 | 힙 사용률 | `sum(jvm_memory_used_bytes{application="vium-be",env="prod",area="heap"}) / sum(jvm_memory_max_bytes{application="vium-be",env="prod",area="heap"}) > 0.9` | 10m |
 | DB 커넥션 대기 | `max(hikaricp_connections_pending{application="vium-be",env="prod"}) > 0` | 5m |
+| Health 5xx 응답 | `sum(increase(http_server_requests_seconds_count{application="vium-be",env="prod",uri="/actuator/health",status=~"5.."}[5m])) > 0` | 2m |
 
 5xx·p95는 위 기본 식에 최근 5분 최소 요청 수 조건을 추가한다. 쿼리 A는
-`(<기본 비율 또는 p95 식>) and on() (sum(increase(http_server_requests_seconds_count{application="vium-be",env="prod"}[5m])) >= 20)`이며,
+`(<기본 비율 또는 p95 식>) and on() (sum(increase(http_server_requests_seconds_count{application="vium-be",env="prod",uri!~"/actuator.*"}[5m])) >= 20)`이며,
 임계값은 별도 Threshold C에서 비교한다. 20은 초기 운영 기준으로, 표본 부족 시
 결과가 없어 Normal이 된다. 저트래픽 장애를 놓칠 수 있으므로 트래픽에 맞춰 조정한다.
-요청 수에는 health 요청도 포함되므로 업무 API의 최소 표본 수를 보장하지 않는다.
+5xx 분자·분모, p95 버킷, 최소 요청 수에서 모두 `uri!~"/actuator.*"`로 Actuator를 제외한다.
+이는 인증 실패 등 Actuator 이외의 모든 HTTP 요청을 포함하며, 성공한 업무 요청만을 뜻하지는 않는다.
 새 `uri`·`status` 시리즈가 1에서 시작하면 첫 증가분은 `rate`/`increase`에 잡히지
 않을 수 있다. 이 비율 규칙은 간헐적인 단일 500을 빠짐없이 검출하는 수단이 아니다.
 
@@ -122,11 +124,18 @@ notification policy를 연결한다. 평가 간격은 1분으로 시작한다.
 끊김 규칙도 정상 수집 시 결과가 없으므로 No Data는 Normal로 둔다.
 5분 조회 창과 5분 pending 때문에 끊김 감지는 마지막 수집 후 약 10분이 걸린다.
 
+Health 5xx는 최소 사용자 요청 수 조건 없이 별도로 평가하므로 저트래픽 때도
+반복되는 health 실패를 감지한다. 5분 창에 실패 증가분이 남아 있는 조건의
+pending이 2분이라는 뜻이며, 연속 장애 2분을 요구하는 규칙은 아니다. 복구 후에도
+조회 창 때문에 알림이 유지될 수 있다. 최초 5xx 시리즈의 첫 증가분 누락 가능성은
+동일하며, HTTP 응답이 끝나지 않거나 메트릭 전송이 중단되면 이 규칙만으로는
+감지할 수 없다. 수집 중단은 앱 메트릭 끊김 규칙으로 보완하며 외부 가용성 검사는 별도다.
+
 ### 운영 설정과 복원
 
 - 연락처: `vium-discord-daily-scrum` (Discord `daily-scrum`). 기본 알림 정책도
   이 연락처를 사용하며 복구 알림을 활성화했다. 웹훅 URL은 Grafana에만 저장한다.
-- 규칙 6개의 실제 export: [alert-rules.yaml](../monitoring/grafana/alert-rules.yaml).
+- 규칙 7개의 실제 export: [alert-rules.yaml](../monitoring/grafana/alert-rules.yaml).
   폴더는 `Vium Production`, 평가 그룹은 `vium-prod-1m` (1분)이다.
   pending은 표의 지속 시간, **keep firing for는 0초**다.
 - 활성 시리즈는 `grafanacloud-usage`에서 스택 `1896975`를 조회하며
@@ -152,7 +161,10 @@ Cloud 복원은 연락처를 먼저 안전하게 재생성한 뒤, 이 파일을
 
 | 항목 | 실제 조회 결과 |
 |---|---|
-| p95 (최소 표본 조건 전) | 0.0475초. 5분 요청 수 10건으로, 조건 추가 후에는 No Data |
+| 기존 Actuator 포함 p95 | 0.0475초. 업무 API 지연 검증값으로 사용하지 않는다 |
+| 경로별 5분 증가분 | `uri="/actuator/health", status="200"` 10건, 나머지 관측 경로는 0건 |
+| Actuator 제외 후 p95·5xx | 최소 요청 수 미달로 No Data, 정상 처리 |
+| Health 5xx | 현재 5xx 시리즈가 없어 No Data, 정상 처리. 성공 health 시리즈로 URI·메트릭 이름 확인 |
 | 힙 사용률 | 약 0.40626 |
 | `jvm_memory_max_bytes{area="heap"}` | Eden 71,630,848 / Survivor 8,912,896 / Tenured 178,978,816 bytes; 모두 양수 |
 | `hikaricp_connections_pending` 최댓값 | 0 |
@@ -170,7 +182,10 @@ Cloud 복원은 연락처를 먼저 안전하게 재생성한 뒤, 이 파일을
 임계값을 0.9로 되돌린 뒤 Normal 상태와 Discord Resolved 수신을 확인하고
 임시 규칙을 삭제했다. 복구 메시지 사유는 `Updated`였다. 규칙 수정으로 인한
 해결 알림까지 검증한 것이며, 고정된 규칙에서 메트릭이 임계값을 내려가는
-자연 회복 시나리오까지 재현한 것은 아니다. 최종 export에는 운영 규칙 6개만 포함한다.
+자연 회복 시나리오까지 재현한 것은 아니다. 당시 임시 규칙은 export에서 제외했다.
+이후 health 전용 규칙을 추가해 최종 export는 운영 규칙 7개다. Health 5xx 이름의
+Custom 연락처 테스트도 Discord 수신을 확인했다. 실제 DB 장애·health 503은
+유발하지 않았으며, 해당 장애 감지 자체를 실환경에서 재현한 테스트는 아니다.
 
 ## 사용량과 보안
 
