@@ -96,7 +96,6 @@ class GlobalExceptionHandlerIntegrationTest {
 		assertThat(output.getOut().substring(outputStart)).doesNotContain("GlobalExceptionHandler");
 	}
 
-
 	@Test
 	void authenticatedMissingPathReturnsNotFound() throws Exception {
 		mockMvc.perform(get("/api/me/nope").with(jwt()))
@@ -125,6 +124,7 @@ class GlobalExceptionHandlerIntegrationTest {
 			.andExpect(jsonPath("$.error.message").value("지원하지 않는 HTTP 메서드입니다."))
 			.andExpect(header().string(HttpHeaders.ALLOW, containsString("GET")));
 	}
+
 	@Test
 	void internalBusinessExceptionLogsAtErrorLevel(CapturedOutput output) throws Exception {
 		int outputStart = output.getOut().length();
@@ -205,5 +205,4 @@ class GlobalExceptionHandlerIntegrationTest {
 			throw new BusinessException(ErrorCode.INVALID_REQUEST);
 		}
 	}
-
 }
