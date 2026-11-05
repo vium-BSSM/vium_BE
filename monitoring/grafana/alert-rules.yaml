@@ -1,0 +1,331 @@
+apiVersion: 1
+groups:
+    - orgId: 1
+      name: vium-prod-1m
+      folder: Vium Production
+      interval: 1m
+      rules:
+        - uid: ag3bvypi8nj0gb
+          title: Vium prod - 앱 메트릭 끊김
+          condition: C
+          data:
+            - refId: A
+              relativeTimeRange:
+                from: 600
+                to: 0
+              datasourceUid: grafanacloud-prom
+              model:
+                editorMode: code
+                expr: absent_over_time(jvm_memory_used_bytes{application="vium-be",env="prod"}[5m])
+                instant: true
+                intervalMs: 1000
+                legendFormat: __auto
+                maxDataPoints: 43200
+                range: false
+                refId: A
+            - refId: C
+              queryType: expression
+              datasourceUid: __expr__
+              model:
+                conditions:
+                    - evaluator:
+                        params:
+                            - 0
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                            - C
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                datasource:
+                    type: __expr__
+                    uid: __expr__
+                expression: A
+                intervalMs: 1000
+                maxDataPoints: 43200
+                refId: C
+                type: threshold
+          noDataState: OK
+          execErrState: Error
+          for: 5m
+          annotations:
+            description: 5분 동안 JVM 메트릭이 없고 이 상태가 5분 지속되면 알림. 앱 상태와 OTLP 전송 설정을 확인하세요.
+            summary: Vium 운영 앱 메트릭 수집이 끊겼습니다.
+          isPaused: false
+          notification_settings:
+            receiver: vium-discord-daily-scrum
+        - uid: eg3bw0iw1h0xsb
+          title: Vium prod - p95 지연
+          condition: C
+          data:
+            - refId: A
+              relativeTimeRange:
+                from: 600
+                to: 0
+              datasourceUid: grafanacloud-prom
+              model:
+                editorMode: code
+                expr: (histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{application="vium-be",env="prod"}[5m])))) and on() (sum(increase(http_server_requests_seconds_count{application="vium-be",env="prod"}[5m])) >= 20)
+                instant: true
+                intervalMs: 1000
+                legendFormat: __auto
+                maxDataPoints: 43200
+                range: false
+                refId: A
+            - refId: C
+              queryType: expression
+              datasourceUid: __expr__
+              model:
+                conditions:
+                    - evaluator:
+                        params:
+                            - 2
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                            - C
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                datasource:
+                    type: __expr__
+                    uid: __expr__
+                expression: A
+                intervalMs: 1000
+                maxDataPoints: 43200
+                refId: C
+                type: threshold
+          noDataState: OK
+          execErrState: Error
+          for: 10m
+          annotations:
+            description: 최근 5분 요청 수가 20건 이상일 때 p95가 2초를 초과한 상태가 10분 지속됨. 느린 API 및 DB 쿼리를 확인하세요.
+            summary: Vium 운영 HTTP p95 응답 시간이 2초를 초과했습니다.
+          isPaused: false
+          notification_settings:
+            receiver: vium-discord-daily-scrum
+        - uid: ag3bw20h91uyoe
+          title: Vium prod - JVM 힙 사용률
+          condition: C
+          data:
+            - refId: A
+              relativeTimeRange:
+                from: 600
+                to: 0
+              datasourceUid: grafanacloud-prom
+              model:
+                editorMode: code
+                expr: sum(jvm_memory_used_bytes{application="vium-be",env="prod",area="heap"}) / sum(jvm_memory_max_bytes{application="vium-be",env="prod",area="heap"})
+                instant: true
+                intervalMs: 1000
+                legendFormat: __auto
+                maxDataPoints: 43200
+                range: false
+                refId: A
+            - refId: C
+              queryType: expression
+              datasourceUid: __expr__
+              model:
+                conditions:
+                    - evaluator:
+                        params:
+                            - 0.9
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                            - C
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                datasource:
+                    type: __expr__
+                    uid: __expr__
+                expression: A
+                intervalMs: 1000
+                maxDataPoints: 43200
+                refId: C
+                type: threshold
+          noDataState: OK
+          execErrState: Error
+          for: 10m
+          annotations:
+            description: 힙 사용률 90% 초과가 10분 지속됨. 메모리 사용량 및 GC 상태를 확인하세요.
+            summary: Vium 운영 JVM 힙 사용률이 90%를 초과했습니다.
+          isPaused: false
+          notification_settings:
+            receiver: vium-discord-daily-scrum
+        - uid: eg3bw3am0jj7ka
+          title: Vium prod - DB 커넥션 대기
+          condition: C
+          data:
+            - refId: A
+              relativeTimeRange:
+                from: 600
+                to: 0
+              datasourceUid: grafanacloud-prom
+              model:
+                editorMode: code
+                expr: max(hikaricp_connections_pending{application="vium-be",env="prod"})
+                instant: true
+                intervalMs: 1000
+                legendFormat: __auto
+                maxDataPoints: 43200
+                range: false
+                refId: A
+            - refId: C
+              queryType: expression
+              datasourceUid: __expr__
+              model:
+                conditions:
+                    - evaluator:
+                        params:
+                            - 0
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                            - C
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                datasource:
+                    type: __expr__
+                    uid: __expr__
+                expression: A
+                intervalMs: 1000
+                maxDataPoints: 43200
+                refId: C
+                type: threshold
+          noDataState: OK
+          execErrState: Error
+          for: 5m
+          annotations:
+            description: HikariCP 대기 커넥션 수가 0을 초과한 상태가 5분 지속됨. DB 가용성, 느린 쿼리 및 풀 사용량을 확인하세요.
+            summary: Vium 운영 DB 커넥션 대기가 지속되고 있습니다.
+          isPaused: false
+          notification_settings:
+            receiver: vium-discord-daily-scrum
+        - uid: cg3bwd5f0ts74f
+          title: Vium prod - 활성 시리즈 사용량
+          condition: C
+          data:
+            - refId: A
+              relativeTimeRange:
+                from: 600
+                to: 0
+              datasourceUid: grafanacloud-usage
+              model:
+                datasource:
+                    type: prometheus
+                    uid: grafanacloud-usage
+                editorMode: code
+                expr: max(grafanacloud_instance_active_series{stack_id="1896975"})
+                instant: true
+                intervalMs: 1000
+                legendFormat: __auto
+                maxDataPoints: 43200
+                range: false
+                refId: A
+            - refId: C
+              queryType: expression
+              datasourceUid: __expr__
+              model:
+                conditions:
+                    - evaluator:
+                        params:
+                            - 8000
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                            - C
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                datasource:
+                    type: __expr__
+                    uid: __expr__
+                expression: A
+                intervalMs: 1000
+                maxDataPoints: 43200
+                refId: C
+                type: threshold
+          noDataState: OK
+          execErrState: Error
+          for: 5m
+          annotations:
+            description: 활성 시리즈 8,000개 초과가 5분 지속됨. 카디널리티와 불필요한 메트릭 수집을 확인하세요.
+            summary: Grafana 활성 시리즈가 무료 기준 10,000개의 80%를 초과했습니다.
+          isPaused: false
+          notification_settings:
+            receiver: vium-discord-daily-scrum
+        - uid: fg3bwgx3as8hsd
+          title: Vium prod - HTTP 5xx 비율
+          condition: C
+          data:
+            - refId: A
+              relativeTimeRange:
+                from: 600
+                to: 0
+              datasourceUid: grafanacloud-prom
+              model:
+                datasource:
+                    type: prometheus
+                    uid: grafanacloud-prom
+                editorMode: code
+                expr: (sum(rate(http_server_requests_seconds_count{application="vium-be",env="prod",status=~"5.."}[5m])) / sum(rate(http_server_requests_seconds_count{application="vium-be",env="prod"}[5m]))) and on() (sum(increase(http_server_requests_seconds_count{application="vium-be",env="prod"}[5m])) >= 20)
+                instant: true
+                intervalMs: 1000
+                legendFormat: __auto
+                maxDataPoints: 43200
+                range: false
+                refId: A
+            - refId: C
+              queryType: expression
+              datasourceUid: __expr__
+              model:
+                conditions:
+                    - evaluator:
+                        params:
+                            - 0.05
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                            - C
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                datasource:
+                    type: __expr__
+                    uid: __expr__
+                expression: A
+                intervalMs: 1000
+                maxDataPoints: 43200
+                refId: C
+                type: threshold
+          noDataState: OK
+          execErrState: Error
+          for: 5m
+          annotations:
+            description: '최근 5분 요청 수가 20건 이상일 때 HTTP 5xx 비율 5% 초과가 5분 지속됨. 서버 오류 로그를 확인하세요. #97 운영 배포 확인 후 평가를 재개하세요.'
+            summary: Vium 운영 HTTP 5xx 응답 비율이 5%를 초과했습니다.
+          isPaused: true
+          notification_settings:
+            receiver: vium-discord-daily-scrum

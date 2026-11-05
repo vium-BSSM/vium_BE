@@ -71,10 +71,9 @@ HTTP 요청도 발생시킨 후 `http_server_requests_seconds_count`와 `_bucket
 
 끄려면 `OTLP_METRICS_ENABLED=false`로 바꾸고 재배포한다.
 `/actuator/health` 정상 응답과 인증된 요청에서 `/actuator/metrics`,
-`/actuator/prometheus`의 비노출을 확인한다. 현재 공통 예외 처리기는
-미존재 경로의 `NoResourceFoundException`도 500으로 변환하므로 인증된 요청의
-실제 응답은 404 대신 500이다. 비노출 테스트는 해당 예외를 확인한다.
-404 반환 복구는 공통 오류 처리의 별도 수정 사항이다. 인증 없는 요청은 보안 필터가
+`/actuator/prometheus`의 비노출을 확인한다. #97 수정이 배포된 버전에서는
+인증된 미존재 경로 요청에 공통 형식의 404를 반환한다.
+배포 전 버전은 해당 요청을 500으로 변환할 수 있다. 인증 없는 요청은 보안 필터가
 먼저 401을 반환할 수 있으므로 상태 코드만으로 비노출을 판단하지 않는다.
 
 배포 전후 `docker stats --no-stream vium-prod-app-1`로 메모리를 비교하고 배포 기록에
@@ -109,11 +108,69 @@ notification policy를 연결한다. 평가 간격은 1분으로 시작한다.
 | 힙 사용률 | `sum(jvm_memory_used_bytes{application="vium-be",env="prod",area="heap"}) / sum(jvm_memory_max_bytes{application="vium-be",env="prod",area="heap"}) > 0.9` | 10m |
 | DB 커넥션 대기 | `max(hikaricp_connections_pending{application="vium-be",env="prod"}) > 0` | 5m |
 
+5xx·p95는 위 기본 식에 최근 5분 최소 요청 수 조건을 추가한다. 쿼리 A는
+`(<기본 비율 또는 p95 식>) and on() (sum(increase(http_server_requests_seconds_count{application="vium-be",env="prod"}[5m])) >= 20)`이며,
+임계값은 별도 Threshold C에서 비교한다. 20은 초기 운영 기준으로, 표본 부족 시
+결과가 없어 Normal이 된다. 저트래픽 장애를 놓칠 수 있으므로 트래픽에 맞춰 조정한다.
+요청 수에는 health 요청도 포함되므로 업무 API의 최소 표본 수를 보장하지 않는다.
+새 `uri`·`status` 시리즈가 1에서 시작하면 첫 증가분은 `rate`/`increase`에 잡히지
+않을 수 있다. 이 비율 규칙은 간헐적인 단일 500을 빠짐없이 검출하는 수단이 아니다.
+
 실제 메트릭 이름·라벨은 Explore에서 확인하고 맞춘다. p95는 지정 버킷 기반
 근사치다. 5xx가 아직 없거나 트래픽이 없으면 비율 식은 결과가 없거나 NaN일 수 있다.
 이때 No Data를 정상으로 처리하고 수집 중단은 별도 끊김 규칙으로 확인한다.
 끊김 규칙도 정상 수집 시 결과가 없으므로 No Data는 Normal로 둔다.
 5분 조회 창과 5분 pending 때문에 끊김 감지는 마지막 수집 후 약 10분이 걸린다.
+
+### 운영 설정과 복원
+
+- 연락처: `vium-discord-daily-scrum` (Discord `daily-scrum`). 기본 알림 정책도
+  이 연락처를 사용하며 복구 알림을 활성화했다. 웹훅 URL은 Grafana에만 저장한다.
+- 규칙 6개의 실제 export: [alert-rules.yaml](../monitoring/grafana/alert-rules.yaml).
+  폴더는 `Vium Production`, 평가 그룹은 `vium-prod-1m` (1분)이다.
+  pending은 표의 지속 시간, **keep firing for는 0초**다.
+- 활성 시리즈는 `grafanacloud-usage`에서 스택 `1896975`를 조회하며
+  **8,000 초과, pending 5분**이다. 무료 계획 기준 10,000개의 80%이며
+  Trial의 서비스 제한을 뜻하지 않는다. 플랜 변경 시 기준을 재검토한다.
+- #97 운영 배포 전에는 5xx 평가를 중지한다.
+  [배포 시 재개 체크리스트](cd.md#97-배포-시-5xx-알림-재개-100)를 배포 PR에 복사해 추적한다.
+
+규칙을 UI에서 변경하면 `vium-prod-1m` 그룹을 YAML로 다시 export해 함께 리뷰한다.
+연락처는 비밀 값이 포함될 수 있으므로 export하지 않는다.
+[Grafana의 export 형식](https://grafana.com/docs/grafana/latest/alerting/set-up/provision-alerting-resources/export-alerting-resources/)은
+file provisioning용이며 **Grafana Cloud는 파일 provisioning을 지원하지 않는다**.
+Cloud 복원은 연락처를 먼저 안전하게 재생성한 뒤, 이 파일을 기준으로
+[HTTP provisioning API](https://grafana.com/docs/grafana/latest/alerting/set-up/provision-alerting-resources/http-api-provisioning/)
+형식으로 변환하거나 Terraform을 사용한다. YAML을 API에 그대로 보내지 않는다.
+새 스택에서는 데이터소스 UID·stack_id·폴더·조직 ID와 일시 중지 상태를 검토한다.
+기본 알림 정책은 규칙 파일에 포함되지 않으므로 별도로 설정한다.
+
+### 검증 기록 (2026-11-05)
+
+편집 화면 Preview의 **쿼리 A 값**을 확인했다. Threshold C의 Normal 표시만으로
+메트릭 존재를 판단하지 않는다. 이름·라벨 변경 시 같은 확인을 반복한다.
+
+| 항목 | 실제 조회 결과 |
+|---|---|
+| p95 (최소 표본 조건 전) | 0.0475초. 5분 요청 수 10건으로, 조건 추가 후에는 No Data |
+| 힙 사용률 | 약 0.40626 |
+| `jvm_memory_max_bytes{area="heap"}` | Eden 71,630,848 / Survivor 8,912,896 / Tenured 178,978,816 bytes; 모두 양수 |
+| `hikaricp_connections_pending` 최댓값 | 0 |
+| 활성 시리즈 | 610 |
+| HTTP 카운터 | 200·400·401 시리즈 존재. 현재 5xx 비율은 No Data |
+
+최근 7일 500 시리즈 조회에서는 `/api/me/waste-patterns`, `exception="none"`을
+확인했으며 미존재 경로를 예외 라벨로 식별할 근거는 확보하지 못했다.
+`@ExceptionHandler`로 처리된 예외가 자동으로 observation 오류에 기록된다는
+보장은 없다([Spring 공식 설명](https://docs.spring.io/spring-framework/reference/integration/observability.html)).
+따라서 `exception!="NoResourceFoundException"` 필터를 근거 없이 적용하지 않는다.
+6개 규칙 이름을 넣은 Custom 연락처 테스트는 모두 Discord에서 수신했다.
+힙 규칙 복제본(`Vium TEST - 발생 및 복구 경로 검증`)을 임계값 0, pending 0초로
+설정해 실제 Firing 평가 → 기본 알림 정책 → Discord 전달을 확인했다.
+임계값을 0.9로 되돌린 뒤 Normal 상태와 Discord Resolved 수신을 확인하고
+임시 규칙을 삭제했다. 복구 메시지 사유는 `Updated`였다. 규칙 수정으로 인한
+해결 알림까지 검증한 것이며, 고정된 규칙에서 메트릭이 임계값을 내려가는
+자연 회복 시나리오까지 재현한 것은 아니다. 최종 export에는 운영 규칙 6개만 포함한다.
 
 ## 사용량과 보안
 
