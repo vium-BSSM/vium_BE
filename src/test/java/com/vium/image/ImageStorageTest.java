@@ -68,11 +68,26 @@ class ImageStorageTest {
 	}
 
 	@Test void hidesSdkFailureDetails() {
-		when(presigners.getObject()).thenThrow(new IllegalStateException("sensitive provider details"));
+		var cause = new IllegalStateException("sensitive provider details");
+		when(presigners.getObject()).thenThrow(cause);
 		assertThatThrownBy(() -> new ImageStorage(enabled, clients, presigners).access(image(ImagePurpose.RECEIPT)))
 			.isInstanceOfSatisfying(BusinessException.class, e -> {
 				assertThat(e.getErrorCode()).isEqualTo(ErrorCode.IMAGE_STORAGE_UNAVAILABLE);
 				assertThat(e.getMessage()).doesNotContain("sensitive");
+				assertThat(e.getCause()).isSameAs(cause);
+			});
+	}
+
+	@Test void preservesPutFailureCauseWithoutExposingDetails() {
+		var cause = new IllegalStateException("sensitive S3 details");
+		when(clients.getObject()).thenReturn(client);
+		when(client.putObject(any(Consumer.class), any(RequestBody.class))).thenThrow(cause);
+		assertThatThrownBy(() -> new ImageStorage(enabled, clients, presigners)
+			.put(image(ImagePurpose.RECEIPT), new byte[] {1}))
+			.isInstanceOfSatisfying(BusinessException.class, e -> {
+				assertThat(e.getErrorCode()).isEqualTo(ErrorCode.IMAGE_STORAGE_UNAVAILABLE);
+				assertThat(e.getMessage()).isEqualTo(ErrorCode.IMAGE_STORAGE_UNAVAILABLE.getDefaultMessage());
+				assertThat(e.getCause()).isSameAs(cause);
 			});
 	}
 

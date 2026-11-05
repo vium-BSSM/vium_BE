@@ -2,6 +2,8 @@ package com.vium.global.exception;
 
 import com.vium.global.common.ApiResponse;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.web.filter.ServerHttpObservationFilter;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.MultipartException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
@@ -15,12 +17,16 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
 	@ExceptionHandler(BusinessException.class)
 	public ResponseEntity<ApiResponse<Void>> handleBusinessException(BusinessException e) {
 		ErrorCode errorCode = e.getErrorCode();
+		if (errorCode.getStatus().is5xxServerError()) {
+			log.warn("서버 측 비즈니스 오류: code={}", errorCode.name(), e);
+		}
 		return ResponseEntity.status(errorCode.getStatus())
 			.body(ApiResponse.fail(new ApiResponse.ErrorObject(errorCode.name(), e.getMessage())));
 	}
@@ -84,9 +90,10 @@ public class GlobalExceptionHandler {
 	}
 
 	@ExceptionHandler(Exception.class)
-	public ResponseEntity<ApiResponse<Void>> handleException(Exception e) {
-		return ResponseEntity.status(ErrorCode.INTERNAL_ERROR.getStatus())
-			.body(ApiResponse.fail(
-				new ApiResponse.ErrorObject(ErrorCode.INTERNAL_ERROR.name(), ErrorCode.INTERNAL_ERROR.getDefaultMessage())));
+	public ResponseEntity<ApiResponse<Void>> handleException(Exception e, HttpServletRequest request) {
+		log.error("처리되지 않은 예외: {} {}", request.getMethod(), request.getRequestURI(), e);
+		ServerHttpObservationFilter.findObservationContext(request).ifPresent(context -> context.setError(e));
+		ErrorCode errorCode = ErrorCode.INTERNAL_ERROR;
+		return ResponseEntity.status(errorCode.getStatus()).body(failureBody(errorCode));
 	}
 }

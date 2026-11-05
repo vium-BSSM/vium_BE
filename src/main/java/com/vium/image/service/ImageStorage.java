@@ -33,7 +33,7 @@ public class ImageStorage {
 				.cacheControl(image.getPurpose().isPrivate() ? "private, no-store" : "public, max-age=31536000, immutable"),
 				RequestBody.fromBytes(bytes));
 		} catch (RuntimeException e) {
-			throw new BusinessException(ErrorCode.IMAGE_STORAGE_UNAVAILABLE);
+			throw new BusinessException(ErrorCode.IMAGE_STORAGE_UNAVAILABLE, e);
 		}
 	}
 
@@ -50,7 +50,7 @@ public class ImageStorage {
 					.responseCacheControl("private, no-store").build()));
 			return new ImageAccessResponse(image.getId(), signed.url().toString(), signed.expiration());
 		} catch (RuntimeException e) {
-			throw new BusinessException(ErrorCode.IMAGE_STORAGE_UNAVAILABLE);
+			throw new BusinessException(ErrorCode.IMAGE_STORAGE_UNAVAILABLE, e);
 		}
 	}
 }
