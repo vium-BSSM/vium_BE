@@ -14,4 +14,5 @@ public class LlmProperties {
 	private String apiKey;
 	private String model;
 	private int timeoutSeconds = 60;
+	private int detailTimeoutSeconds = 25;
 }

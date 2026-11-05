@@ -4451,6 +4451,11 @@
             "type": "string",
             "description": "재고 단위 이름 (예: 개, g, ml). inventoryId가 null이면 null. GET /api/me/ingredients의 unit과 같은 값",
             "nullable": true
+          },
+          "amount": {
+            "type": "string",
+            "description": "이 레시피에서 쓰는 재료 분량(자유 텍스트, 예: \"1/2모\"). 상세 보강 전이면 null",
+            "nullable": true
           }
         }
       },
@@ -4470,6 +4475,23 @@
           }
         }
       },
+      "RecipeSeasoning": {
+        "type": "object",
+        "required": [
+          "name",
+          "amount"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "소금, 설탕, 간장 등 기본 양념 이름"
+          },
+          "amount": {
+            "type": "string",
+            "description": "1인분 기준 분량(자유 텍스트, 예: \"한 꼬집\")"
+          }
+        }
+      },
       "RecipeDetailResponse": {
         "type": "object",
         "required": [
@@ -4478,7 +4500,9 @@
           "category",
           "cookTime",
           "imageUrl",
+          "detailReady",
           "ingredients",
+          "seasonings",
           "steps"
         ],
         "properties": {
@@ -4501,10 +4525,21 @@
             "description": "없으면 null (회색 박스 표시)",
             "nullable": true
           },
+          "detailReady": {
+            "type": "boolean",
+            "description": "true면 재료 분량·양념·6~12단계 상세 보강이 완료된 상태. false면 기본 생성분(steps 2~6개)만 있고 ingredients[].amount/seasonings는 비어 있음. 이 열람 요청이 보강을 트리거했을 수도 있으며, 다음에 다시 열람하면 완료돼 있을 수 있음"
+          },
           "ingredients": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/RecipeDetailIngredient"
+            }
+          },
+          "seasonings": {
+            "type": "array",
+            "description": "detailReady가 false면 빈 배열",
+            "items": {
+              "$ref": "#/components/schemas/RecipeSeasoning"
             }
           },
           "steps": {
