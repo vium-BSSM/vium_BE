@@ -382,3 +382,109 @@ groups:
           isPaused: false
           notification_settings:
             receiver: vium-discord-daily-scrum
+        - uid: fg3d871wq5h4wc
+          title: Vium prod - 외부 HTTPS health 실패
+          condition: C
+          data:
+            - refId: A
+              relativeTimeRange:
+                from: 600
+                to: 0
+              datasourceUid: grafanacloud-prom
+              model:
+                editorMode: code
+                expr: max by (job) (max_over_time(probe_success{job="vium-api-health"}[5m])) or on() vector(0)
+                instant: true
+                intervalMs: 1000
+                legendFormat: __auto
+                maxDataPoints: 43200
+                range: false
+                refId: A
+            - refId: C
+              queryType: expression
+              datasourceUid: __expr__
+              model:
+                conditions:
+                    - evaluator:
+                        params:
+                            - 1
+                        type: lt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                            - C
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                datasource:
+                    type: __expr__
+                    uid: __expr__
+                expression: A
+                intervalMs: 1000
+                maxDataPoints: 43200
+                refId: C
+                type: threshold
+          noDataState: OK
+          execErrState: Error
+          for: 1m
+          annotations:
+            description: Seoul·Tokyo 프로브 모두 최근 5분간 /actuator/health 확인에 실패(또는 체크 결과 없음)하고 1분 지속되면 알림. DNS·인증서·Nginx·앱 상태와 Synthetics 체크 vium-api-health를 확인하세요.
+            summary: Vium 운영 API에 외부에서 HTTPS로 접속할 수 없습니다.
+          isPaused: false
+          notification_settings:
+            receiver: vium-discord-daily-scrum
+        - uid: fg3d8eg4rke80d
+          title: Vium prod - TLS 인증서 만료 임박
+          condition: C
+          data:
+            - refId: A
+              relativeTimeRange:
+                from: 600
+                to: 0
+              datasourceUid: grafanacloud-prom
+              model:
+                editorMode: code
+                expr: min by (job) ((last_over_time(probe_ssl_earliest_cert_expiry{job="vium-api-health"}[10m]) - time()) / 86400)
+                instant: true
+                intervalMs: 1000
+                legendFormat: __auto
+                maxDataPoints: 43200
+                range: false
+                refId: A
+            - refId: C
+              queryType: expression
+              datasourceUid: __expr__
+              model:
+                conditions:
+                    - evaluator:
+                        params:
+                            - 14
+                        type: lt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                            - C
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                datasource:
+                    type: __expr__
+                    uid: __expr__
+                expression: A
+                intervalMs: 1000
+                maxDataPoints: 43200
+                refId: C
+                type: threshold
+          noDataState: OK
+          execErrState: Error
+          for: 10m
+          annotations:
+            description: TLS 인증서 만료까지 14일 미만입니다. EC2에서 certbot 타이머와 갱신 로그를 확인하고 sudo certbot renew --dry-run으로 갱신 경로를 점검하세요.
+            summary: Vium 운영 TLS 인증서 만료가 14일 미만 남았습니다.
+          isPaused: false
+          notification_settings:
+            receiver: vium-discord-daily-scrum
