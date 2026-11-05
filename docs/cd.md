@@ -15,7 +15,8 @@ PR/develop에는 배포하지 않는다. 대기 중 새 main이 생긴 오래된
 - 신뢰 정책: audience `sts.amazonaws.com`, main의 OIDC subject만 허용.
   GitHub Environment는 현재 사용하지 않는다. 추후 환경을 사용하면 subject와
   환경의 허용 브랜치/승인 정책을 함께 변경해야 한다.
-- EC2 `vium-ec2-role`: AmazonSSMManagedInstanceCore 및 해당 저장소 pull 권한.
+- EC2 `vium-ec2-role`: AmazonSSMManagedInstanceCore 및 해당 저장소 pull 권한,
+  이미지 저장소용 S3 권한([배포 안내](deployment.md) 참고).
   SSM Agent online, AWS CLI, Docker Compose, Python 3, curl, flock 필요.
 - GitHub repository Variables: `AWS_ROLE_ARN`, `AWS_REGION`,
   `ECR_REPOSITORY`, `EC2_INSTANCE_ID`. 장기 액세스 키는 사용하지 않는다.
@@ -158,6 +159,29 @@ CLEANUP
 
 ## 최초 검증
 
+### #97 배포 시 5xx 알림 재개 (#100)
+
+아래 항목을 해당 운영 배포 PR의 체크리스트로 복사해 완료 여부를 기록한다.
+미완료 상태에서는 #100을 닫지 않는다.
+알림 설정 PR은 `Closes #100` 대신 `Refs #100`으로 연결한다. 기본 브랜치
+develop에 병합할 때 이슈가 자동 종료되는 것을 막기 위함이다. main 대상 배포 PR의
+종료 키워드는 기본 브랜치가 아니므로 자동 종료되지 않는다
+([GitHub 동작](https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue)).
+배포 PR에 아래 검증 완료를 기록한 뒤 #100을 수동 종료하고,
+이 일회성 절과 모니터링 문서의 참조를 삭제한다.
+
+- [ ] #97 수정이 main에 포함되고 해당 커밋의 CD 및 SSM 배포가 성공했는지 확인한다.
+- [ ] 인증된 미존재 경로 요청이 공통 응답 형식의 404를 반환하는지 확인한다.
+- [ ] Grafana `Vium prod - HTTP 5xx 비율` (`fg3bwgx3as8hsd`)의 평가를 재개한다.
+- [ ] 해당 규칙 description에서 `#97 운영 배포 확인 후 평가를 재개하세요.` 문구를 삭제한다.
+- [ ] 재개 후 쿼리·평가 상태를 확인한다. 5xx가 없거나 최소 요청 수 미달이면 No Data는 정상이다.
+- [ ] `vium-prod-1m` 그룹을 다시 export해 `monitoring/grafana/alert-rules.yaml`을 갱신하고,
+  해당 규칙의 `isPaused: false`를 확인한다.
+
+알림 구성과 검증 기록은 [모니터링 문서](monitoring.md)를 참고한다.
+
+### 최초 CD 실행 검증
+
 첫 실행 전에 EC2의 SSM 터미널에서 파일 **존재만** 검사한다. 비밀값을 출력하지 않는다.
 
 ```bash
@@ -178,5 +202,6 @@ printf "Bootstrap files present\n"
 5. 같은 main에서 수동 재실행해 불변 태그 재사용을 확인한다.
 
 로컬 문법/모의 테스트는 실제 IAM, ECR, SSM, RDS 연결을 검증하지 않는다.
-현재 애플리케이션 테스트는 H2 기반이며 PostgreSQL Flyway 사전 검증 job은
-별도 후속 작업이다.
+애플리케이션 테스트는 H2 기반이다. PostgreSQL Flyway·`ddl-auto: validate` 사전 검증은
+PR CI의 `PostgreSQL migration check`가 빈 DB 기준으로 수행한다([CI 안내](ci.md)).
+CD 자체는 이 검사를 다시 실행하지 않는다.

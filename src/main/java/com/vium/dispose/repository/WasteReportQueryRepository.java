@@ -98,16 +98,16 @@ public class WasteReportQueryRepository {
 			       ic.name as category_name,
 			       count(ce.id) as waste_count,
 			       coalesce(sum(ce.amount), 0)::numeric as total_wasted_amount,
-			       coalesce(sum(ce.amount), 0)::numeric /
+			       coalesce(coalesce(sum(ce.amount), 0)::numeric /
 			       nullif((select coalesce(sum(amount), 0)::numeric from consumption_events
-			                where user_id = ? and event_type = 'disposed'), 0) as waste_ratio
+			                where user_id = ? and event_type = 'disposed'), 0), 0) as waste_ratio
 			from consumption_events ce
 			join inventory_items ii on ce.inventory_item_id = ii.id
 			left join ingredient_catalog ingr on ingr.id = ii.ingredient_catalog_id
 			left join ingredient_categories ic on ic.id = ingr.category_id
 			where ce.user_id = ? and ce.event_type = 'disposed'
 			group by ic.id, ic.name
-			order by waste_ratio desc nulls last
+			order by waste_ratio desc nulls last, waste_count desc, category_id nulls last
 			""";
 
 		List<WastePatternDto> patterns = jdbcTemplate.query(sql, (rs, rowNum) -> {
