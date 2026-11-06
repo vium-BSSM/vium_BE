@@ -97,6 +97,10 @@ auth:
     retention: 30d
     batch-size: 1000
 
+metrics:
+  user-activity:
+    enabled: ${management.otlp.metrics.export.enabled:false}
+
 security:
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:}
