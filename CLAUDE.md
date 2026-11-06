@@ -283,5 +283,4 @@ com.vium
 ## 13. 운영 모니터링 (#92)
 
 - Grafana Cloud로 메트릭을 OTLP/HTTP push한다. 기본 비활성이며 `OTLP_METRICS_ENABLED`로 켠다. 추가 프로세스·공개 포트 없이 운영 health 노출을 유지하며 설정·검증·대시보드·알림은 `docs/monitoring.md`를 따른다.
-
 - 활성 사용자(오늘·7일, `user_sessions.issued_at` 기준)와 가입자(누적·오늘) gauge 4개를 OTLP가 켜져 있을 때 5분마다 DB에서 집계해 보낸다(`metrics.user-activity.enabled`, 기본값은 OTLP 플래그를 따름). 사용자별 라벨은 넣지 않는다. 정의와 패널 쿼리는 `docs/monitoring.md`.

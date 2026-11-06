@@ -99,7 +99,7 @@ auth:
 
 metrics:
   user-activity:
-    enabled: ${management.otlp.metrics.export.enabled}
+    enabled: ${management.otlp.metrics.export.enabled:false}
 
 security:
   cors:
