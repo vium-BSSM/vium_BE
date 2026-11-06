@@ -26,9 +26,13 @@ import static org.mockito.Mockito.verify;
 class OtlpMetricsExportTest {
 
     private ApplicationContextRunner runner(String configuration) {
-        return new ApplicationContextRunner()
+        return configurationRunner(configuration)
                 .withConfiguration(AutoConfigurations.of(
-                        MetricsAutoConfiguration.class, OtlpMetricsExportAutoConfiguration.class))
+                        MetricsAutoConfiguration.class, OtlpMetricsExportAutoConfiguration.class));
+    }
+
+    private ApplicationContextRunner configurationRunner(String configuration) {
+        return new ApplicationContextRunner()
                 .withInitializer(context -> {
                     try {
                         new YamlPropertySourceLoader().load("application", new FileSystemResource(configuration))
@@ -37,6 +41,33 @@ class OtlpMetricsExportTest {
                         throw new IllegalStateException(exception);
                     }
                 });
+    }
+
+    @Test
+    void userActivityIsDisabledByDefaultInMainConfiguration() {
+        configurationRunner("src/main/resources/application.yml").run(context ->
+                assertThat(context.getEnvironment().getProperty("metrics.user-activity.enabled")).isEqualTo("false"));
+    }
+
+    @Test
+    void userActivityFollowsEnabledOtlpFlag() {
+        configurationRunner("src/main/resources/application.yml")
+                .withPropertyValues("OTLP_METRICS_ENABLED=true").run(context ->
+                        assertThat(context.getEnvironment().getProperty("metrics.user-activity.enabled")).isEqualTo("true"));
+    }
+
+    @Test
+    void userActivityFollowsDisabledOtlpFlag() {
+        configurationRunner("src/main/resources/application.yml")
+                .withPropertyValues("OTLP_METRICS_ENABLED=false").run(context ->
+                        assertThat(context.getEnvironment().getProperty("metrics.user-activity.enabled")).isEqualTo("false"));
+    }
+
+    @Test
+    void testConfigurationOmitsUserActivityEvenWithOtlpEnvironmentFlag() {
+        configurationRunner("src/test/resources/application.yml")
+                .withPropertyValues("OTLP_METRICS_ENABLED=true").run(context ->
+                        assertThat(context.getEnvironment().getProperty("metrics.user-activity.enabled")).isNull());
     }
 
     @Test

@@ -3,7 +3,7 @@
 앱 → OTLP/HTTP(1분 주기, gzip) → Grafana Cloud로 메트릭을 직접 전송한다.
 EC2에는 Prometheus·Grafana·Alloy 프로세스나 공개 포트를 추가하지 않는다.
 JVM·HTTP 요청·HikariCP·Tomcat·Logback·프로세스의 자동 계측 메트릭을 사용한다.
-로그 수집(Loki), tracing, 비즈니스 커스텀 메트릭은 포함하지 않는다.
+로그 수집(Loki), tracing은 포함하지 않는다. 사용자 수 집계 gauge(아래 [서비스 사용 지표](#서비스-사용-지표)) 외의 비즈니스 커스텀 메트릭은 포함하지 않는다.
 
 ## 설정과 의존성
 
@@ -92,6 +92,73 @@ Dashboards → Import에서 아래 ID를 가져온다.
 패널이 동작한다고 보장하지 않는다. 빈 패널은 Explore에서 `_seconds`, `_total`,
 instance/job 라벨과 쿼리를 비교한다. 별도 JVM extras가 필요한 패널은 기본 수집에
 포함되지 않는다. 운영 대시보드 쿼리에는 `env="prod"` 필터를 적용한다.
+
+## 서비스 사용 지표
+
+`OTLP_METRICS_ENABLED=true`이면 사용자 수 gauge도 자동 활성화된다. 별도 환경변수는 없다.
+`metrics.user-activity.enabled`는 OTLP 전송 설정을 따른다. 기동 로그는
+`사용자 활동 메트릭 활성화: 갱신 간격 5분`이다. 기동 10초 후 처음 DB를 조회하고,
+그 후 갱신 완료 시점부터 5분마다 집계한다. 첫 조회 성공 전에는 시리즈가 없다(No Data).
+Gauge 콜백은 메모리의 값만 읽으며 DB를 조회하지 않는다.
+
+| Micrometer 이름 | 예상 Prometheus 이름 | 태그 | 의미 |
+|---|---|---|---|
+| `vium.users.active` | `vium_users_active` | `period=today` | 오늘 KST 00:00부터 세션이 발급된 distinct 사용자 수 |
+| `vium.users.active` | `vium_users_active` | `period=7d` | 오늘 포함 최근 7일, 6일 전 KST 00:00부터 세션이 발급된 distinct 사용자 수 |
+| `vium.users.registered` | `vium_users_registered` | 없음 | 탈퇴하지 않은 전체 가입자 수 |
+| `vium.users.signups` | `vium_users_signups` | `period=today` | 오늘 KST에 가입했고 탈퇴하지 않은 사용자 수 |
+
+기간은 Asia/Seoul 달력 기준이며, UTC로 저장된 컬럼과 비교할 때 경계도 UTC로 바꾼다.
+7일은 롤링 168시간이 아니다. 탈퇴 제외는 가입 지표에만 적용한다.
+폐기된 세션도 발급 이력이므로 활성 사용자에 포함하며, 같은 사용자의 여러 세션은 한 번만 센다.
+시리즈는 프로세스당 4개이며 사용자 ID 등 사용자별 라벨은 없다. 별도 단위 접미사는 지정하지 않는다.
+
+### 정의의 한계와 비용
+
+- 활성은 API 요청 전체가 아닌 **로그인·토큰 갱신**을 뜻한다. 전날 발급된 Access Token으로
+  자정 직후에만 사용하면 기본 토큰 수명 기준 최대 1시간 구간에서 누락될 수 있다.
+- 화면을 열지 않아도 백그라운드에서 토큰을 갱신하면 과다 집계될 수 있다.
+  **FE 갱신 정책 확인은 미완료**다. 401 시 갱신·선제 갱신·백그라운드 갱신 여부를 확인해 이곳에 기록한다.
+- 집계 실패 시 마지막 값을 유지하고 예외를 다시 던져 스케줄 관측에 오류를 남긴다.
+  첫 성공 전 실패는 No Data를 유지한다. 장애가 자정을 넘기면 `today`가 전날 값으로 남을 수 있다.
+- 활성 창 길이는 **Refresh Token 수명 + 세션 정리 보존 기간 이하**여야 한다(현재 14 + 30 = 약 44일).
+  30일 지표 추가나 토큰 수명·#102 보존 기간 변경 시 다시 확인한다.
+- SQL 한 번으로 네 값을 조회한다. 현재 규모에서는 인덱스 없이 5분마다 집계하며,
+  쿼리가 지속적으로 100ms 이상이거나 세션이 100만 행 이상이면 인덱스 후속 이슈를 만든다.
+- 단일 스케줄러 스레드를 공유하므로 자동 폐기 등 다른 작업이 길어지면 갱신도 지연된다.
+
+### 패널 쿼리
+
+아래 이름은 OTLP 변환 후 예상값이다. 처음에는 Explore에서
+`{__name__=~"vium_users.*", env="prod"}`로 실제 이름과 라벨을 확인하고 맞춘다.
+재시작 시 `instance`/`service_instance_id`가 달라져 시리즈가 나뉠 수 있으므로 `max()`로 합친다.
+대시보드 시간대는 `Asia/Seoul`로 둔다.
+
+| 패널 | 유형 | PromQL |
+|---|---|---|
+| 오늘 활성 사용자 | Stat | `max(vium_users_active{application="vium-be",env="prod",period="today"})` |
+| 7일 활성 사용자 | Stat | `max(vium_users_active{application="vium-be",env="prod",period="7d"})` |
+| 누적 가입자 | Stat | `max(vium_users_registered{application="vium-be",env="prod"})` |
+| 오늘 가입자 | Stat | `max(vium_users_signups{application="vium-be",env="prod",period="today"})` |
+| 활성 사용자 추이 | Time series | `max by (period) (vium_users_active{application="vium-be",env="prod"})` |
+| 일별 활성 사용자(근사) | Time series, Min interval `1d` | `max(max_over_time(vium_users_active{application="vium-be",env="prod",period="today"}[1d]))` |
+| 갱신 실패 | Time series | `sum(increase(tasks_scheduled_execution_seconds_count{application="vium-be",env="prod",code_namespace=~".*UserActivityMetrics",outcome="ERROR"}[15m]))` |
+
+일별 근사 패널을 UTC 자정(KST 09:00) 평가 시점에 맞추면 각 점은 그 직전 24시간의
+최댓값이며, 대부분 전날 최종 DAU에 가깝다. 실제 평가 시점은 패널 조회 범위와 step에
+따라 확인해야 하며 Min interval만으로 KST 하루 집계가 보장되지는 않는다.
+정확한 일별 이력은 DB 쿼리로 확인한다. Grafana 메트릭 보존 기간은 현재 계획상 14일이다.
+갱신 실패 패널의 `code_namespace`·`outcome` 라벨도 Explore에서 확인한다.
+
+### 배포 후 검증 (미완료)
+
+구현 시 운영 배포나 Grafana 설정 변경은 수행하지 않았다. 머지·배포 후 다음을 기록한다.
+
+1. 활성화 로그와 갱신 실패 여부, Explore의 실제 이름 3개와 `period` 라벨을 확인한다.
+2. RDS의 같은 기간 집계와 Explore 값이 5분 내 일치하는지 비교하고, 최근 가입 시각이 UTC인지 확인한다.
+3. 최근 7일 세션 집계의 `EXPLAIN (ANALYZE, BUFFERS)` 실행 시간과 세션 행 수를 기록한다.
+4. 실제 이름·라벨로 위 패널 쿼리를 맞추고 대시보드에 추가한다.
+5. KST 자정 후 값 초기화와 배포 전후 활성 시리즈 증가(예상 4개, 재시작 중복 가능)를 확인한다.
 
 ## 알림
 
@@ -294,7 +361,7 @@ Synthetics 무료 한도는 월 API 실행 100k이며 이 체크는 30일 43,200
 변경 가능한 한도는 [Grafana 가격 안내](https://grafana.com/pricing/)와 스택 Usage에서 확인한다.
 JVM·시스템 약 200개에 HTTP URI·상태·메서드 등 라벨 조합과 버킷 수가 곱해진다.
 URI 약 35개 기준 1~2천 시리즈는 초기 추정이며 실제 조합에 따라 더 늘 수 있다.
-새 메트릭·histogram 추가 전 시리즈 수를 계산하고 배포 후 Usage로 확인한다.
+새 메트릭·histogram 추가 전 시리즈 수를 계산하고 배포 후 Usage로 확인한다. 사용자 수 gauge는 프로세스당 4개 시리즈다.
 
 매칭되지 않는 경로는 프레임워크의 낮은 카디널리티 URI 라벨(예: NOT_FOUND/UNKNOWN)로
 묶인다. 사용자 ID·원문 URL·쿼리 문자열을 태그로 넣지 않는다.

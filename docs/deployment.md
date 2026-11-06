@@ -37,6 +37,7 @@ RDS URL의 `sslmode=verify-full`은 인증서와 호스트를 검증한다. 인�
 `AWS_REGION`, `S3_PRIVATE_BUCKET`, `S3_PUBLIC_BUCKET`, `IMAGE_PUBLIC_BASE_URL`을 실제 운영 값과 대조한다. 활성화 시 버킷 이름 형식이 잘못되거나 두 버킷이 같거나 공개 URL이 경로 없는 HTTPS 형식이 아니면 앱 기동이 실패한다. CD 전환 후에는 `/opt/vium/shared/.env.prod`(권한 600)를 수정하고 현재 릴리스의 컨테이너를 재생성해 반영한다([CD 안내](cd.md)).
 
 `OTLP_METRICS_ENABLED`, `OTLP_METRICS_URL`, `OTLP_METRICS_AUTHORIZATION`는 선택 사항이며 Grafana Cloud 메트릭 전송은 기본 비활성이다. 활성화·대시보드·알림 절차는 [운영 모니터링](monitoring.md)을 따른다.
+`OTLP_METRICS_ENABLED=true`이면 사용자 수 gauge도 함께 켜지며 별도 환경변수는 없다([서비스 사용 지표](monitoring.md#서비스-사용-지표)).
 
 ### IMDS hop limit 확인
 
