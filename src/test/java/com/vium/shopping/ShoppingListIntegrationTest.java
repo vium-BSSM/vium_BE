@@ -86,6 +86,18 @@ class ShoppingListIntegrationTest {
 	}
 
 	@Test
+	void addShoppingListItemWithoutCatalogIdOrCustomNameReturns400() throws Exception {
+		mockMvc.perform(post("/api/me/shopping-list-items")
+				.header("Authorization", "Bearer " + tokenService.issue(userId).accessToken())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{"suggestedQuantity":10,"unitId":4,"reason":"자주 버림"}
+					"""))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+	}
+
+	@Test
 	void getShoppingListAllowsNullUnitWithoutError() throws Exception {
 		jdbcTemplate.update("""
 			insert into "shopping_list_items"
