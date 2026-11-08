@@ -27,9 +27,16 @@ public class RecipeIngredient {
 	@Column(name = "ingredient_catalog_id", nullable = false)
 	private Long ingredientCatalogId;
 
+	@Column(name = "amount", length = 50)
+	private String amount;
+
 	@Builder
 	public RecipeIngredient(Long recipeId, Long ingredientCatalogId) {
 		this.recipeId = recipeId;
 		this.ingredientCatalogId = ingredientCatalogId;
+	}
+
+	public void setAmount(String amount) {
+		this.amount = amount;
 	}
 }

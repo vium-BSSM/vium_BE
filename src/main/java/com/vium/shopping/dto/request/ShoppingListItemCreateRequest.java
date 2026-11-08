@@ -1,5 +1,7 @@
 package com.vium.shopping.dto.request;
 
+import com.vium.global.exception.BusinessException;
+import com.vium.global.exception.ErrorCode;
 import java.math.BigDecimal;
 import jakarta.validation.constraints.NotNull;
 
@@ -48,7 +50,7 @@ public record ShoppingListItemCreateRequest(
 	 * 2. customName이 주어진 경우, 공백만 있으면 null로 처리
 	 *
 	 * @return customName이 정규화된 요청 객체
-	 * @throws IllegalArgumentException 검증 실패 시
+	 * @throws BusinessException 검증 실패 시 (ErrorCode.INVALID_REQUEST)
 	 */
 	public ShoppingListItemCreateRequest validate() {
 		// customName을 정규화 (공백 제거)
@@ -58,7 +60,7 @@ public record ShoppingListItemCreateRequest(
 
 		// 둘 다 null이면 에러
 		if (ingredientCatalogId == null && normalizedCustomName == null) {
-			throw new IllegalArgumentException(
+			throw new BusinessException(ErrorCode.INVALID_REQUEST,
 				"ingredientCatalogId 또는 customName 중 하나는 반드시 필요합니다");
 		}
 

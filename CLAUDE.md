@@ -89,7 +89,8 @@
 - 로그인·회원가입·토큰 갱신의 POST 경로는 동일한 RequestMatcher로 공개 허용 및 Bearer 검증 생략을 적용한다. 만료되거나 잘못된 Authorization 헤더가 붙어도 요청 본문을 검증한다. 다른 메서드와 보호 경로의 Bearer 검증은 유지한다.
 - `POST /api/auth/token/refresh`는 Refresh Token을 본문으로 받아 새 토큰 쌍과 `expiresIn`(Access Token 유효기간 초)을 반환한다. 세션 행의 비관적 쓰기 잠금으로 동시 재사용을 막고, 만료·폐기·탈퇴 사용자 토큰을 거부한다. 기존 세션 폐기와 새 세션 저장은 동일 트랜잭션이다. 새 Refresh Token 만료는 재발급 시점부터 계산하며 기존 Access Token은 만료까지 유지된다. 재사용 시 요청만 거부하고 토큰 계보 전체 폐기는 지원하지 않는다. 교체 커밋 후 응답이 유실되면 다시 로그인해야 한다.
 - `POST /api/auth/logout`은 유효한 Access Token 인증이 필요하며 본문으로 받은 본인 Refresh Token 세션 하나만 잠금 후 폐기한다. 미존재 토큰·이미 폐기된 본인 토큰은 200, 다른 사용자 세션은 403이다. 만료된 본인 Refresh Token도 폐기 가능하다. 기존 Access Token과 다른 세션은 유지된다. 재발급과 로그아웃은 클라이언트에서 직렬화하고 최신 Refresh Token으로 로그아웃한 뒤 로컬 토큰을 삭제한다.
-- **미구현:** 토큰 계보 기반 재사용 탐지·일괄 폐기 및 만료 세션 정리.
+- 만료 후 30일이 지난 세션은 `SessionCleanupScheduler`가 매일 04:30(Asia/Seoul)에 1000건 단위로 삭제한다(`AUTH_SESSION_CLEANUP_ENABLED`, 앱 기본 false·운영 compose 기본 true). 삭제 기준은 `expires_at`뿐이므로 토큰을 쓸 수 있는 동안에는 폐기된 행도 남는다. 삭제된 토큰은 미존재 토큰과 같이 처리된다(갱신 401, 로그아웃 200).
+- **미구현:** 토큰 계보 기반 재사용 탐지·일괄 폐기.
 
 ---
 
@@ -112,7 +113,7 @@
 
 - **도메인별 모놀리식 + 계층형 아키텍처**를 사용한다. 하나의 Spring Boot 애플리케이션과 PostgreSQL DB를 운영한다.
 - `dispose`는 소진·폐기, 자동 폐기, 이벤트 이력, 낭비 리포트·패턴 집계를 담당한다.
-- `ingredient`는 공용 재료 카탈로그·소비기한 규칙, `inventory`는 사용자별 보유 재료·잔여 수량·상태, `user`는 사용자 정보·설정을 담당한다.
+- `ingredient`는 공용 재료 카탈로그·소비기한 규칙, `inventory`는 사용자별 보유 재료·잔여 수량·상태, `user`는 사용자 정보·설정·사용자 수 집계 지표를 담당한다.
 - `receipt`는 영수증·온라인 주문내역의 행 복원·규칙 파싱, 구매 DRAFT 저장, 확정·조회·삭제를 담당한다. 외부 OCR·LLM API를 호출하지 않는다. 이미지 소유권은 `ImageService`, 카탈로그 매칭 데이터·소비기한 규칙은 `ingredient`의 서비스, 확정 시 재고 생성은 `InventoryService`를 통해 처리한다.
 - `image`는 S3 이미지 검증·업로드·소유권·임시 조회 URL과 실패 파일 정리를 담당한다. `UserProfileService`로 활성 사용자를 확인하고 이미지 메타데이터만 변경하며 프로필·레시피 연결은 각 도메인이 담당한다.
 - `auth`는 로그인 흐름·토큰 발급·세션 저장을 담당한다. `user`는 계정 조회와 비밀번호 검증을 담당하며, `auth`에는 향후 회원가입·토큰 갱신·로그아웃 흐름을 추가한다.
@@ -156,16 +157,19 @@ com.vium
 │   ├── entity           Purchase, PurchaseItem, PurchaseType, PurchaseStatus
 │   └── repository       PurchaseRepository, PurchaseItemRepository, PurchaseQueryRepository
 ├── auth
+│   ├── config           SessionCleanupProperties
 │   ├── controller       AuthController
 │   ├── dto              LoginRequest, LoginResponse
-│   ├── service          AuthService, TokenService
+│   ├── service          AuthService, TokenService,
+│   │                    SessionCleanupService, SessionCleanupScheduler
 │   ├── entity           UserSession
 │   └── repository       UserSessionRepository
 ├── user
 │   ├── controller       UserController
-│   ├── dto              UserIdentity
-│   ├── service          UserSettingsService, UserLoginService, UserProfileService
-│   └── repository       UserSettingsRepository, UserCredentialRepository
+│   ├── dto              UserIdentity, UserActivityCounts
+│   ├── service          UserSettingsService, UserLoginService, UserProfileService,
+│   │                    UserActivityService, UserActivityMetrics
+│   └── repository       UserSettingsRepository, UserCredentialRepository, UserActivityQueryRepository
 └── global
     ├── common           ApiResponse
     ├── exception        BusinessException, ErrorCode, GlobalExceptionHandler 등
@@ -279,3 +283,4 @@ com.vium
 ## 13. 운영 모니터링 (#92)
 
 - Grafana Cloud로 메트릭을 OTLP/HTTP push한다. 기본 비활성이며 `OTLP_METRICS_ENABLED`로 켠다. 추가 프로세스·공개 포트 없이 운영 health 노출을 유지하며 설정·검증·대시보드·알림은 `docs/monitoring.md`를 따른다.
+- 활성 사용자(오늘·7일, `user_sessions.issued_at` 기준)와 가입자(누적·오늘) gauge 4개를 OTLP가 켜져 있을 때 5분마다 DB에서 집계해 보낸다(`metrics.user-activity.enabled`, 기본값은 OTLP 플래그를 따름). 사용자별 라벨은 넣지 않는다. 정의와 패널 쿼리는 `docs/monitoring.md`.

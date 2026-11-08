@@ -104,7 +104,7 @@ public class RecipeRecommendationService {
 			reusableRecipes.values().stream().flatMap(List::stream).collect(Collectors.toList())
 		);
 
-		List<GeneratedRecipe> llmRecipes = callLlmIfNeeded(userId, reusableRecipes, userCatalogIds, inventoryMap);
+		List<GeneratedRecipe> llmRecipes = callLlmIfNeeded(userId, reusableRecipes, userCatalogIds, inventoryMap, newBatchId);
 
 		if (allRecipes.isEmpty() && llmRecipes.isEmpty()) {
 			throw new BusinessException(ErrorCode.RECIPE_GENERATION_FAILED);
@@ -157,7 +157,7 @@ public class RecipeRecommendationService {
 	}
 
 	private List<GeneratedRecipe> callLlmIfNeeded(Long userId, Map<RecipeCategory, List<Recipe>> reusableRecipes,
-		List<Long> userCatalogIds, Map<Long, LocalDate> inventoryMap) {
+		List<Long> userCatalogIds, Map<Long, LocalDate> inventoryMap, UUID batchId) {
 
 		Map<String, Integer> need = new HashMap<>();
 		Set<String> excludeTitles = new HashSet<>();
@@ -183,7 +183,7 @@ public class RecipeRecommendationService {
 		try {
 			List<InventoryItem> activeInventory = getActiveInventory(userId);
 			List<IngredientInfo> ingredientInfos = buildIngredientList(activeInventory, inventoryMap);
-			LlmRecipeRequest request = new LlmRecipeRequest(ingredientInfos, need, new ArrayList<>(excludeTitles));
+			LlmRecipeRequest request = new LlmRecipeRequest(batchId, ingredientInfos, need, new ArrayList<>(excludeTitles));
 
 			LlmRecipeResponse response = callLlmWithRetry(request);
 			List<RecipeDto> validatedDtos = llmRecipeValidator.validate(response.recipes(), userCatalogIds, need);

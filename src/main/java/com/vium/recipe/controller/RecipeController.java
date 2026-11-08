@@ -6,6 +6,7 @@ import com.vium.recipe.dto.RecipeCompleteRequest;
 import com.vium.recipe.dto.RecipeDetailResponse;
 import com.vium.recipe.dto.RecommendedRecipesResponse;
 import com.vium.recipe.service.RecipeCompletionService;
+import com.vium.recipe.service.RecipeDetailEnrichmentService;
 import com.vium.recipe.service.RecipeQueryService;
 import com.vium.recipe.service.RecipeRecommendationService;
 import jakarta.validation.Valid;
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class RecipeController {
 
 	private final RecipeQueryService recipeQueryService;
+	private final RecipeDetailEnrichmentService recipeDetailEnrichmentService;
 	private final RecipeCompletionService recipeCompletionService;
 	private final RecipeRecommendationService recipeRecommendationService;
 	private final CurrentUserProvider currentUserProvider;
@@ -31,11 +33,17 @@ public class RecipeController {
 	/**
 	 * API ② 레시피 상세 조회
 	 * GET /api/me/recipes/{recipeId}
+	 *
+	 * 상세(재료 분량 + 6~12단계)가 아직 없으면(BASIC) 이 열람 요청이 최초로 LLM 보강을 트리거한다.
+	 * 소유권 확인은 첫 getRecipeDetail 호출에서 끝나므로, 보강은 그 이후에만 시도한다.
 	 */
 	@GetMapping("/{recipeId}")
 	public ApiResponse<RecipeDetailResponse> getRecipeDetail(@PathVariable Long recipeId) {
 		Long userId = currentUserProvider.getCurrentUserId();
 		RecipeDetailResponse response = recipeQueryService.getRecipeDetail(userId, recipeId);
+		if (recipeDetailEnrichmentService.enrichIfNeeded(recipeId)) {
+			response = recipeQueryService.getRecipeDetail(userId, recipeId);
+		}
 		return ApiResponse.ok(response);
 	}
 

@@ -9,11 +9,13 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.ColumnDefault;
 
 @Entity
 @Table(name = "recipes")
@@ -53,6 +55,14 @@ public class Recipe {
 	@Column(name = "created_at", nullable = false)
 	private LocalDateTime createdAt;
 
+	@Column(name = "detail_status", nullable = false, length = 20)
+	@Enumerated(EnumType.STRING)
+	@ColumnDefault("'BASIC'")
+	private RecipeDetailStatus detailStatus = RecipeDetailStatus.BASIC;
+
+	@Column(name = "detail_generation_started_at")
+	private Instant detailGenerationStartedAt;
+
 	@Builder
 	public Recipe(String title, String description, RecipeCategory category, Integer cookTime,
 			String imageUrl, String source) {
@@ -78,5 +88,13 @@ public class Recipe {
 
 	public void setImageAuthorUrl(String imageAuthorUrl) {
 		this.imageAuthorUrl = imageAuthorUrl;
+	}
+
+	public void markDetailGenerated() {
+		this.detailStatus = RecipeDetailStatus.DETAILED;
+	}
+
+	public void resetDetailGeneration() {
+		this.detailStatus = RecipeDetailStatus.BASIC;
 	}
 }

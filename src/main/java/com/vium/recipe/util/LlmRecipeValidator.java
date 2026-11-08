@@ -117,8 +117,8 @@ public class LlmRecipeValidator {
 				}
 			}
 
-			// steps 검증: 1~10개, 각 항목 공백 아님, 500자 이하
-			if (recipe.steps() == null || recipe.steps().isEmpty() || recipe.steps().size() > 10) {
+			// steps 검증: 1~12개, 각 항목 공백 아님, 500자 이하
+			if (recipe.steps() == null || recipe.steps().isEmpty() || recipe.steps().size() > 12) {
 				log.debug("조리 단계 개수 검증 실패: {}", recipe.steps() != null ? recipe.steps().size() : "null");
 				return false;
 			}

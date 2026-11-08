@@ -1,13 +1,18 @@
 package com.vium.recipe.client;
 
 import com.vium.recipe.config.LlmProperties;
+import com.vium.recipe.dto.LlmRecipeDetailRequest;
+import com.vium.recipe.dto.LlmRecipeDetailResponse;
 import com.vium.recipe.dto.LlmRecipeRequest;
 import com.vium.recipe.dto.LlmRecipeResponse;
+import java.net.http.HttpClient;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -21,45 +26,130 @@ public class GeminiRecipeClient implements LlmRecipeClient {
 	private final LlmProperties properties;
 	private final JsonMapper jsonMapper;
 	private final RestClient restClient;
+	private final RestClient detailRestClient;
 
 	@Autowired
 	public GeminiRecipeClient(LlmProperties properties, JsonMapper jsonMapper) {
-		this(properties, jsonMapper, RestClient.builder().build());
+		this(properties, jsonMapper,
+			RestClient.builder().requestFactory(buildRequestFactory(properties.getTimeoutSeconds())).build(),
+			RestClient.builder().requestFactory(buildRequestFactory(properties.getDetailTimeoutSeconds())).build());
 	}
 
-	GeminiRecipeClient(LlmProperties properties, JsonMapper jsonMapper, RestClient restClient) {
+	GeminiRecipeClient(LlmProperties properties, JsonMapper jsonMapper, RestClient restClient, RestClient detailRestClient) {
 		this.properties = properties;
 		this.jsonMapper = jsonMapper;
 		this.restClient = restClient;
+		this.detailRestClient = detailRestClient;
+	}
+
+	private static JdkClientHttpRequestFactory buildRequestFactory(int timeoutSeconds) {
+		Duration timeout = Duration.ofSeconds(timeoutSeconds);
+		JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(
+			HttpClient.newBuilder().connectTimeout(timeout).build());
+		factory.setReadTimeout(timeout);
+		return factory;
 	}
 
 	private static final String GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent";
 	private static final int MAX_OUTPUT_TOKENS = 8192;
+	private static final String SYSTEM_INSTRUCTION =
+		"당신은 자취생을 위한 레시피 추천 도우미입니다.\n반드시 지정된 JSON 형식으로만 답하세요.";
 
 	@Override
 	public LlmRecipeResponse generateRecipes(LlmRecipeRequest request) {
+		long startedAt = System.currentTimeMillis();
 		try {
-			String systemInstruction = "당신은 자취생을 위한 레시피 추천 도우미입니다.\n반드시 지정된 JSON 형식으로만 답하세요.";
 			String userPrompt = buildUserPrompt(request);
+			Map<String, Object> responseMap = callGemini(restClient, userPrompt, buildResponseSchema());
+			LlmRecipeResponse response = parseGeminiResponse(responseMap);
+			log.info("레시피 배치 생성 성공: batchId={}, elapsedMs={}, {}",
+				request.batchId(), System.currentTimeMillis() - startedAt, formatUsage(responseMap));
+			return response;
+		} catch (GeminiCallException e) {
+			log.warn("레시피 배치 생성 호출 실패: batchId={}, elapsedMs={}, {}",
+				request.batchId(), System.currentTimeMillis() - startedAt, e.logDetail);
+			throw e;
+		}
+	}
 
-			Map<String, Object> requestBody = buildGeminiRequest(systemInstruction, userPrompt);
+	@Override
+	public LlmRecipeDetailResponse enrichRecipeDetail(LlmRecipeDetailRequest request) {
+		long startedAt = System.currentTimeMillis();
+		try {
+			String userPrompt = buildDetailPrompt(request);
+			Map<String, Object> responseMap = callGemini(detailRestClient, userPrompt, buildDetailResponseSchema());
+			LlmRecipeDetailResponse response = parseDetailResponse(responseMap);
+			log.info("레시피 상세 보강 성공: recipeId={}, elapsedMs={}, {}",
+				request.recipeId(), System.currentTimeMillis() - startedAt, formatUsage(responseMap));
+			return response;
+		} catch (GeminiCallException e) {
+			log.warn("레시피 상세 보강 호출 실패: recipeId={}, elapsedMs={}, {}",
+				request.recipeId(), System.currentTimeMillis() - startedAt, e.logDetail);
+			throw e;
+		}
+	}
 
+	/**
+	 * callGemini/parse 단계에서 발생한 실패를 호출부까지 그대로 전달해, 로그를 상위(generateRecipes/
+	 * enrichRecipeDetail)에서 식별자(batchId/recipeId)·elapsedMs와 함께 한 줄로만 남기기 위한 내부 예외.
+	 * message는 기존 공개 계약과 동일(LLM 호출 실패 / 응답 파싱 실패)하게 유지한다.
+	 */
+	private static final class GeminiCallException extends RuntimeException {
+		private final String logDetail;
+
+		GeminiCallException(String message, String logDetail) {
+			super(message);
+			this.logDetail = logDetail;
+		}
+	}
+
+	/**
+	 * HTTP 실패 원인을 대략적인 범주로 분류한다. 429는 RATE_LIMIT, 5xx는 UPSTREAM_ERROR, 그 외 4xx는
+	 * CLIENT_ERROR, 응답 자체를 못 받았는데 원인이 타임아웃이면 TIMEOUT, 나머지는 CLIENT_ERROR로 묶는다.
+	 */
+	static String classifyFailureReason(RestClientException e, Integer status) {
+		if (status != null) {
+			if (status == 429) return "RATE_LIMIT";
+			if (status / 100 == 5) return "UPSTREAM_ERROR";
+			if (status / 100 == 4) return "CLIENT_ERROR";
+			return "UNKNOWN";
+		}
+		for (Throwable cause = e; cause != null; cause = cause.getCause()) {
+			if (cause instanceof java.net.http.HttpTimeoutException) {
+				return "TIMEOUT";
+			}
+		}
+		return "CLIENT_ERROR";
+	}
+
+	private String formatUsage(Map<String, Object> responseMap) {
+		var usage = jsonMapper.valueToTree(responseMap).path("usageMetadata");
+		if (usage.isMissingNode()) {
+			return "tokens=N/A";
+		}
+		return "promptTokens=" + usage.path("promptTokenCount").asInt(-1)
+			+ ", candidatesTokens=" + usage.path("candidatesTokenCount").asInt(-1)
+			+ ", totalTokens=" + usage.path("totalTokenCount").asInt(-1);
+	}
+
+	private Map<String, Object> callGemini(RestClient client, String userPrompt, Map<String, Object> responseSchema) {
+		try {
+			Map<String, Object> requestBody = buildGeminiRequest(userPrompt, responseSchema);
 			String url = GEMINI_API_URL.replace("{model}", properties.getModel());
 
-			Map<String, Object> responseMap = restClient.post()
+			return client.post()
 				.uri(url)
 				.header("x-goog-api-key", properties.getApiKey())
 				.header("Content-Type", "application/json")
 				.body(requestBody)
 				.retrieve()
 				.body(new ParameterizedTypeReference<Map<String, Object>>() {});
-
-			return parseGeminiResponse(responseMap);
 		} catch (RestClientException e) {
 			Integer status = e instanceof RestClientResponseException response ? response.getStatusCode().value() : null;
-			log.warn("Gemini API 호출 실패: type={}, status={}", e.getClass().getSimpleName(), status);
-			// HTTP 예외의 메시지와 cause에는 요청 URL이나 응답 원문이 포함될 수 있다.
-			throw new RuntimeException("LLM 호출 실패");
+			String reason = classifyFailureReason(e, status);
+			// HTTP 예외의 메시지와 cause에는 요청 URL이나 응답 원문이 포함될 수 있어 로그에 남기지 않는다.
+			throw new GeminiCallException("LLM 호출 실패",
+				"reason=" + reason + ", status=" + status + ", type=" + e.getClass().getSimpleName());
 		}
 	}
 
@@ -100,20 +190,50 @@ public class GeminiRecipeClient implements LlmRecipeClient {
 		return sb.toString();
 	}
 
+	private String buildDetailPrompt(LlmRecipeDetailRequest request) {
+		StringBuilder sb = new StringBuilder("아래 레시피에 1인분 기준 재료 분량과 양념, 상세 조리 단계를 추가해 주세요.\n\n");
+		sb.append("{\"title\": \"").append(escapeJson(request.title())).append("\", ")
+			.append("\"category\": \"").append(request.category()).append("\", ")
+			.append("\"ingredients\": [");
+		for (int i = 0; i < request.ingredients().size(); i++) {
+			if (i > 0) sb.append(", ");
+			LlmRecipeDetailRequest.IngredientInfo ing = request.ingredients().get(i);
+			sb.append("{\"catalogId\": ").append(ing.catalogId()).append(", ")
+				.append("\"name\": \"").append(escapeJson(ing.name())).append("\"}");
+		}
+		sb.append("]}\n\n")
+			.append("규칙:\n")
+			.append("1. ingredients 목록의 catalogId를 그대로 전부 사용하세요. 추가하거나 빼지 마세요. ")
+			.append("ingredients 목록에 있는 재료는 소금·간장 같은 양념이라도 ingredients에 분량(amount)을 쓰고, ")
+			.append("seasonings에는 ingredients 목록에 없는 양념만 분량과 함께 쓰세요.\n")
+			.append("2. 모든 분량(ingredients의 amount, seasonings의 amount)은 1인분 기준으로 계산하세요.\n")
+			.append("3. 분량은 다음과 같은 형식 중 상황에 맞는 걸 골라 쓰세요: \"한 숟가락(15ml)\", \"두 숟가락\", \"10g\", ")
+			.append("\"1/2개(약 80g)\", \"종이컵 1컵(180ml)\", \"한 꼬집\", \"약간\". ")
+			.append("가능하면 숫자와 단위를 함께 쓰고, 정확히 재기 어려운 경우에만 \"한 꼬집\"이나 \"약간\"을 쓰세요.\n")
+			.append("4. seasonings의 각 항목은 name과 amount(3번 형식)를 반드시 포함하고, 최대 10개까지만 쓰세요. ")
+			.append("쓰지 않는 레시피면 빈 배열로 두세요.\n")
+			.append("5. steps는 6~12단계로 작성하세요. 각 단계마다 다음을 포함해 요리 초보도 실패하지 않고 따라 할 수 있게 쓰세요: ")
+			.append("불을 쓰는 단계는 불 세기(센 불/중간 불/약한 불 중 하나), 걸리는 시간(예: \"3분간\"), ")
+			.append("다음 단계로 넘어가도 되는 상태 기준(예: \"가장자리가 노릇해지면\", \"물이 끓어오르면\"). ")
+			.append("각 단계는 500자 이하로 쓰세요.");
+		return sb.toString();
+	}
+
 	private String escapeJson(String str) {
 		return str.replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r");
 	}
 
-	private Map<String, Object> buildGeminiRequest(String systemInstruction, String userPrompt) {
+	private Map<String, Object> buildGeminiRequest(String userPrompt, Map<String, Object> responseSchema) {
 		return Map.of(
 			"contents", List.of(
 				Map.of("role", "user", "parts", List.of(Map.of("text", userPrompt)))
 			),
-			"system_instruction", Map.of("parts", List.of(Map.of("text", systemInstruction))),
+			"system_instruction", Map.of("parts", List.of(Map.of("text", SYSTEM_INSTRUCTION))),
 			"generationConfig", Map.of(
 				"responseMimeType", "application/json",
-				"responseSchema", buildResponseSchema(),
-				"maxOutputTokens", MAX_OUTPUT_TOKENS
+				"responseSchema", responseSchema,
+				"maxOutputTokens", MAX_OUTPUT_TOKENS,
+				"thinkingConfig", Map.of("thinkingBudget", 0)
 			)
 		);
 	}
@@ -143,6 +263,38 @@ public class GeminiRecipeClient implements LlmRecipeClient {
 				)
 			),
 			"required", List.of("recipes")
+		);
+	}
+
+	private Map<String, Object> buildDetailResponseSchema() {
+		return Map.of(
+			"type", "OBJECT",
+			"properties", Map.of(
+				"ingredients", Map.of(
+					"type", "ARRAY",
+					"items", Map.of(
+						"type", "OBJECT",
+						"properties", Map.of(
+							"catalogId", Map.of("type", "INTEGER"),
+							"amount", Map.of("type", "STRING")
+						),
+						"required", List.of("catalogId", "amount")
+					)
+				),
+				"seasonings", Map.of(
+					"type", "ARRAY",
+					"items", Map.of(
+						"type", "OBJECT",
+						"properties", Map.of(
+							"name", Map.of("type", "STRING"),
+							"amount", Map.of("type", "STRING")
+						),
+						"required", List.of("name", "amount")
+					)
+				),
+				"steps", Map.of("type", "ARRAY", "items", Map.of("type", "STRING"))
+			),
+			"required", List.of("ingredients", "seasonings", "steps")
 		);
 	}
 
@@ -181,9 +333,51 @@ public class GeminiRecipeClient implements LlmRecipeClient {
 			stage = "mapping";
 			return jsonMapper.treeToValue(root, LlmRecipeResponse.class);
 		} catch (Exception e) {
-			log.warn("Gemini 응답 파싱 실패: stage={}, finishReason={}, textLength={}, type={}",
-				stage, finishReason, text.length(), e.getClass().getSimpleName());
-			throw new RuntimeException("응답 파싱 실패");
+			throw new GeminiCallException("응답 파싱 실패",
+				"stage=" + stage + ", finishReason=" + finishReason + ", textLength=" + text.length()
+					+ ", type=" + e.getClass().getSimpleName());
+		}
+	}
+
+	LlmRecipeDetailResponse parseDetailResponse(Map<String, Object> responseMap) {
+		String stage = "envelope";
+		String finishReason = "MISSING";
+		StringBuilder text = new StringBuilder();
+		try {
+			var candidates = jsonMapper.valueToTree(responseMap).path("candidates");
+			if (!candidates.isArray() || candidates.isEmpty()) {
+				throw new IllegalArgumentException("Gemini 응답에 candidates가 없습니다");
+			}
+			var candidate = candidates.get(0);
+			String rawFinishReason = candidate.path("finishReason").asText();
+			if (candidate.has("finishReason")) {
+				finishReason = List.of("STOP", "MAX_TOKENS", "SAFETY", "RECITATION", "OTHER")
+					.contains(rawFinishReason) ? rawFinishReason : "OTHER";
+			}
+			if (candidate.has("finishReason") && !"STOP".equals(candidate.path("finishReason").asText())) {
+				throw new IllegalArgumentException("Gemini 응답이 정상적으로 완료되지 않았습니다");
+			}
+			var parts = candidate.path("content").path("parts");
+			if (!parts.isArray()) {
+				throw new IllegalArgumentException("Gemini 응답에 parts가 없습니다");
+			}
+			for (var part : parts) {
+				if (!part.path("thought").asBoolean(false) && part.path("text").isString()) {
+					text.append(part.path("text").asText());
+				}
+			}
+			stage = "json";
+			var root = jsonMapper.readTree(text.toString());
+			if (root == null || !root.path("ingredients").isArray() || !root.path("seasonings").isArray()
+				|| !root.path("steps").isArray()) {
+				throw new IllegalArgumentException("Gemini 응답에 ingredients/seasonings/steps 배열이 없습니다");
+			}
+			stage = "mapping";
+			return jsonMapper.treeToValue(root, LlmRecipeDetailResponse.class);
+		} catch (Exception e) {
+			throw new GeminiCallException("응답 파싱 실패",
+				"stage=" + stage + ", finishReason=" + finishReason + ", textLength=" + text.length()
+					+ ", type=" + e.getClass().getSimpleName());
 		}
 	}
 }

@@ -2,25 +2,34 @@ package com.vium.global.exception;
 
 import com.vium.global.common.ApiResponse;
 import jakarta.servlet.http.HttpServletRequest;
-import org.springframework.web.multipart.MaxUploadSizeExceededException;
-import org.springframework.web.multipart.MultipartException;
-import org.springframework.web.HttpMediaTypeNotSupportedException;
-import org.springframework.web.HttpRequestMethodNotSupportedException;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.filter.ServerHttpObservationFilter;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
+import org.springframework.web.util.DisconnectedClientHelper;
 
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
 	@ExceptionHandler(BusinessException.class)
 	public ResponseEntity<ApiResponse<Void>> handleBusinessException(BusinessException e) {
 		ErrorCode errorCode = e.getErrorCode();
+		if (errorCode == ErrorCode.INTERNAL_ERROR) {
+			log.error("서버 측 비즈니스 오류: code={}", errorCode.name(), e);
+		} else if (errorCode.getStatus().is5xxServerError()) {
+			log.warn("서버 측 비즈니스 오류: code={}", errorCode.name(), e);
+		}
 		return ResponseEntity.status(errorCode.getStatus())
 			.body(ApiResponse.fail(new ApiResponse.ErrorObject(errorCode.name(), e.getMessage())));
 	}
@@ -84,9 +93,14 @@ public class GlobalExceptionHandler {
 	}
 
 	@ExceptionHandler(Exception.class)
-	public ResponseEntity<ApiResponse<Void>> handleException(Exception e) {
-		return ResponseEntity.status(ErrorCode.INTERNAL_ERROR.getStatus())
-			.body(ApiResponse.fail(
-				new ApiResponse.ErrorObject(ErrorCode.INTERNAL_ERROR.name(), ErrorCode.INTERNAL_ERROR.getDefaultMessage())));
+	public ResponseEntity<ApiResponse<Void>> handleException(Exception e, HttpServletRequest request) throws Exception {
+		if (DisconnectedClientHelper.isClientDisconnectedException(e)) {
+			// 응답을 다시 쓰지 않고 Spring 기본 resolver에 연결 종료 처리를 맡긴다.
+			throw e;
+		}
+		log.error("처리되지 않은 예외: {} {}", request.getMethod(), request.getRequestURI(), e);
+		ServerHttpObservationFilter.findObservationContext(request).ifPresent(context -> context.setError(e));
+		ErrorCode errorCode = ErrorCode.INTERNAL_ERROR;
+		return ResponseEntity.status(errorCode.getStatus()).body(failureBody(errorCode));
 	}
 }

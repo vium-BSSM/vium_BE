@@ -77,6 +77,7 @@ gemini:
   api-key: ${GEMINI_API_KEY}
   model: ${GEMINI_MODEL:gemini-2.5-flash}
   timeout-seconds: 60
+  detail-timeout-seconds: 25
 
 unsplash:
   access-key: ${UNSPLASH_ACCESS_KEY}
@@ -87,6 +88,18 @@ disposal:
     enabled: ${DISPOSAL_AUTO_DISPOSE_ENABLED:false}
     cron: ${DISPOSAL_AUTO_DISPOSE_CRON:0 10 0 * * *}
     time-zone: ${DISPOSAL_AUTO_DISPOSE_TIMEZONE:Asia/Seoul}
+
+auth:
+  session-cleanup:
+    enabled: ${AUTH_SESSION_CLEANUP_ENABLED:false}
+    cron: "0 30 4 * * *"
+    time-zone: Asia/Seoul
+    retention: 30d
+    batch-size: 1000
+
+metrics:
+  user-activity:
+    enabled: ${management.otlp.metrics.export.enabled:false}
 
 security:
   cors:
