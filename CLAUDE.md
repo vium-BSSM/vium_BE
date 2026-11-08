@@ -249,6 +249,7 @@ com.vium
    - 예: `feat/12-ingredient-register`, `fix/27-waste-report-timezone`
 3. **커밋 메시지도 같은 타입 접두사를 쓴다.** 예: `feat: 재료 등록 API 구현 (#12)`
 4. **PR을 올릴 때는 `Closes #이슈번호`로 연결한다.** (PR 템플릿에 이미 자리 있음 → 머지 시 이슈 자동 닫힘)
+5. **Dependabot PR은 예외다.** `dependabot[bot]`이 매월 develop 대상으로 여는 의존성 PR(`dependabot/...` 브랜치, `chore: bump ...`)은 이슈·이슈 번호·`Closes #`가 없다. 이슈를 만들지 않고, PR에 직접 커밋하지 않는다. 필수 CI 통과 후 사용자가 릴리스 노트를 보고 머지한다(자동 머지 없음). 직접 수정이 필요하면 PR을 닫고 이슈를 만든다. 세부 규칙은 `docs/ci.md` Dependabot 절.
 
 ---
 

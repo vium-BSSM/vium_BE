@@ -25,6 +25,17 @@ OIDC 인증이 실패하면 실제 저장소의 subject 형식도 확인한다. 
 저장소/옵트인 설정에서는 조직·저장소 ID가 subject에 포함될 수 있다. 이때도
 와일드카드로 넓히지 않고 실제 main subject와 신뢰 정책을 일치시킨다.
 
+`cd.yml`의 액션(`checkout`, `configure-aws-credentials`) 업데이트는 Dependabot
+PR의 CI에서 실행되지 않고 main 배포 때 처음 실행된다. 릴리스 후 CD의
+`Authenticate to AWS with OIDC` step과 Summary의 Annotations를 확인해야
+검증이 끝난다. #104에서는 `configure-aws-credentials` v6.3.0
+(`e1253824e5c10ff9df46874f81ed3ec929e19cfd`)이 실행되고 Node.js 20 deprecation
+경고가 없는지, `Publish image and deploy through SSM` 성공과 운영 health `UP`을
+확인한다. main push 실행으로 확인하거나 Actions → CD → Run workflow에서
+`main`을 선택한다. 액션 업데이트로 실패하면 실패 로그를 이슈에 남기고
+`cd.yml`의 해당 액션을 이전 SHA로 되돌리는 fix PR을 develop → main으로 반영한다.
+OIDC 인증 실패는 배포 step 전에 중단되므로 기존 운영 앱은 유지된다.
+
 ## 첫 CD 실행과 운영 파일
 
 현재 운영 중인 수동 릴리스 `/home/ubuntu/vium-releases/3fb5582`를 자동으로
