@@ -22,7 +22,7 @@ class ReleaseTests(unittest.TestCase):
         command = payload["commands"][0]
         encoded = command.split("printf '%s' '")[1].split("'")[0]
         with tarfile.open(fileobj=io.BytesIO(base64.b64decode(encoded))) as archive:
-            self.assertEqual(set(archive.getnames()), {"remote.sh", "compose.prod.yml", "compose.micro.yml"})
+            self.assertEqual(set(archive.getnames()), {"remote.sh", "cleanup.py", "compose.prod.yml", "compose.micro.yml"})
 
     def test_access_denied_is_not_treated_as_missing_image(self):
         error = subprocess.CalledProcessError(1, "aws", stderr="(AccessDeniedException)")
@@ -34,7 +34,18 @@ class ReleaseTests(unittest.TestCase):
         missing = subprocess.CalledProcessError(1, "aws", stderr="(InvocationDoesNotExist)")
         with patch("release.aws", side_effect=[missing, json.dumps({"Status": "InProgress"}),
                                                json.dumps({"Status": "Success"})]), patch("release.time.sleep"):
-            release.wait_for_command("command", "instance")
+            self.assertEqual(release.wait_for_command("command", "instance"), {"Status": "Success"})
+
+    def test_only_safe_cleanup_summaries_are_printed(self):
+        with patch("builtins.print") as output:
+            release.print_cleanup_summary({"StandardOutputContent":
+                "CLEANUP status=ok images_removed=2\nDB_PASSWORD=secret\nCLEANUP status=ok path=/opt"}, "command")
+        output.assert_called_once_with("CLEANUP status=ok images_removed=2")
+
+    def test_missing_summary_points_to_ssm(self):
+        with patch("builtins.print") as output:
+            release.print_cleanup_summary({}, "command")
+        output.assert_called_once_with("Cleanup summary not found; inspect SSM command command.")
 
     def test_remote_failure_fails_cd_without_printing_server_secrets(self):
         with patch("release.aws", return_value=json.dumps({"Status": "Failed", "StandardOutputContent": "secret"})):

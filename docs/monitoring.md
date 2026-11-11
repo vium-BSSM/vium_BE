@@ -2,7 +2,7 @@
 
 앱 → OTLP/HTTP(1분 주기, gzip) → Grafana Cloud로 메트릭을 직접 전송한다.
 EC2에는 Prometheus·Grafana·Alloy 프로세스나 공개 포트를 추가하지 않는다.
-JVM·HTTP 요청·HikariCP·Tomcat·Logback·프로세스의 자동 계측 메트릭을 사용한다.
+JVM·HTTP 요청·HikariCP·Tomcat·Logback·프로세스의 자동 계측 메트릭과 컨테이너 cgroup 메모리 gauge를 사용한다.
 로그 수집(Loki), tracing은 포함하지 않는다. 사용자 수 집계 gauge(아래 [서비스 사용 지표](#서비스-사용-지표)) 외의 비즈니스 커스텀 메트릭은 포함하지 않는다.
 
 ## 설정과 의존성
@@ -75,10 +75,10 @@ HTTP 요청도 발생시킨 후 `http_server_requests_seconds_count`와 `_bucket
 404를 반환한다. 인증 없는 요청은 보안 필터가
 먼저 401을 반환할 수 있으므로 상태 코드만으로 비노출을 판단하지 않는다.
 
-배포 전후 `docker stats --no-stream vium-prod-app-1`로 메모리를 비교하고 배포 기록에
-남긴다. 레지스트리·HTTP 클라이언트의 메모리와 스레드 증가량은 실제 측정한다.
+컨테이너 메모리 gauge와 메모리·디스크 알림으로 정기 수동 확인을 대신한다.
+`docker stats --no-stream vium-prod-app-1`은 최초 배포 검증이나 이상 값 대조에 사용한다.
 `compose.micro.yml`의 RAM 512 MiB / RAM+swap 768 MiB 제한은 유지한다.
-실제 Cloud 수신·메모리 비교는 운영 자격증명과 배포 환경에서 별도로 검증해야 한다.
+새 메트릭 Cloud 수신과 알림 경로는 아래 미완료 검증 기록을 배포 후 채운다.
 
 ## 대시보드
 
@@ -160,6 +160,43 @@ Gauge 콜백은 메모리의 값만 읽으며 DB를 조회하지 않는다.
 4. 실제 이름·라벨로 위 패널 쿼리를 맞추고 대시보드에 추가한다.
 5. KST 자정 후 값 초기화와 배포 전후 활성 시리즈 증가(예상 4개, 재시작 중복 가능)를 확인한다.
 
+## 컨테이너 메모리와 디스크 지표
+
+`ContainerMemoryMetrics`는 Docker private cgroup namespace의 `/sys/fs/cgroup`을 읽는다.
+`metrics.container-memory.enabled` 기본값은 OTLP 플래그이며 새 환경변수는 없다.
+`memory.current` 또는 `memory.max`를 읽을 수 없으면 meter를 등록하지 않고
+`컨테이너 메모리 메트릭 비활성화: cgroup v2 파일 없음`을 INFO로 남긴다.
+등록 시 `컨테이너 메모리 메트릭 활성화: limit=<bytes|max>`를 기록한다.
+콜백의 파일 읽기·파싱 실패는 NaN을 반환하며 경고 로그는 인스턴스당 한 번만 남긴다.
+
+| Micrometer 이름 | Prometheus 이름 | 정의·등록 조건 |
+|---|---|---|
+| `vium.container.memory.working.set` | `vium_container_memory_working_set_bytes` | `memory.current - inactive_file`, 최소 0. stat에 inactive_file 항목이 없으면 0 차감 |
+| `vium.container.memory.limit` | `vium_container_memory_limit_bytes` | `memory.max`, `max`(무제한)이면 미등록 |
+| `vium.container.memory.swap` | `vium_container_memory_swap_bytes` | `memory.swap.current`, 파일 없으면 미등록 |
+
+모두 base unit은 bytes이며 공통 application/env 태그만 사용한다. 프로세스당 최대 3개
+시리즈가 늘어난다. working set은 회수 가능한 비활성 파일 캐시를 빼며 cgroup v2의
+`docker stats` MEM USAGE와 같은 정의다. JVM 힙·비힙 외 네이티브·스레드 등도 포함한다.
+메모리 사용률은 RAM 제한 512 MiB를 분모로 쓰며 RAM+swap 768 MiB는 쓰지 않는다.
+85%/10분 알림은 초기 운영 기준이며 평상시 추세가 올라가면 제한과 기준을 함께 검토한다.
+swap은 원인 분석용이고 별도 알림은 없다. 재시작 중 시리즈 중복은 `max()`로 합친다.
+
+디스크는 Boot 기본 `DiskSpaceMetricsBinder`의 `disk.free`/`disk.total`을 사용한다.
+작업 디렉터리 `/app`의 overlay가 호스트 Docker root 파일시스템을 보고하며,
+실제 라벨은 `path="/app/."`이다. `/opt/vium`, Docker root, `/`가 같은 파일시스템임을
+2026-11-11에 확인했다. Docker root를 별도 디스크로 옮기면 이 전제를 재검토한다.
+`management.metrics.system.diskspace.paths`는 변경하지 않는다.
+
+| 패널 | PromQL |
+|---|---|
+| 메모리 사용률 | `max(vium_container_memory_working_set_bytes{application="vium-be",env="prod"}) / max(vium_container_memory_limit_bytes{application="vium-be",env="prod"})` |
+| Working set | `max(vium_container_memory_working_set_bytes{application="vium-be",env="prod"})` |
+| RAM 제한 | `max(vium_container_memory_limit_bytes{application="vium-be",env="prod"})` |
+| Swap | `max(vium_container_memory_swap_bytes{application="vium-be",env="prod"})` |
+| 디스크 여유 | `min(disk_free_bytes{application="vium-be",env="prod",path="/app/."})` |
+| 디스크 사용률 | `1 - min(disk_free_bytes{application="vium-be",env="prod",path="/app/."}) / max(disk_total_bytes{application="vium-be",env="prod",path="/app/."})` |
+
 ## 알림
 
 Alerting → Contact points에서 이메일 또는 Discord 웹훅을 설정하고 테스트한다.
@@ -172,6 +209,8 @@ notification policy를 연결한다. 평가 간격은 1분으로 시작한다.
 | 5xx 비율 | `sum(rate(http_server_requests_seconds_count{application="vium-be",env="prod",uri!~"/actuator.*",status=~"5.."}[5m])) / sum(rate(http_server_requests_seconds_count{application="vium-be",env="prod",uri!~"/actuator.*"}[5m])) > 0.05` | 5m |
 | p95 지연 | `histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{application="vium-be",env="prod",uri!~"/actuator.*"}[5m]))) > 2` | 10m |
 | 힙 사용률 | `sum(jvm_memory_used_bytes{application="vium-be",env="prod",area="heap"}) / sum(jvm_memory_max_bytes{application="vium-be",env="prod",area="heap"}) > 0.9` | 10m |
+| 컨테이너 메모리 사용률 | `max(vium_container_memory_working_set_bytes{application="vium-be",env="prod"}) / max(vium_container_memory_limit_bytes{application="vium-be",env="prod"}) > 0.85` | 10m |
+| 디스크 여유 공간 부족 | `min(disk_free_bytes{application="vium-be",env="prod",path="/app/."}) < 4294967296` | 10m |
 | DB 커넥션 대기 | `max(hikaricp_connections_pending{application="vium-be",env="prod"}) > 0` | 5m |
 | Health 5xx 응답 | `sum(increase(http_server_requests_seconds_count{application="vium-be",env="prod",uri="/actuator/health",status=~"5.."}[5m])) > 0` | 2m |
 
@@ -201,7 +240,7 @@ pending이 2분이라는 뜻이며, 연속 장애 2분을 요구하는 규칙은
 
 - 연락처: `vium-discord-daily-scrum` (Discord `daily-scrum`). 기본 알림 정책도
   이 연락처를 사용하며 복구 알림을 활성화했다. 웹훅 URL은 Grafana에만 저장한다.
-- 규칙 9개의 실제 export: [alert-rules.yaml](../monitoring/grafana/alert-rules.yaml).
+- 규칙 11개 정의(기존 9개 실제 export + 신규 2개 임시 UID): [alert-rules.yaml](../monitoring/grafana/alert-rules.yaml).
   폴더는 `Vium Production`, 평가 그룹은 `vium-prod-1m` (1분)이다.
   pending은 표의 지속 시간, **keep firing for는 0초**다.
 - 활성 시리즈는 `grafanacloud-usage`에서 스택 `1896975`를 조회하며
@@ -220,6 +259,33 @@ Cloud 복원은 연락처를 먼저 안전하게 재생성한 뒤, 이 파일을
 Synthetics 체크 `vium-api-health`는 이 export에 포함되지 않는다.
 복원 시 [외부 가동 확인](#외부-가동-확인)의 설정으로 체크를 다시 생성하고
 Job name을 유지한다. 체크 자체의 per-check alerts는 모두 끈다.
+
+### 컨테이너·디스크 알림 검증 (미완료)
+
+신규 두 규칙은 운영 UI 반영 전이다. YAML의 `REPLACE_WITH_GRAFANA_UID_MEMORY`와
+`REPLACE_WITH_GRAFANA_UID_DISK`는 임시 표지이며 실제 운영 UID가 아니다.
+머지·배포 후 `Vium Production` / `vium-prod-1m`에 두 규칙을 만든다.
+연락처는 `vium-discord-daily-scrum`, No Data는 OK, Error는 Error,
+pending은 10분, keep firing for는 0초다. 앱 중단 시 메모리·디스크는 No Data(OK)가
+될 수 있으며 기존 앱 메트릭 끊김 알림으로 보완한다.
+
+| 항목 | 사전 확인(2026-11-11) | 배포 후 결과 |
+|---|---|---|
+| cgroup v2 | `cgroup2fs`, memory.max 536870912, memory.swap.max 268435456 | 미확인 |
+| Working set | current 390262784 − inactive_file 18837504 = 371425280 bytes(354.2 MiB, 69.2%) | gauge·docker stats 비교 미확인 |
+| docker stats | 355.3 MiB / 512 MiB(69.40%) | 미확인 |
+| 디스크 | 전체 19682557952, 가용 10750660608 bytes. `/app`, `/`, `/opt/vium`, Docker root 일치 | df·gauge 비교 미확인 |
+| Explore 라벨 | application=vium-be, env=prod, job=vium-be, path=/app/., service_name=vium-be, deployment_environment_name=prod | 신규 메모리 이름·라벨 미확인 |
+| Preview 쿼리 A | 신규 규칙 미생성 | 메모리(docker stats ±5%p), 디스크(df Available) 미확인 |
+| Discord Firing → Resolved | 신규 규칙 미검증 | 수신 여부·날짜 미기록 |
+| Export | 신규 2개 임시 UID | 운영 UID로 교체 미완료 |
+
+메모리 규칙 복제본 `Vium TEST - 메모리 알림 경로`를 임계값 0, pending 0초로 만들어
+Firing → Discord 전달을 확인한다. 임계값을 되돌려 Resolved 수신을 확인하고 삭제한다.
+디스크는 같은 방식(`> 0`으로 반전) 또는 규칙 이름을 넣은 Custom 연락처 테스트로
+확인한다. 쿼리 A 값과 수신 날짜를 표에 기록한다. 테스트 규칙을 제외한 그룹 전체를
+export해 [alert-rules.yaml](../monitoring/grafana/alert-rules.yaml)을 교체한다(11개 규칙).
+임시 UID 제거와 검증 기록을 develop 후속 커밋에 반영하고 이 절의 미완료 표시를 지운다.
 
 ### 검증 기록 (2026-11-05)
 

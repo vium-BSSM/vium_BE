@@ -12,6 +12,9 @@ import time
 import urllib.request
 
 
+CLEANUP_LINE = re.compile(r"CLEANUP( [a-z_]+=[a-z0-9-]+)+")
+
+
 def aws(*args):
     return subprocess.run(
         ["aws", *args, "--output", "json", "--no-cli-pager"],
@@ -50,6 +53,7 @@ def command_payload(sha, image, region):
     with tarfile.open(fileobj=archive, mode="w:gz") as tar:
         for source, name in (
             ("scripts/deploy/remote.sh", "remote.sh"),
+            ("scripts/deploy/cleanup.py", "cleanup.py"),
             ("compose.prod.yml", "compose.prod.yml"),
             ("compose.micro.yml", "compose.micro.yml"),
         ):
@@ -86,12 +90,21 @@ def wait_for_command(command_id, instance, timeout=1500):
             status = result["Status"]
             if status == "Success":
                 print("SSM deployment succeeded.", flush=True)
-                return
+                return result
             if status not in {"Pending", "InProgress", "Delayed"}:
                 # Do not forward arbitrary server output, which could contain secrets.
                 raise RuntimeError(f"SSM deployment {status}; inspect command {command_id} in AWS")
         time.sleep(10)
     raise TimeoutError(f"SSM result timed out; inspect {command_id} before retrying. It may still run.")
+
+
+def print_cleanup_summary(result, command_id):
+    lines = [line for line in result.get("StandardOutputContent", "").splitlines()
+             if CLEANUP_LINE.fullmatch(line)]
+    for line in lines:
+        print(line)
+    if not lines:
+        print(f"Cleanup summary not found; inspect SSM command {command_id}.")
 
 
 def main():
@@ -142,7 +155,8 @@ def main():
                             "--parameters", json.dumps(parameters)))
     command_id = result["Command"]["CommandId"]
     print(f"Image: {image}\nSSM command: {command_id}", flush=True)
-    wait_for_command(command_id, instance)
+    result = wait_for_command(command_id, instance)
+    print_cleanup_summary(result, command_id)
 
 
 if __name__ == "__main__":

@@ -125,4 +125,9 @@ ln -sfn "$release" "$root/current.next"
 mv -Tf "$root/current.next" "$root/current"
 trap - ERR
 printf 'Deployed %s\nImage %s\nConfiguration %s\n' "$revision" "$image" "$release"
-# Keep previous release directories and images for manual rollback; do not prune here.
+cleanup_args=(--root "$root" --previous "$previous" --repository "${image%@*}" --docker-root "$docker_root")
+if [[ -e $root/shared/cleanup-dry-run ]]; then
+  cleanup_args+=(--dry-run)
+fi
+timeout 300 python3 "$bundle/cleanup.py" "${cleanup_args[@]}" ||
+  echo 'WARN: release cleanup failed; deployment itself succeeded.' >&2
