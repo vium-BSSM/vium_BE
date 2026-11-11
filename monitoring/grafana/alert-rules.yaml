@@ -488,3 +488,109 @@ groups:
           isPaused: false
           notification_settings:
             receiver: vium-discord-daily-scrum
+        - uid: REPLACE_WITH_GRAFANA_UID_MEMORY
+          title: Vium prod - 컨테이너 메모리 사용률
+          condition: C
+          data:
+            - refId: A
+              relativeTimeRange:
+                from: 600
+                to: 0
+              datasourceUid: grafanacloud-prom
+              model:
+                editorMode: code
+                expr: max(vium_container_memory_working_set_bytes{application="vium-be",env="prod"}) / max(vium_container_memory_limit_bytes{application="vium-be",env="prod"})
+                instant: true
+                intervalMs: 1000
+                legendFormat: __auto
+                maxDataPoints: 43200
+                range: false
+                refId: A
+            - refId: C
+              queryType: expression
+              datasourceUid: __expr__
+              model:
+                conditions:
+                    - evaluator:
+                        params:
+                            - 0.85
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                            - C
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                datasource:
+                    type: __expr__
+                    uid: __expr__
+                expression: A
+                intervalMs: 1000
+                maxDataPoints: 43200
+                refId: C
+                type: threshold
+          noDataState: OK
+          execErrState: Error
+          for: 10m
+          annotations:
+            description: 컨테이너 working set이 메모리 제한(512 MiB)의 85%를 넘은 상태가 10분 지속됨. swap 사용량과 JVM 힙·비힙을 확인하세요.
+            summary: Vium 운영 컨테이너 메모리 사용률이 85%를 초과했습니다.
+          isPaused: false
+          notification_settings:
+            receiver: vium-discord-daily-scrum
+        - uid: REPLACE_WITH_GRAFANA_UID_DISK
+          title: Vium prod - 디스크 여유 공간 부족
+          condition: C
+          data:
+            - refId: A
+              relativeTimeRange:
+                from: 600
+                to: 0
+              datasourceUid: grafanacloud-prom
+              model:
+                editorMode: code
+                expr: min(disk_free_bytes{application="vium-be",env="prod",path="/app/."})
+                instant: true
+                intervalMs: 1000
+                legendFormat: __auto
+                maxDataPoints: 43200
+                range: false
+                refId: A
+            - refId: C
+              queryType: expression
+              datasourceUid: __expr__
+              model:
+                conditions:
+                    - evaluator:
+                        params:
+                            - 4294967296
+                        type: lt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                            - C
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                datasource:
+                    type: __expr__
+                    uid: __expr__
+                expression: A
+                intervalMs: 1000
+                maxDataPoints: 43200
+                refId: C
+                type: threshold
+          noDataState: OK
+          execErrState: Error
+          for: 10m
+          annotations:
+            description: Docker root 파일시스템 여유 공간이 4 GiB 미만인 상태가 10분 지속됨(2 GiB 미만이면 배포가 중단됨). 최근 CD 로그의 CLEANUP 요약을 확인하고 docs/cd.md의 수동 정리 절차를 따르세요.
+            summary: Vium 운영 서버 디스크 여유 공간이 4 GiB 미만입니다.
+          isPaused: false
+          notification_settings:
+            receiver: vium-discord-daily-scrum

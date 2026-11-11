@@ -11,7 +11,7 @@ import unittest
 
 @unittest.skipUnless(sys.platform == "linux", "Server script requires Linux coreutils/flock")
 class RemoteTests(unittest.TestCase):
-    def run_deployment(self, failure, repository="vium-be"):
+    def run_deployment(self, failure, repository="vium-be", old_releases=False, dry_run=False):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         base = Path(temp.name)
@@ -31,6 +31,19 @@ class RemoteTests(unittest.TestCase):
             shutil.copytree(legacy / "deploy/certs", root / "shared/certs")
             shutil.copy(legacy / ".env.prod", root / "shared/.env.prod")
             (root / "current").symlink_to(baseline)
+        shutil.copy(Path(__file__).with_name("cleanup.py"), bundle / "cleanup.py")
+        if old_releases or dry_run:
+            (root / "shared").mkdir(parents=True, exist_ok=True)
+        if dry_run:
+            (root / "shared/cleanup-dry-run").touch()
+        if old_releases:
+            for n in range(1, 5):
+                old = root / "releases" / (f"{n:040x}" + ".ABC123")
+                old.mkdir(parents=True)
+                ref = f"243919538384.dkr.ecr.ap-northeast-2.amazonaws.com/{repository}@sha256:{n:064x}"
+                (old / "compose.image.yml").write_text(f'    image: "{ref}"\n')
+                (old / "succeeded").touch()
+                os.utime(old / "succeeded", (n, n))
         script = Path(__file__).with_name("remote.sh").read_text()
         script = script.replace("root=/opt/vium", f"root={root}")
         script = script.replace("legacy=/home/ubuntu/vium-releases/3fb5582", f"legacy={legacy}")
@@ -55,6 +68,21 @@ elif name == "aws":
     print("mock-token")
 elif args[0] == "info":
     print("/tmp")
+elif args[:2] == ["image", "ls"]:
+    if mode == "cleanup":
+        sys.exit(1)
+    print("\\n".join(json.loads(os.environ["MOCK_IMAGES"])))
+elif args[:2] == ["image", "inspect"]:
+    ref = args[-1]
+    image_id = ref.split("@")[-1]
+    if "--format" in args:
+        print(image_id)
+    else:
+        print(json.dumps([{{"Id": image_id, "RepoDigests": [os.environ["MOCK_REPOSITORY"] + "@" + image_id], "RepoTags": []}}]))
+elif args[0] == "ps":
+    print("d" * 64)
+elif args[:2] == ["image", "rm"]:
+    pass
 elif args[0] == "inspect":
     print("sha256:" + "b" * 64)
 elif args[0] == "login":
@@ -73,7 +101,10 @@ elif args[0] == "compose" and "up" in args:
             executable.chmod(0o755)
         log = base / "commands"
         env = dict(os.environ, PATH=f"{binaries}:{os.environ['PATH']}",
-                   MOCK_LOG=str(log), MOCK_FAIL=failure)
+                   MOCK_LOG=str(log), MOCK_FAIL=failure,
+                   MOCK_REPOSITORY=f"243919538384.dkr.ecr.ap-northeast-2.amazonaws.com/{repository}",
+                   MOCK_IMAGES=json.dumps(["sha256:" + f"{n:064x}" for n in range(1, 5)]
+                                          + ["sha256:" + "c" * 64]))
         result = subprocess.run(["bash", str(bundle / "remote.sh"), "a" * 40,
                                  f"243919538384.dkr.ecr.ap-northeast-2.amazonaws.com/{repository}@sha256:" + "c" * 64,
                                  "ap-northeast-2"], env=env, text=True, capture_output=True)
@@ -130,3 +161,38 @@ elif args[0] == "compose" and "up" in args:
     def test_dotted_repository_name_is_supported(self):
         _, result, _ = self.run_deployment("", repository="team/vium.be")
         self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_success_runs_cleanup_and_prints_summary(self):
+        root, result, _ = self.run_deployment("")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("CLEANUP status=ok", result.stdout)
+        self.assertEqual(len(list((root / "releases").glob("bootstrap.*"))), 1)
+
+    def test_cleanup_failure_does_not_fail_deployment(self):
+        root, result, _ = self.run_deployment("cleanup")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((root / "current/revision").read_text().strip(), "a" * 40)
+        self.assertIn("CLEANUP status=partial", result.stdout)
+        self.assertIn("images_skipped=all", result.stdout)
+
+    def test_failed_deployment_skips_cleanup(self):
+        _, result, commands = self.run_deployment("up")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn("CLEANUP", result.stdout)
+        self.assertFalse(any(cmd[1:3] == ["image", "rm"] for cmd in commands))
+
+    def test_dry_run_marker_deletes_nothing(self):
+        root, result, commands = self.run_deployment("", old_releases=True, dry_run=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("dry_run=1", result.stdout)
+        self.assertEqual(len(list((root / "releases").iterdir())), 6)
+        self.assertFalse(any(cmd[1:3] == ["image", "rm"] for cmd in commands))
+
+    def test_old_releases_and_images_are_removed(self):
+        root, result, commands = self.run_deployment("", old_releases=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("CLEANUP status=ok", result.stdout)
+        self.assertEqual(len(list((root / "releases").iterdir())), 4)
+        removed = [cmd[3:] for cmd in commands if cmd[1:3] == ["image", "rm"]]
+        self.assertEqual(removed, [["sha256:" + f"{n:064x}"] for n in (1, 2)])
+        self.assertTrue((root / "shared/.env.prod").exists())
