@@ -70,9 +70,13 @@ public class ImageService {
 			image.markReady();
 			return images.saveAndFlush(image);
 		});
-		String url = purpose.isPrivate() ? null : properties.publicBaseUrl().replaceAll("/$", "") + "/" + key;
+		String url = purpose.isPrivate() ? null : publicUrl(key);
 		return new ImageUploadResponse(ready.getId(), purpose, purpose.isPrivate() ? "PRIVATE" : "PUBLIC",
 			ready.getContentType(), ready.getSizeBytes(), url, ready.getCreatedAt());
+	}
+
+	private String publicUrl(String key) {
+		return properties.publicBaseUrl().replaceAll("/$", "") + "/" + key;
 	}
 
 	private ImageValidator.Validated decode(MultipartFile file) {
@@ -108,5 +112,18 @@ public class ImageService {
 		var image = images.findByIdAndUserIdAndPurposeAndReadyTrue(id, userId, ImagePurpose.RECEIPT)
 			.orElseThrow(() -> new BusinessException(ErrorCode.IMAGE_NOT_FOUND));
 		return storage.access(image);
+	}
+
+	@Transactional(readOnly = true)
+	public void requireProfileImage(Long userId, Long imageId) {
+		if (imageId == null || imageId <= 0) throw new BusinessException(ErrorCode.INVALID_REQUEST);
+		images.findByIdAndUserIdAndPurposeAndReadyTrue(imageId, userId, ImagePurpose.PROFILE)
+			.orElseThrow(() -> new BusinessException(ErrorCode.IMAGE_NOT_FOUND));
+	}
+
+	@Transactional(readOnly = true)
+	public String findProfileImageUrl(Long profileImageId) {
+		if (profileImageId == null) return null;
+		return images.findById(profileImageId).map(image -> publicUrl(image.getObjectKey())).orElse(null);
 	}
 }

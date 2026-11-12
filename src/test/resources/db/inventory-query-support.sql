@@ -10,7 +10,8 @@ CREATE TABLE IF NOT EXISTS "users" (
   "push_enabled" boolean NOT NULL DEFAULT true,
   "created_at" timestamp NOT NULL,
   "updated_at" timestamp NOT NULL,
-  "deleted_at" timestamp
+  "deleted_at" timestamp,
+  "profile_image_id" bigint
 );
 
 CREATE TABLE IF NOT EXISTS "ingredient_categories" (
