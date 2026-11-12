@@ -1,6 +1,10 @@
-// PickDo(비움) DB 스키마 — Flyway V1~V8 적용 결과 기준 (2026-10-22)
+// PickDo(비움) DB 스키마 — Flyway V1~V11 적용 결과 + 거래 기능 설계안
 Project PickDo {
   database_type: "PostgreSQL"
+  Note: '''
+  post·trade·credit·chat·safety·ai_report 그룹과 credit_base_values·user_push_tokens는 추가 기능(#143) 설계안이며 아직 마이그레이션이 없다.
+  위치 컬럼은 PostGIS geography(Point, 4326)를 쓴다.
+  '''
 }
 
 Table users {
@@ -12,6 +16,7 @@ Table users {
   auto_dispose_enabled boolean [not null, default: `true`]
   shopping_reminder_enabled boolean [not null, default: `false`]
   push_enabled boolean [not null, default: `true`]
+  profile_image_id bigint [note: 'V11. purpose=PROFILE 이미지']
   created_at timestamp [not null]
   updated_at timestamp [not null]
   deleted_at timestamp
@@ -75,6 +80,11 @@ Table item_statuses {
   id smallint [pk, increment]
   code varchar(20) [unique, not null]
   name varchar(40) [not null]
+
+  Note: '''
+  active / consumed / disposed
+  거래 기능: shared(나눔·판매로 넘김) 추가 예정
+  '''
 }
 
 Table event_sources {
@@ -93,16 +103,39 @@ Table ingredient_categories {
   }
 }
 
+Table credit_base_values {
+  category_id smallint [not null]
+  unit_id smallint [not null]
+  base_value numeric(8,3) [not null, note: '기준 단위 1당 기준 크레딧']
+
+  indexes {
+    (category_id, unit_id) [pk]
+  }
+
+  Note: '''
+  거래 기능: 추천 크레딧 = round(base_value × 기준 단위 수량 × 신선도 계수)
+  unit_id는 기준 단위만 쓴다: kg, L, 그리고 환산할 수 없는 개·팩·봉·병·캔·통. g·ml 행은 두지 않는다
+  g은 kg(÷1000), ml은 L(÷1000)로 환산한 뒤 계산하므로 1kg과 1000g은 같은 추천가가 나온다
+  행이 없거나 계산된 추천가가 0이면 판매 불가, 나눔(SHARE)만 허용한다
+  '''
+}
+
 Table ingredient_catalog {
   id bigint [pk, increment]
   category_id smallint
   default_unit_id smallint [not null]
   name varchar(120) [unique, not null]
+  post_allowed boolean [not null, default: `true`, note: '거래 기능: 게시 허용 여부. 품목 단위로 판단']
   created_at timestamp [not null]
 
   indexes {
     category_id
   }
+
+  Note: '''
+  거래 기능: post_allowed는 육류·수산물 카테고리 품목과, 다른 카테고리에 있는 날고기·수산물 품목(냉동새우·냉동오징어·냉동연어·냉동대구 등)을 false로 시드한다
+  카탈로그를 고르지 않은 재고(ingredient_catalog_id IS NULL)는 품목을 판별할 수 없어 게시할 수 없다
+  '''
 }
 
 Table expiry_estimation_rules {
@@ -186,6 +219,7 @@ Table inventory_items {
 
   Note: '''
   (ingredient_catalog_id IS NOT NULL) OR (custom_name IS NOT NULL)
+  삭제(DELETE /api/me/ingredients/{id})는 하드 삭제다. consumption_events·posts·trades에 연결된 재고는 삭제할 수 없고, 이 재고를 가리키는 notifications는 함께 지운다
   '''
 }
 
@@ -193,7 +227,7 @@ Table consumption_events {
   id bigint [pk, increment]
   inventory_item_id bigint [not null]
   user_id bigint [not null]
-  event_type varchar(20) [not null, note: 'consumed / disposed']
+  event_type varchar(20) [not null, note: 'consumed / disposed (거래 기능: shared 추가 예정)']
   event_source_id smallint [not null, note: 'manual / auto_estimated']
   quantity numeric(12,3) [not null, note: '게이지로 조절한 처리량']
   amount numeric(12,2) [note: '해당 처리량의 금액(낭비 집계용)']
@@ -223,10 +257,28 @@ Table shopping_list_items {
   }
 }
 
+Table user_push_tokens {
+  id bigint [pk, increment]
+  user_id bigint [not null]
+  token varchar(512) [unique, not null, note: 'FCM 등록 토큰. 다른 사용자가 같은 토큰을 등록하면 소유자를 옮긴다']
+  platform varchar(10) [not null, note: 'ANDROID / IOS']
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null, note: '마지막 등록 시각']
+
+  indexes {
+    user_id
+  }
+
+  Note: '''
+  푸시 발송 대상 기기. 로그아웃 시 해제 API로, 회원 탈퇴 시 전부, FCM 무효 토큰 응답 시 서버가 삭제한다
+  설계안이며 아직 마이그레이션이 없다
+  '''
+}
+
 Table notifications {
   id bigint [pk, increment]
   user_id bigint [not null]
-  type varchar(30) [not null, note: 'expiry / consume_check / shopping_reminder']
+  type varchar(30) [not null, note: 'expiry / consume_check / shopping_reminder (API 예시는 expiry_popup이라 값 통일 필요)']
   inventory_item_id bigint
   title varchar(120) [not null]
   body varchar(500)
@@ -252,6 +304,8 @@ Table recipes {
   image_url varchar(1000)
   image_author_name varchar(255)
   image_author_url varchar(500)
+  detail_status varchar(20) [not null, default: 'BASIC']
+  detail_generation_started_at timestamptz
 
   indexes {
     (source, category, created_at) [note: 'created_at DESC']
@@ -260,6 +314,7 @@ Table recipes {
   Note: '''
   (cook_time >= 1) AND (cook_time <= 180)
   category IN ('KOREAN', 'CHINESE', 'WESTERN', 'JAPANESE', 'DESSERT')
+  detail_status IN ('BASIC', 'GENERATING', 'DETAILED')
   '''
 }
 
@@ -267,14 +322,32 @@ Table recipe_ingredients {
   id bigint [pk, increment]
   recipe_id bigint [not null]
   ingredient_catalog_id bigint [not null]
+  amount varchar(50) [note: '상세 생성 후 채워지는 분량']
 
   indexes {
     (recipe_id, ingredient_catalog_id) [unique]
   }
 }
 
+Table recipe_seasonings {
+  id bigint [pk, increment]
+  recipe_id bigint [not null]
+  name varchar(30) [not null]
+  amount varchar(50) [not null]
+  sort_order integer [not null]
+
+  indexes {
+    (recipe_id, sort_order) [unique]
+  }
+
+  Note: '''
+  기본 양념(소금·설탕·간장 등). ingredient_catalog 재료가 아니라 별도 테이블
+  (sort_order >= 1)
+  '''
+}
+
 Table recipe_steps {
-  id bigint [not null, default: `nextval('recipe_steps_id_seq'`]
+  id bigint [pk, increment]
   recipe_id bigint [not null]
   step_order integer [not null]
   description varchar(500) [not null]
@@ -324,9 +397,227 @@ Table uploaded_images {
   Note: '''
   S3 이미지 메타데이터. ready=false는 업로드 중 또는 정리 재시도 대상
   content_type IN ('image/jpeg', 'image/png')
-  purpose IN ('RECEIPT', 'PROFILE', 'RECIPE')
+  purpose IN ('RECEIPT', 'PROFILE', 'RECIPE') (거래 기능: 'POST', 'CHAT' 추가 예정)
   (size_bytes >= 1) AND (size_bytes <= 5242880)
   '''
+}
+
+// ---------------------------------------------------------------- 거래 기능 설계안 (#143, 마이그레이션 미적용)
+
+Table posts {
+  id bigint [pk, increment]
+  author_id bigint [not null]
+  inventory_item_id bigint [not null, note: '재고 1건을 통째로 게시']
+  type varchar(10) [not null, note: 'SHARE / SALE']
+  status varchar(20) [not null, note: 'OPEN / RESERVED / COMPLETED / EXPIRED']
+  title varchar(50) [not null]
+  description varchar(1000) [not null, default: '', note: '생략하면 빈 문자열로 저장']
+  price integer [not null, default: 0, note: '크레딧. SHARE면 0']
+  recommended_price integer [note: '게시 시점 추천가. 판매가는 max(1, ceil(추천가×0.8)) ~ floor(추천가×1.2)']
+  is_opened boolean [not null]
+  location geography [not null, note: 'geography(Point, 4326). 게시 위치']
+  like_count integer [not null, default: 0]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  deleted_at timestamptz [note: '삭제 시 재고 잠금 해제']
+
+  indexes {
+    (status, created_at)
+    author_id
+    inventory_item_id [note: 'deleted_at IS NULL 부분 유니크']
+  }
+
+  Note: '''
+  location은 GiST 인덱스가 필요하다. DBML은 btree·hash만 지원하므로 마이그레이션에서 USING GIST로 선언한다
+  게시 잠금: deleted_at IS NULL AND status IN ('OPEN', 'RESERVED')인 게시물의 재고는 소진/폐기·수정·요리 완료 차감이 잠긴다 (공통 재고 변경 경로에서 검사)
+  거래가 완료되면 판매자 재고는 shared 상태로 종료되며, 이후 변경 제한은 재고 상태 규칙으로 처리한다
+  type IN ('SHARE', 'SALE')
+  status IN ('OPEN', 'RESERVED', 'COMPLETED', 'EXPIRED')
+  (type = 'SALE' AND price >= 1) OR (type = 'SHARE' AND price = 0)
+  '''
+}
+
+Table post_images {
+  id bigint [pk, increment]
+  post_id bigint [not null]
+  image_id bigint [unique, not null]
+  sort_order smallint [not null, note: '1이 썸네일, 최대 5']
+
+  indexes {
+    (post_id, sort_order) [unique]
+  }
+}
+
+Table post_likes {
+  user_id bigint [not null]
+  post_id bigint [not null]
+  created_at timestamptz [not null]
+
+  indexes {
+    (user_id, post_id) [pk]
+    post_id
+  }
+}
+
+Table trades {
+  id bigint [pk, increment]
+  post_id bigint [not null]
+  buyer_id bigint [not null]
+  seller_id bigint [not null]
+  status varchar(20) [not null, note: 'REQUESTED / ACCEPTED / COMPLETED / REJECTED / CANCELED']
+  price integer [not null, note: '요청 시점 게시물 가격. 이 금액을 보류']
+  buyer_inventory_item_id bigint [unique, note: '완료 시 구매자에게 생긴 재고. 거래 하나에 재고 하나']
+  canceled_by_id bigint
+  cancel_reason varchar(200)
+  requested_at timestamptz [not null]
+  accepted_at timestamptz
+  auto_resolve_at timestamptz [note: '자동 완료 시각 = accepted_at + 72시간. 24시간 전 SYSTEM 메시지로 안내']
+  completed_at timestamptz
+  closed_at timestamptz [note: '거절·취소 시각']
+
+  indexes {
+    post_id [note: 'status IN (REQUESTED, ACCEPTED) 부분 유니크: 게시물당 진행 중 거래 1건']
+    (buyer_id, requested_at)
+    (seller_id, requested_at)
+    (status, auto_resolve_at)
+  }
+
+  Note: '''
+  상태 변경은 posts·trades 행을 SELECT ... FOR UPDATE로 잠근 뒤 상태를 다시 확인하고, 재고·크레딧 변경까지 한 트랜잭션에서 처리한다
+  잠금 순서는 모든 경로에서 posts → trades → inventory_items → users, 같은 종류의 여러 행은 ID 오름차순
+  COMPLETED·REJECTED·CANCELED 거래는 만료 검사 없이 거절한다. 진행 중 거래의 만료 처리(취소·환불)는 409를 돌려줘도 커밋한다
+  '''
+}
+
+Table trade_reviews {
+  id bigint [pk, increment]
+  trade_id bigint [not null]
+  writer_id bigint [not null]
+  target_user_id bigint [not null]
+  manner_score smallint [not null, note: '1~5']
+  content varchar(500)
+  created_at timestamptz [not null]
+
+  indexes {
+    (trade_id, writer_id) [unique]
+    (target_user_id, created_at)
+  }
+}
+
+Table credit_transactions {
+  id bigint [pk, increment]
+  user_id bigint [not null]
+  type varchar(30) [not null]
+  amount integer [not null, note: '부호 있는 변동량. 적립·환불 +, 보류·사용 -']
+  trade_id bigint
+  ai_waste_report_id bigint
+  reward_date date [note: 'DAILY_REWARD(하루 1회)·SAVING_BONUS(판매자당 하루 3회) 상한 판단용 (Asia/Seoul)']
+  provider_transaction_id varchar(100) [unique, note: '오퍼월 중복 지급 방지']
+  created_at timestamptz [not null]
+
+  indexes {
+    (user_id, created_at)
+    (user_id, reward_date) [note: 'type = DAILY_REWARD 부분 유니크']
+    trade_id
+  }
+
+  Note: '''
+  사용 가능 잔액 = SUM(amount). 보류 잔액 = 내가 구매자인 REQUESTED·ACCEPTED 거래의 price 합
+  차감(TRADE_HOLD·AI_REPORT) 전에는 users 행을 SELECT ... FOR UPDATE로 잠근 뒤 잔액을 확인하고 내역을 넣는다. 같은 사용자의 동시 차감을 직렬화하기 위함
+  type IN ('SIGNUP_REWARD', 'AD_REWARD', 'DAILY_REWARD', 'SAVING_BONUS', 'TRADE_HOLD', 'TRADE_REFUND', 'TRADE_INCOME', 'AI_REPORT')
+  SAVING_BONUS는 최근 7일 안에 같은 상대와 완료한 거래가 이미 있으면 지급하지 않는다
+  '''
+}
+
+Table chat_rooms {
+  id bigint [pk, increment]
+  post_id bigint [not null]
+  buyer_id bigint [not null]
+  seller_id bigint [not null]
+  last_message_at timestamptz
+  created_at timestamptz [not null]
+
+  indexes {
+    (post_id, buyer_id) [unique]
+  }
+}
+
+Table chat_participants {
+  chat_room_id bigint [not null]
+  user_id bigint [not null]
+  last_read_message_id bigint
+  left_at timestamptz [note: '나가기. 상대가 새 메시지를 보내거나 구매자가 채팅방 생성을 다시 호출하면 null로 복귀']
+
+  indexes {
+    (chat_room_id, user_id) [pk]
+    (user_id, left_at)
+  }
+}
+
+Table chat_messages {
+  id bigint [pk, increment]
+  chat_room_id bigint [not null]
+  sender_id bigint [note: 'SYSTEM이면 NULL']
+  type varchar(10) [not null, note: 'TEXT / IMAGE / SYSTEM']
+  content varchar(1000)
+  image_id bigint
+  system_event varchar(30) [note: 'TRADE_REQUESTED / ACCEPTED / REJECTED / CANCELED / COMPLETED / AUTO_COMPLETE_SOON']
+  created_at timestamptz [not null]
+
+  indexes {
+    (chat_room_id, id) [note: 'id DESC, 커서 페이지네이션']
+  }
+}
+
+Table user_blocks {
+  blocker_id bigint [not null]
+  blocked_id bigint [not null]
+  created_at timestamptz [not null]
+
+  indexes {
+    (blocker_id, blocked_id) [pk]
+    blocked_id
+  }
+
+  Note: '(blocker_id <> blocked_id)'
+}
+
+Table user_reports {
+  id bigint [pk, increment]
+  reporter_id bigint [not null]
+  target_type varchar(10) [not null, note: 'USER / POST']
+  target_user_id bigint
+  target_post_id bigint
+  reason varchar(20) [not null, note: 'SPAM / FRAUD / PROHIBITED_ITEM / ABUSIVE / ETC']
+  detail varchar(500)
+  status varchar(20) [not null, default: 'RECEIVED', note: 'RECEIVED / REVIEWED']
+  created_at timestamptz [not null]
+
+  indexes {
+    (reporter_id, target_user_id) [note: 'target_type = USER 부분 유니크']
+    (reporter_id, target_post_id) [note: 'target_type = POST 부분 유니크']
+  }
+
+  Note: '''
+  target_type = USER면 target_user_id, POST면 target_post_id만 채운다
+  (target_type = 'USER' AND target_user_id IS NOT NULL AND target_post_id IS NULL) OR (target_type = 'POST' AND target_post_id IS NOT NULL AND target_user_id IS NULL)
+  중복 신고 방지는 일반 UNIQUE로는 NULL 때문에 동작하지 않으므로 마이그레이션에서 부분 유니크 인덱스 2개로 만든다
+  '''
+}
+
+Table ai_waste_reports {
+  id bigint [pk, increment]
+  user_id bigint [not null]
+  year_month char(7) [not null, note: 'YYYY-MM']
+  cost integer [not null]
+  summary text [not null]
+  insights jsonb [not null, note: '[{title, body}]']
+  suggestions jsonb [not null, note: '[string]']
+  created_at timestamptz [not null]
+
+  indexes {
+    (user_id, year_month) [unique]
+  }
 }
 
 Ref: consumption_events.event_source_id > event_sources.id
@@ -345,6 +636,7 @@ Ref: inventory_items.unit_id > units.id
 Ref: inventory_items.user_id > users.id
 Ref: notifications.inventory_item_id > inventory_items.id
 Ref: notifications.user_id > users.id
+Ref: user_push_tokens.user_id > users.id
 Ref: purchase_items.ingredient_catalog_id > ingredient_catalog.id
 Ref: purchase_items.purchase_id > purchases.id
 Ref: purchase_items.storage_method_id > storage_methods.id
@@ -355,6 +647,8 @@ Ref: purchases.user_id > users.id
 Ref: recipe_ingredients.ingredient_catalog_id > ingredient_catalog.id
 Ref: recipe_ingredients.recipe_id > recipes.id
 Ref: recipe_steps.recipe_id > recipes.id
+Ref: recipe_seasonings.recipe_id > recipes.id [delete: cascade]
+Ref: users.profile_image_id > uploaded_images.id
 Ref: recipe_suggestions.recipe_id > recipes.id
 Ref: recipe_suggestions.user_id > users.id
 Ref: shopping_list_items.ingredient_catalog_id > ingredient_catalog.id
@@ -364,6 +658,41 @@ Ref: uploaded_images.user_id > users.id
 Ref: user_auth_accounts.auth_provider_id > auth_providers.id
 Ref: user_auth_accounts.user_id > users.id
 Ref: user_sessions.user_id > users.id
+
+Ref: credit_base_values.category_id > ingredient_categories.id
+Ref: credit_base_values.unit_id > units.id
+Ref: posts.author_id > users.id
+Ref: posts.inventory_item_id > inventory_items.id
+Ref: post_images.post_id > posts.id [delete: cascade]
+Ref: post_images.image_id > uploaded_images.id
+Ref: post_likes.user_id > users.id
+Ref: post_likes.post_id > posts.id [delete: cascade]
+Ref: trades.post_id > posts.id
+Ref: trades.buyer_id > users.id
+Ref: trades.seller_id > users.id
+Ref: trades.canceled_by_id > users.id
+Ref: trades.buyer_inventory_item_id > inventory_items.id
+Ref: trade_reviews.trade_id > trades.id
+Ref: trade_reviews.writer_id > users.id
+Ref: trade_reviews.target_user_id > users.id
+Ref: credit_transactions.user_id > users.id
+Ref: credit_transactions.trade_id > trades.id
+Ref: credit_transactions.ai_waste_report_id > ai_waste_reports.id
+Ref: chat_rooms.post_id > posts.id
+Ref: chat_rooms.buyer_id > users.id
+Ref: chat_rooms.seller_id > users.id
+Ref: chat_participants.chat_room_id > chat_rooms.id [delete: cascade]
+Ref: chat_participants.user_id > users.id
+Ref: chat_participants.last_read_message_id > chat_messages.id
+Ref: chat_messages.chat_room_id > chat_rooms.id [delete: cascade]
+Ref: chat_messages.sender_id > users.id
+Ref: chat_messages.image_id > uploaded_images.id
+Ref: user_blocks.blocker_id > users.id
+Ref: user_blocks.blocked_id > users.id
+Ref: user_reports.reporter_id > users.id
+Ref: user_reports.target_user_id > users.id
+Ref: user_reports.target_post_id > posts.id
+Ref: ai_waste_reports.user_id > users.id
 
 TableGroup user {
   users
@@ -399,16 +728,49 @@ TableGroup inventory_dispose {
 TableGroup shopping_notification {
   shopping_list_items
   notifications
+  user_push_tokens
 }
 
 TableGroup recipe {
   recipes
   recipe_ingredients
   recipe_steps
+  recipe_seasonings
   recipe_suggestions
 }
 
 TableGroup image {
   uploaded_images
+}
+
+TableGroup post {
+  posts
+  post_images
+  post_likes
+}
+
+TableGroup trade {
+  trades
+  trade_reviews
+}
+
+TableGroup credit {
+  credit_transactions
+  credit_base_values
+}
+
+TableGroup chat {
+  chat_rooms
+  chat_participants
+  chat_messages
+}
+
+TableGroup safety {
+  user_blocks
+  user_reports
+}
+
+TableGroup ai_report {
+  ai_waste_reports
 }
 

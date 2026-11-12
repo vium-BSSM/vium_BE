@@ -44,11 +44,11 @@
     },
     {
       "name": "trade",
-      "description": "게시물 거래. 상태 흐름: REQUESTED → ACCEPTED → COMPLETED, 또는 REJECTED/CANCELED. 수락 후 일정 시간 동안 수령 확인이 없으면 내부 배치가 자동 처리한다(자동 완료/자동 취소 중 정책 미정, HTTP 엔드포인트 없음). 거래 완료 시 판매자에게 절약 보너스(+1, 하루 상한, 같은 상대 반복 거래 제외)가 자동 지급된다."
+      "description": "게시물 거래. 상태 흐름: REQUESTED → ACCEPTED → COMPLETED, 또는 REJECTED/CANCELED. 수락 후 72시간(autoResolveAt) 동안 수령 확인이 없으면 내부 배치가 자동 완료한다(HTTP 엔드포인트 없음). 처리 내용은 수령 확인 API와 같고, 24시간 전에 채팅 SYSTEM 메시지(TRADE_AUTO_COMPLETE_SOON)로 알린다. 받지 못한 구매자는 그 전에 취소하면 된다. 거래가 완료되면(자동 완료 포함) 나눔·판매 모두 판매자에게 절약 보너스(+1)가 자동 지급된다. 판매자 1명당 하루(Asia/Seoul) 3회까지이며, 최근 7일 안에 같은 상대와 완료한 거래가 이미 있으면 지급하지 않는다. 동시성: 모든 거래 상태 변경(요청·수락·거절·취소·완료·자동 처리)은 게시물 행과 거래 행을 잠근 뒤 현재 상태를 다시 확인하고, 상태 변경부터 재고·크레딧 변경까지 한 트랜잭션에서 처리한다. 그래서 같은 거래의 완료와 취소가 동시에 들어와도 지급과 환불 중 하나만 실행된다. 만료: 소비기한 만료 배치가 아직 돌지 않았어도 요청·수락·거절·완료 시점에 재고 소비기한을 확인한다. 검사 순서는 ① 잠금 후 거래 상태 확인 → 이미 COMPLETED·REJECTED·CANCELED면 만료 검사 없이 409 INVALID_TRADE_STATUS(종료된 거래와 게시물은 다시 처리하지 않는다) ② 진행 중 거래(또는 거래 요청 시 OPEN 게시물)에만 소비기한 확인 → 지났으면 배치와 같은 만료 처리(게시물 EXPIRED, 진행 중 거래 취소·환불)를 하고 409 POST_EXPIRED. 이때 만료·취소·환불은 409여도 저장된다. 서비스는 예외를 던지지 않고 만료 결과를 반환해 트랜잭션을 정상 커밋하며, 컨트롤러가 그 결과를 409로 바꾼다. 업무 예외 전반에 롤백 제외(noRollbackFor)를 걸지 않는다. 잠금 순서: 교착을 막기 위해 모든 경로가 posts → trades → inventory_items → users 순으로 잠그고, 같은 종류의 여러 행은 ID 오름차순으로 잠근다. 거래 요청은 거래 행이 없으므로 게시물 잠금 → 진행 중 거래 재확인 → 구매자 사용자 잠금(크레딧 보류) → 거래 생성 순이다. 게시물 등록과 일반 재고 변경(수정·소진/폐기·요리 완료)은 재고 행만 잠그고 게시 잠금 여부는 잠금 없이 조회한다."
     },
     {
       "name": "credit",
-      "description": "앱 내 포인트(크레딧). 가입·광고 시청·출석·절약 보너스로 무상 지급되며 현금 충전·환급은 없다. 잔액은 credit_transactions 내역 합산으로 계산한다."
+      "description": "앱 내 포인트(크레딧). 가입·광고 시청·출석·절약 보너스로 무상 지급되며 현금 충전·환급은 없다. 잔액은 credit_transactions 내역 합산으로 계산한다. 크레딧 차감(거래 요청 보류, AI 리포트)과 상한이 있는 지급(출석 보상, 절약 보너스)은 대상 사용자 행을 잠근 뒤 잔액·상한 확인과 내역 저장을 같은 트랜잭션에서 처리해, 같은 사용자의 동시 차감·지급을 직렬화한다."
     },
     {
       "name": "chat",
@@ -153,7 +153,11 @@
                       ]
                     },
                     "error": {
-                      "type": "null"
+                      "type": "object",
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     }
                   },
                   "required": [
@@ -258,10 +262,18 @@
                       "type": "boolean"
                     },
                     "data": {
-                      "type": "null"
+                      "type": "object",
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     },
                     "error": {
-                      "type": "null"
+                      "type": "object",
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     }
                   },
                   "required": [
@@ -1139,7 +1151,11 @@
                       ]
                     },
                     "error": {
-                      "type": "null"
+                      "type": "object",
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     }
                   },
                   "required": [
@@ -1295,7 +1311,11 @@
                       ]
                     },
                     "error": {
-                      "type": "null"
+                      "type": "object",
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     }
                   },
                   "required": [
@@ -1339,6 +1359,150 @@
       }
     },
     "/api/me/ingredients/{ingredientId}": {
+      "get": {
+        "summary": "식재료 상세 조회",
+        "deprecated": false,
+        "description": "식재료 한 건의 전체 필드를 조회한다. 목록 조회(GET /api/me/ingredients)에 없는 storageMethodName을 포함한다. 본인 소유가 아니거나 존재하지 않으면 404 NOT_FOUND다(존재 여부 노출 방지를 위해 403을 쓰지 않는다).",
+        "tags": [
+          "ingredient"
+        ],
+        "parameters": [
+          {
+            "name": "ingredientId",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "example": "",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "inventoryItemId": {
+                          "type": "integer",
+                          "format": "int64"
+                        },
+                        "ingredientCatalogId": {
+                          "type": "integer",
+                          "format": "int64",
+                          "nullable": true
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "categoryName": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "initialQuantity": {
+                          "type": "number"
+                        },
+                        "remainingQuantity": {
+                          "type": "number"
+                        },
+                        "amount": {
+                          "type": "integer",
+                          "format": "int64",
+                          "nullable": true
+                        },
+                        "unitId": {
+                          "type": "integer"
+                        },
+                        "unit": {
+                          "type": "string"
+                        },
+                        "storageMethodId": {
+                          "type": "integer",
+                          "nullable": true,
+                          "description": "1=냉장, 2=냉동, 3=실온"
+                        },
+                        "storageMethodName": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "statusCode": {
+                          "type": "string"
+                        },
+                        "purchasedOn": {
+                          "type": "string",
+                          "format": "date",
+                          "nullable": true
+                        },
+                        "expiresOn": {
+                          "type": "string",
+                          "format": "date",
+                          "nullable": true
+                        }
+                      }
+                    },
+                    "error": {
+                      "type": "object",
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "inventoryItemId": 1,
+                    "ingredientCatalogId": 5,
+                    "name": "우유",
+                    "categoryName": "dairy",
+                    "initialQuantity": 1,
+                    "remainingQuantity": 1,
+                    "amount": 2500,
+                    "unitId": 1,
+                    "unit": "개",
+                    "storageMethodId": 1,
+                    "storageMethodName": "냉장",
+                    "statusCode": "active",
+                    "purchasedOn": "2026-08-13",
+                    "expiresOn": "2026-08-20"
+                  },
+                  "error": null
+                }
+              }
+            },
+            "headers": {}
+          },
+          "404": {
+            "description": "식재료를 찾을 수 없거나 본인 소유가 아님",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "x-apidog-status": "released"
+      },
       "patch": {
         "summary": "식재료 수정",
         "deprecated": false,
@@ -1494,7 +1658,11 @@
                       ]
                     },
                     "error": {
-                      "type": "null"
+                      "type": "object",
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     }
                   },
                   "required": [
@@ -1562,10 +1730,10 @@
         ],
         "x-apidog-status": "released"
       },
-      "get": {
-        "summary": "식재료 상세 조회",
-        "deprecated": false,
-        "description": "식재료 한 건의 전체 필드를 조회한다. 목록 조회(GET /api/me/ingredients)에 없는 storageMethodName을 포함한다. 본인 소유가 아니거나 존재하지 않으면 404 NOT_FOUND다(존재 여부 노출 방지를 위해 403을 쓰지 않는다).",
+      "delete": {
+        "summary": "식재료 삭제",
+        "description": "잘못 등록한 재고를 삭제한다. 소진·폐기가 아니므로 consumption_events를 남기지 않고 낭비 통계에도 잡히지 않는다.\n\n- 삭제할 수 있는 재고: 본인 소유의 active 재고이며 소진·폐기 이벤트가 없고, 게시물(삭제된 게시물 포함)에 올라간 적이 없고, 거래로 받은 재고가 아님\n- 이력이 있는 재고는 409 INVENTORY_HAS_HISTORY. 남은 양을 정리하려면 소진/폐기 처리를 쓴다\n- 게시 중인 재고는 409 INVENTORY_LOCKED\n- 이 재고를 가리키는 알림(notifications)도 함께 삭제한다. 구매 내역(purchase_items)은 그대로 둔다",
+        "operationId": "deleteIngredient",
         "tags": [
           "ingredient"
         ],
@@ -1573,126 +1741,88 @@
           {
             "name": "ingredientId",
             "in": "path",
-            "description": "",
             "required": true,
-            "example": "",
             "schema": {
-              "type": "integer"
+              "type": "integer",
+              "format": "int64"
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "",
+            "description": "삭제됨",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "inventoryItemId": {
-                          "type": "integer",
-                          "format": "int64"
-                        },
-                        "ingredientCatalogId": {
-                          "type": "integer",
-                          "format": "int64",
-                          "nullable": true
-                        },
-                        "name": {
-                          "type": "string"
-                        },
-                        "categoryName": {
-                          "type": "string",
-                          "nullable": true
-                        },
-                        "initialQuantity": {
-                          "type": "number"
-                        },
-                        "remainingQuantity": {
-                          "type": "number"
-                        },
-                        "amount": {
-                          "type": "integer",
-                          "format": "int64",
-                          "nullable": true
-                        },
-                        "unitId": {
-                          "type": "integer"
-                        },
-                        "unit": {
-                          "type": "string"
-                        },
-                        "storageMethodId": {
-                          "type": "integer",
-                          "nullable": true,
-                          "description": "1=냉장, 2=냉동, 3=실온"
-                        },
-                        "storageMethodName": {
-                          "type": "string",
-                          "nullable": true
-                        },
-                        "statusCode": {
-                          "type": "string"
-                        },
-                        "purchasedOn": {
-                          "type": "string",
-                          "format": "date",
-                          "nullable": true
-                        },
-                        "expiresOn": {
-                          "type": "string",
-                          "format": "date",
-                          "nullable": true
-                        }
-                      }
-                    },
-                    "error": {
-                      "type": "null"
-                    }
-                  }
+                  "$ref": "#/components/schemas/ApiResponseEmpty"
                 },
                 "example": {
                   "success": true,
-                  "data": {
-                    "inventoryItemId": 1,
-                    "ingredientCatalogId": 5,
-                    "name": "우유",
-                    "categoryName": "dairy",
-                    "initialQuantity": 1,
-                    "remainingQuantity": 1,
-                    "amount": 2500,
-                    "unitId": 1,
-                    "unit": "개",
-                    "storageMethodId": 1,
-                    "storageMethodName": "냉장",
-                    "statusCode": "active",
-                    "purchasedOn": "2026-08-13",
-                    "expiresOn": "2026-08-20"
-                  },
+                  "data": null,
                   "error": null
-                }
-              }
-            },
-            "headers": {}
-          },
-          "404": {
-            "description": "식재료를 찾을 수 없거나 본인 소유가 아님",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "description": "NOT_FOUND: 식재료 없음 또는 본인 소유 아님",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "examples": {
+                  "NOT_FOUND": {
+                    "summary": "NOT_FOUND",
+                    "value": {
+                      "success": false,
+                      "data": null,
+                      "error": {
+                        "code": "NOT_FOUND",
+                        "message": "식재료를 찾을 수 없습니다"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "삭제할 수 없는 재고",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "examples": {
+                  "INVENTORY_HAS_HISTORY": {
+                    "summary": "INVENTORY_HAS_HISTORY",
+                    "value": {
+                      "success": false,
+                      "data": null,
+                      "error": {
+                        "code": "INVENTORY_HAS_HISTORY",
+                        "message": "소진·폐기·거래 이력이 있는 재료는 삭제할 수 없습니다."
+                      }
+                    }
+                  },
+                  "INVENTORY_LOCKED": {
+                    "summary": "INVENTORY_LOCKED",
+                    "value": {
+                      "success": false,
+                      "data": null,
+                      "error": {
+                        "code": "INVENTORY_LOCKED",
+                        "message": "게시물에 올라간 재고는 삭제할 수 없습니다."
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "security": [
@@ -1700,7 +1830,7 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "released"
+        "x-apidog-status": "designing"
       }
     },
     "/api/ingredients/estimate-expiry": {
@@ -1777,7 +1907,11 @@
                       ]
                     },
                     "error": {
-                      "type": "null"
+                      "type": "object",
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     }
                   },
                   "required": [
@@ -1791,7 +1925,8 @@
                   "data": {
                     "ingredientCatalogId": 12,
                     "ingredientName": "우유",
-                    "storageMethod": "cold",
+                    "storageMethodId": 1,
+                    "storageMethodName": "냉장",
                     "shelfLifeDays": 7,
                     "estimatedExpiryDate": "2026-09-03"
                   },
@@ -2040,7 +2175,11 @@
                       ]
                     },
                     "error": {
-                      "type": "null"
+                      "type": "object",
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     }
                   },
                   "required": [
@@ -2213,7 +2352,11 @@
                       ]
                     },
                     "error": {
-                      "type": "null"
+                      "type": "object",
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     }
                   },
                   "required": [
@@ -2321,7 +2464,11 @@
                       ]
                     },
                     "error": {
-                      "type": "null"
+                      "type": "object",
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     }
                   },
                   "required": [
@@ -2396,14 +2543,15 @@
           {
             "name": "eventType",
             "in": "query",
-            "description": "",
+            "description": "생략 시 전체. shared는 나눔·판매로 넘긴 재고 (거래 기능 도입 후)",
             "required": false,
             "example": "",
             "schema": {
               "type": "string",
               "enum": [
                 "consumed",
-                "disposed"
+                "disposed",
+                "shared"
               ]
             }
           }
@@ -2439,9 +2587,10 @@
                                 "type": "string",
                                 "enum": [
                                   "consumed",
-                                  "disposed"
+                                  "disposed",
+                                  "shared"
                                 ],
-                                "description": "거래 기능 도입 후 shared(나눔·판매로 넘김)가 추가된다."
+                                "description": "shared는 거래 완료로 넘긴 재고 (거래 기능 도입 후)"
                               },
                               "eventSource": {
                                 "type": "string",
@@ -2469,7 +2618,11 @@
                       }
                     },
                     "error": {
-                      "type": "null"
+                      "type": "object",
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     }
                   }
                 }
@@ -2478,7 +2631,7 @@
             "headers": {}
           },
           "400": {
-            "description": "eventType이 consumed/disposed가 아님",
+            "description": "INVALID_REQUEST: 잘못된 날짜 형식, from > to, eventType이 consumed·disposed·shared가 아님",
             "content": {
               "application/json": {
                 "schema": {
@@ -2661,7 +2814,7 @@
       "post": {
         "summary": "요리 완료 (재료 사용량 반영)",
         "deprecated": false,
-        "description": "사용량 조사 화면의 슬라이더 값을 재고에 반영합니다.\n\n- usageRate: 현재 남은 양의 몇 %를 썼는지 (0~100 정수). usedQuantity/usageRate로 계산된 사용량이 재고에서 차감되는 전체 양입니다.\n- 0 → 변경 없음 / 계산 후 남은 양 > 0 → 남은 양만 차감 / 남은 양 ≤ 0 (100% 포함) → 종료 처리\n- wasteQuantity: usedQuantity 중 버린 양(일반 폐기와 동일한 규칙, 선택, 기본 0). usedQuantity를 초과할 수 없으며 초과하면 400입니다. 0보다 크면 사용분(consumed, usedQuantity - wasteQuantity)과 폐기분(disposed, wasteQuantity) 이벤트를 각각 기록합니다(둘 다 0보다 클 때만). 차감 후 남은 수량이 0이 되면, 전부 폐기(wasteQuantity == usedQuantity)면 disposed로, 아니면 consumed로 종료됩니다.\n- wasteAmount: 폐기분 금액(선택, 원 단위 정수). 지정하면 폐기 이벤트 금액으로 그대로 쓰고, 없으면 일반 폐기와 동일하게 비례 계산합니다.\n- inventoryId는 레시피 재료가 아니어도 됩니다 (재료 추가 화면에서 고른 재료 포함).\n- 하나라도 실패하면 아무것도 차감하지 않습니다.\n- 중복 차감 방지를 위해 요청 중에는 완료 버튼을 비활성화해 주세요.",
+        "description": "사용량 조사 화면의 슬라이더 값을 재고에 반영합니다.\n\n- usageRate: 현재 남은 양의 몇 %를 썼는지 (0~100 정수). usedQuantity/usageRate로 계산된 사용량이 재고에서 차감되는 전체 양입니다.\n- 0 → 변경 없음 / 계산 후 남은 양 > 0 → 남은 양만 차감 / 남은 양 ≤ 0 (100% 포함) → 종료 처리\n- wasteQuantity: usedQuantity 중 버린 양(일반 폐기와 동일한 규칙, 선택, 기본 0). usedQuantity를 초과할 수 없으며 초과하면 400입니다. 0보다 크면 사용분(consumed, usedQuantity - wasteQuantity)과 폐기분(disposed, wasteQuantity) 이벤트를 각각 기록합니다(둘 다 0보다 클 때만). 차감 후 남은 수량이 0이 되면, 전부 폐기(wasteQuantity == usedQuantity)면 disposed로, 아니면 consumed로 종료됩니다.\n- wasteAmount: 폐기분 금액(선택, 원 단위 정수). 지정하면 폐기 이벤트 금액으로 그대로 쓰고, 없으면 일반 폐기와 동일하게 비례 계산합니다.\n- inventoryId는 레시피 재료가 아니어도 됩니다 (재료 추가 화면에서 고른 재료 포함).\n- 하나라도 실패하면 아무것도 차감하지 않습니다.\n- 중복 차감 방지를 위해 요청 중에는 완료 버튼을 비활성화해 주세요.\n- 나눔·판매 게시물에 올라간 재고(게시물 status가 OPEN·RESERVED)가 usages에 하나라도 있으면 사용량과 관계없이(0 포함) 409 INVENTORY_LOCKED로 전체 롤백한다 (거래 기능 도입 후). 잠금 검사는 재고 수정·소진/폐기와 같은 공통 재고 변경 경로에서 한다.",
         "operationId": "completeRecipe",
         "tags": [
           "Recipe"
@@ -2712,7 +2865,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseBase"
+                  "$ref": "#/components/schemas/ApiResponseEmpty"
                 },
                 "example": {
                   "success": true,
@@ -2724,7 +2877,7 @@
             "headers": {}
           },
           "400": {
-            "description": "INVALID_REQUEST(usages 비어있음/50개 초과, usageRate·usedQuantity 둘 다 또는 둘 다 없음, 음수·소수 4자리 이상, 남은 수량 초과, wasteQuantity > usedQuantity) / DUPLICATE_INVENTORY",
+            "description": "INVALID_REQUEST(usages 비어있음/50개 초과, inventoryId 누락, usageRate 0~100 밖, 음수 wasteAmount, usageRate·usedQuantity 둘 다 또는 둘 다 없음, 음수·소수 4자리 이상, 남은 수량 초과, wasteQuantity > usedQuantity) / DUPLICATE_INVENTORY",
             "content": {
               "application/json": {
                 "schema": {
@@ -2816,18 +2969,34 @@
             "headers": {}
           },
           "409": {
-            "description": "이미 소진·폐기된 재고 (INVENTORY_NOT_ACTIVE)",
+            "description": "이미 소진·폐기된 재고 (INVENTORY_NOT_ACTIVE) / 게시물에 올라간 재고 (INVENTORY_LOCKED, 거래 기능 도입 후)",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiErrorResponse"
                 },
-                "example": {
-                  "success": false,
-                  "data": null,
-                  "error": {
-                    "code": "INVENTORY_NOT_ACTIVE",
-                    "message": "이미 소진되거나 폐기된 재고입니다."
+                "examples": {
+                  "INVENTORY_NOT_ACTIVE": {
+                    "summary": "INVENTORY_NOT_ACTIVE",
+                    "value": {
+                      "success": false,
+                      "data": null,
+                      "error": {
+                        "code": "INVENTORY_NOT_ACTIVE",
+                        "message": "이미 소진되거나 폐기된 재고입니다."
+                      }
+                    }
+                  },
+                  "INVENTORY_LOCKED": {
+                    "summary": "INVENTORY_LOCKED",
+                    "value": {
+                      "success": false,
+                      "data": null,
+                      "error": {
+                        "code": "INVENTORY_LOCKED",
+                        "message": "게시물에 올라간 재고는 사용할 수 없습니다."
+                      }
+                    }
                   }
                 }
               }
@@ -3804,10 +3973,18 @@
                       "example": true
                     },
                     "data": {
-                      "type": "null"
+                      "type": "object",
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     },
                     "error": {
-                      "type": "null"
+                      "type": "object",
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     }
                   }
                 },
@@ -4309,7 +4486,8 @@
                   "ingredientCatalogId": {
                     "type": "integer",
                     "format": "int64",
-                    "nullable": true
+                    "nullable": true,
+                    "description": "존재하지 않는 ID면 404 NOT_FOUND"
                   },
                   "customName": {
                     "type": "string",
@@ -4319,7 +4497,10 @@
                   },
                   "suggestedQuantity": {
                     "type": "number",
-                    "nullable": true
+                    "nullable": true,
+                    "exclusiveMinimum": true,
+                    "minimum": 0,
+                    "description": "0보다 크고 정수 9자리·소수 3자리까지"
                   },
                   "unitId": {
                     "type": "integer",
@@ -4336,7 +4517,7 @@
                       9,
                       10
                     ],
-                    "description": "고정 단위 ID: 1=개, 2=g, 3=kg, 4=ml, 5=L, 6=팩, 7=봉, 8=병, 9=캔, 10=통"
+                    "description": "고정 단위 ID: 1=개, 2=g, 3=kg, 4=ml, 5=L, 6=팩, 7=봉, 8=병, 9=캔, 10=통 존재하지 않는 ID면 400"
                   },
                   "reason": {
                     "type": "string",
@@ -4396,7 +4577,7 @@
             }
           },
           "400": {
-            "description": "INVALID_REQUEST: ingredientCatalogId·customName 둘 다 없음",
+            "description": "INVALID_REQUEST: ingredientCatalogId·customName 둘 다 없음, customName 120자·reason 200자 초과, suggestedQuantity 0 이하·자릿수 초과, 존재하지 않는 unitId",
             "content": {
               "application/json": {
                 "schema": {
@@ -4407,6 +4588,16 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "description": "NOT_FOUND: 존재하지 않는 ingredientCatalogId",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           },
           "409": {
             "description": "CONFLICT: 같은 ingredientCatalogId 항목이 이미 존재",
@@ -4594,6 +4785,16 @@
               }
             }
           },
+          "400": {
+            "description": "INVALID_REQUEST: isChecked 누락 또는 null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
@@ -4641,7 +4842,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseBase"
+                  "$ref": "#/components/schemas/ApiResponseEmpty"
                 },
                 "example": {
                   "success": true,
@@ -5288,8 +5489,12 @@
                       }
                     },
                     "error": {
-                      "type": "null",
-                      "example": null
+                      "type": "object",
+                      "example": null,
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     }
                   }
                 },
@@ -5415,8 +5620,12 @@
                       "$ref": "#/components/schemas/PostDetail"
                     },
                     "error": {
-                      "type": "null",
-                      "example": null
+                      "type": "object",
+                      "example": null,
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     }
                   }
                 },
@@ -5506,7 +5715,7 @@
     "/api/me/posts": {
       "post": {
         "summary": "게시물 등록",
-        "description": "내 재고 1건을 통째로 나눔·판매 게시물로 올린다.\n\n게시 조건(하나라도 어기면 422 POST_NOT_ALLOWED, error.message에 사유):\n- 사용량이 0인 active 재고(remainingQuantity == initialQuantity)\n- 이미 게시된 재고가 아님\n- 소비기한이 최소 1일 남음\n- 날고기·수산물·조리식품 카테고리가 아님\n\n개봉 여부와 보관 방법은 필수다. storageMethodId는 재고의 보관 방법도 함께 갱신한다. 게시된 재고는 게시물이 삭제되거나 거래가 끝날 때까지 소진/폐기·수정이 잠긴다. 게시 위치는 요청의 latitude·longitude로 저장한다.",
+        "description": "내 재고 1건을 통째로 나눔·판매 게시물로 올린다.\n\n게시 조건(하나라도 어기면 422 POST_NOT_ALLOWED, error.message에 사유):\n- 사용량이 0인 active 재고(remainingQuantity == initialQuantity)\n- 이미 게시된 재고가 아님\n- 소비기한이 최소 1일 남음\n- 카탈로그에서 고른 재고(ingredientCatalogId 있음). 이름만 입력한 재고는 품목을 판별할 수 없어 게시할 수 없다(조리식품도 이 규칙으로 막힌다)\n- 게시 금지 품목이 아님(카탈로그 품목별 post_allowed). 카테고리가 아니라 품목 단위로 판단하므로 냉동식품에 속한 냉동 수산물도 막힌다\n- type=SALE이면 판매 가능 재고(post-preview의 saleAllowed=true). (카테고리, 단위) 기준값이 없거나 추천가가 0이면 나눔만 가능\n\n개봉 여부와 보관 방법은 필수다. storageMethodId는 재고의 보관 방법도 함께 갱신한다. 게시된 재고는 게시물이 삭제되거나 거래가 끝날 때까지 소진/폐기·수정이 잠긴다. 게시 위치는 요청의 latitude·longitude로 저장한다.",
         "tags": [
           "post"
         ],
@@ -5543,12 +5752,13 @@
                   },
                   "description": {
                     "type": "string",
-                    "maxLength": 1000
+                    "maxLength": 1000,
+                    "description": "선택. 생략하면 빈 문자열로 저장한다"
                   },
                   "price": {
                     "type": "integer",
                     "minimum": 0,
-                    "description": "SALE이면 필수, 크레딧 추천가 ±20% 이내. SHARE면 생략하거나 0"
+                    "description": "type=SALE이면 필수이며 max(1, ceil(추천가×0.8)) ~ floor(추천가×1.2). SHARE면 생략하거나 0"
                   },
                   "imageIds": {
                     "type": "array",
@@ -5637,8 +5847,12 @@
                       }
                     },
                     "error": {
-                      "type": "null",
-                      "example": null
+                      "type": "object",
+                      "example": null,
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     }
                   }
                 },
@@ -5714,7 +5928,7 @@
             }
           },
           "422": {
-            "description": "게시 조건 불충족",
+            "description": "게시 조건 불충족 (판매 불가 재고를 SALE로 올린 경우 포함)",
             "content": {
               "application/json": {
                 "schema": {
@@ -5729,6 +5943,17 @@
                       "error": {
                         "code": "POST_NOT_ALLOWED",
                         "message": "소비기한이 1일 이상 남은 재료만 게시할 수 있습니다."
+                      }
+                    }
+                  },
+                  "SALE_NOT_ALLOWED": {
+                    "summary": "판매 불가 재고",
+                    "value": {
+                      "success": false,
+                      "data": null,
+                      "error": {
+                        "code": "POST_NOT_ALLOWED",
+                        "message": "이 재료는 나눔으로만 올릴 수 있습니다."
                       }
                     }
                   }
@@ -5748,7 +5973,7 @@
     "/api/me/posts/{postId}": {
       "patch": {
         "summary": "게시물 수정",
-        "description": "작성자가 제목·설명·가격·사진을 수정한다. 보낸 필드만 바뀐다. 진행 중(REQUESTED/ACCEPTED) 거래가 있거나 COMPLETED·EXPIRED 게시물이면 409다. 재료·게시 위치·거래 방식은 바꿀 수 없다.",
+        "description": "작성자가 제목·설명·가격·사진을 수정한다. 보낸 필드만 바뀌고 생략한 필드는 기존 값을 유지한다(null은 보낼 수 없다). 진행 중(REQUESTED/ACCEPTED) 거래가 있거나 COMPLETED·EXPIRED 게시물이면 409다. 재료·게시 위치·거래 방식은 바꿀 수 없다.",
         "tags": [
           "post"
         ],
@@ -5770,22 +5995,23 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 50,
-                    "description": "앞뒤 공백 제거 후 1~50자"
+                    "description": "생략하면 기존 값 유지. 앞뒤 공백 제거 후 1~50자"
                   },
                   "description": {
                     "type": "string",
-                    "maxLength": 1000
+                    "maxLength": 1000,
+                    "description": "생략하면 기존 값 유지. 설명을 지우려면 빈 문자열(\"\")을 보낸다"
                   },
                   "price": {
                     "type": "integer",
-                    "minimum": 0,
-                    "description": "SALE이면 필수, 크레딧 추천가 ±20% 이내. SHARE면 생략하거나 0"
+                    "minimum": 1,
+                    "description": "생략하면 기존 값 유지. SALE 게시물만 바꿀 수 있고, 게시 당시 추천가 기준 max(1, ceil(추천가×0.8)) ~ floor(추천가×1.2). SHARE 게시물에 보내면 400"
                   },
                   "imageIds": {
                     "type": "array",
                     "maxItems": 5,
                     "uniqueItems": true,
-                    "description": "purpose=POST로 업로드한 내 이미지 ID. 첫 번째가 썸네일",
+                    "description": "생략하면 기존 사진 유지. 보내면 목록 전체를 교체한다(빈 배열이면 사진 삭제). 첫 번째가 썸네일",
                     "items": {
                       "type": "integer",
                       "format": "int64"
@@ -5820,8 +6046,12 @@
                       "$ref": "#/components/schemas/PostDetail"
                     },
                     "error": {
-                      "type": "null",
-                      "example": null
+                      "type": "object",
+                      "example": null,
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     }
                   }
                 },
@@ -5994,11 +6224,19 @@
                       "example": true
                     },
                     "data": {
-                      "type": "null"
+                      "type": "object",
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     },
                     "error": {
-                      "type": "null",
-                      "example": null
+                      "type": "object",
+                      "example": null,
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     }
                   }
                 },
@@ -6071,7 +6309,7 @@
     "/api/me/ingredients/{ingredientId}/post-preview": {
       "get": {
         "summary": "게시 가능 여부·추천 크레딧 조회",
-        "description": "게시물 작성 화면 진입 시 호출한다. 재고의 게시 가능 여부와 불가 사유, 판매 시 크레딧 추천가와 허용 범위를 돌려준다. 소비기한 임박 알림에서 바로 맡기기도 알림의 inventoryItemId로 이 API를 호출해 작성 화면을 연다.",
+        "description": "게시물 작성 화면 진입 시 호출한다. 재고의 게시 가능 여부와 불가 사유, 판매 가능 여부와 크레딧 추천가·허용 범위를 돌려준다.\n\n- (카테고리, 단위) 기준값이 없거나 계산된 추천가가 0이면 saleAllowed=false이며 나눔만 올릴 수 있다.\n- 소비기한 임박 알림에서 바로 맡기기도 알림의 inventoryItemId로 이 API를 호출해 작성 화면을 연다.",
         "tags": [
           "post",
           "credit"
@@ -6112,6 +6350,8 @@
                         "inventoryItemId",
                         "eligible",
                         "ineligibleReasons",
+                        "saleAllowed",
+                        "saleBlockedReason",
                         "creditEstimate"
                       ],
                       "properties": {
@@ -6128,21 +6368,25 @@
                             "$ref": "#/components/schemas/PostIneligibleReason"
                           }
                         },
+                        "saleAllowed": {
+                          "type": "boolean",
+                          "description": "판매(SALE) 게시 가능 여부. eligible=false면 false"
+                        },
+                        "saleBlockedReason": {
+                          "$ref": "#/components/schemas/SaleBlockedReason"
+                        },
                         "creditEstimate": {
-                          "type": "object",
-                          "allOf": [
-                            {
-                              "$ref": "#/components/schemas/CreditEstimate"
-                            }
-                          ],
-                          "nullable": true,
-                          "description": "eligible=false면 null"
+                          "$ref": "#/components/schemas/CreditEstimate"
                         }
                       }
                     },
                     "error": {
-                      "type": "null",
-                      "example": null
+                      "type": "object",
+                      "example": null,
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     }
                   }
                 },
@@ -6152,12 +6396,14 @@
                     "inventoryItemId": 101,
                     "eligible": true,
                     "ineligibleReasons": [],
+                    "saleAllowed": true,
+                    "saleBlockedReason": null,
                     "creditEstimate": {
-                      "recommendedPrice": 3,
-                      "minPrice": 2,
-                      "maxPrice": 4,
-                      "categoryBaseValue": 4,
-                      "freshnessFactor": 0.75
+                      "recommendedPrice": 5,
+                      "minPrice": 4,
+                      "maxPrice": 6,
+                      "categoryBaseValue": 2.5,
+                      "freshnessFactor": 0.8
                     }
                   },
                   "error": null
@@ -6251,8 +6497,12 @@
                       }
                     },
                     "error": {
-                      "type": "null",
-                      "example": null
+                      "type": "object",
+                      "example": null,
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     }
                   }
                 },
@@ -6352,8 +6602,12 @@
                       }
                     },
                     "error": {
-                      "type": "null",
-                      "example": null
+                      "type": "object",
+                      "example": null,
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     }
                   }
                 },
@@ -6438,8 +6692,12 @@
                       "$ref": "#/components/schemas/TradeResult"
                     },
                     "error": {
-                      "type": "null",
-                      "example": null
+                      "type": "object",
+                      "example": null,
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     }
                   }
                 },
@@ -6531,7 +6789,7 @@
             }
           },
           "409": {
-            "description": "거래할 수 없는 상태 또는 크레딧 부족",
+            "description": "거래할 수 없는 상태 또는 크레딧 부족 / 소비기한이 지나 만료 처리됨 (POST_EXPIRED)",
             "content": {
               "application/json": {
                 "schema": {
@@ -6570,6 +6828,17 @@
                         "message": "크레딧이 부족합니다."
                       }
                     }
+                  },
+                  "POST_EXPIRED": {
+                    "summary": "POST_EXPIRED",
+                    "value": {
+                      "success": false,
+                      "data": null,
+                      "error": {
+                        "code": "POST_EXPIRED",
+                        "message": "소비기한이 지나 거래할 수 없는 게시물입니다."
+                      }
+                    }
                   }
                 }
               }
@@ -6587,7 +6856,7 @@
     "/api/me/trades/{tradeId}/accept": {
       "post": {
         "summary": "거래 수락",
-        "description": "판매자가 REQUESTED 거래를 수락한다. 거래는 ACCEPTED, 게시물은 RESERVED가 되고 autoResolveAt이 정해진다. TRADE_ACCEPTED 시스템 메시지를 남긴다.\n\n판매자만 호출할 수 있다.",
+        "description": "판매자가 REQUESTED 거래를 수락한다. 거래는 ACCEPTED, 게시물은 RESERVED가 되고 autoResolveAt(수락 시각 + 72시간)이 정해진다. TRADE_ACCEPTED 시스템 메시지를 남긴다.\n\n판매자만 호출할 수 있다.",
         "tags": [
           "trade"
         ],
@@ -6618,8 +6887,12 @@
                       "$ref": "#/components/schemas/TradeResult"
                     },
                     "error": {
-                      "type": "null",
-                      "example": null
+                      "type": "object",
+                      "example": null,
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     }
                   }
                 },
@@ -6683,7 +6956,7 @@
             }
           },
           "409": {
-            "description": "현재 상태에서 할 수 없는 동작",
+            "description": "현재 상태에서 할 수 없는 동작 / 소비기한이 지나 만료 처리됨 (POST_EXPIRED)",
             "content": {
               "application/json": {
                 "schema": {
@@ -6698,6 +6971,17 @@
                       "error": {
                         "code": "INVALID_TRADE_STATUS",
                         "message": "현재 거래 상태에서는 처리할 수 없습니다."
+                      }
+                    }
+                  },
+                  "POST_EXPIRED": {
+                    "summary": "POST_EXPIRED",
+                    "value": {
+                      "success": false,
+                      "data": null,
+                      "error": {
+                        "code": "POST_EXPIRED",
+                        "message": "소비기한이 지나 거래할 수 없는 게시물입니다."
                       }
                     }
                   }
@@ -6748,8 +7032,12 @@
                       "$ref": "#/components/schemas/TradeResult"
                     },
                     "error": {
-                      "type": "null",
-                      "example": null
+                      "type": "object",
+                      "example": null,
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     }
                   }
                 },
@@ -6813,7 +7101,7 @@
             }
           },
           "409": {
-            "description": "현재 상태에서 할 수 없는 동작",
+            "description": "현재 상태에서 할 수 없는 동작 / 소비기한이 지나 만료 처리됨 (POST_EXPIRED)",
             "content": {
               "application/json": {
                 "schema": {
@@ -6828,6 +7116,17 @@
                       "error": {
                         "code": "INVALID_TRADE_STATUS",
                         "message": "현재 거래 상태에서는 처리할 수 없습니다."
+                      }
+                    }
+                  },
+                  "POST_EXPIRED": {
+                    "summary": "POST_EXPIRED",
+                    "value": {
+                      "success": false,
+                      "data": null,
+                      "error": {
+                        "code": "POST_EXPIRED",
+                        "message": "소비기한이 지나 거래할 수 없는 게시물입니다."
                       }
                     }
                   }
@@ -6897,8 +7196,12 @@
                       "$ref": "#/components/schemas/TradeResult"
                     },
                     "error": {
-                      "type": "null",
-                      "example": null
+                      "type": "object",
+                      "example": null,
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     }
                   }
                 },
@@ -6978,7 +7281,7 @@
     "/api/me/trades/{tradeId}/complete": {
       "post": {
         "summary": "수령 확인 (거래 완료)",
-        "description": "구매자가 ACCEPTED 거래의 재료를 받았음을 확인한다. 아래를 하나의 트랜잭션으로 처리한다.\n\n1. 판매자 재고를 shared 상태로 종료하고 consumption_events에 shared 이벤트를 남긴다(폐기가 아닌 '구한 양'으로 집계). 재고 차감은 소진/폐기와 같은 행 잠금(PESSIMISTIC_WRITE)을 쓴다.\n2. 구매자에게 같은 재료로 새 재고를 만든다. 수량·소비기한·보관 방법은 원본 그대로, remainingQuantity = initialQuantity, amount는 null(크레딧 거래는 구매 지출이 아니므로 리포트에 잡히지 않게 한다).\n3. SALE이면 보류한 크레딧을 판매자에게 지급(TRADE_INCOME)하고, 판매자에게 절약 보너스를 지급한다(하루 상한, 같은 상대 반복 거래 제외).\n4. 거래·게시물을 COMPLETED로 바꾸고 재고 잠금을 푼다. TRADE_COMPLETED 시스템 메시지를 남긴다.\n\n구매자만 호출할 수 있다. 이미 완료된 거래를 다시 호출하면 409이며 중복 지급하지 않는다.",
+        "description": "구매자가 ACCEPTED 거래의 재료를 받았음을 확인한다. 아래를 하나의 트랜잭션으로 처리한다.\n\n1. 판매자 재고를 shared 상태로 종료하고 consumption_events에 shared 이벤트를 남긴다(폐기가 아닌 '구한 양'으로 집계). 재고 차감은 소진/폐기와 같은 행 잠금(PESSIMISTIC_WRITE)을 쓴다.\n2. 구매자에게 같은 재료로 새 재고를 만든다. 수량·소비기한·보관 방법은 원본 그대로, remainingQuantity = initialQuantity, amount는 null(크레딧 거래는 구매 지출이 아니므로 리포트에 잡히지 않게 한다).\n3. SALE이면 보류한 크레딧을 판매자에게 지급(TRADE_INCOME)한다. 나눔·판매 모두 판매자에게 절약 보너스(+1)를 지급한다(판매자당 하루 3회, 최근 7일 안에 같은 상대와 완료한 거래가 있으면 제외).\n4. 거래·게시물을 COMPLETED로 바꾸고 재고 잠금을 푼다. TRADE_COMPLETED 시스템 메시지를 남긴다.\n\n구매자만 호출할 수 있다. 이미 완료된 거래를 다시 호출하면 409이며 중복 지급하지 않는다.",
         "tags": [
           "trade"
         ],
@@ -7031,8 +7334,12 @@
                       ]
                     },
                     "error": {
-                      "type": "null",
-                      "example": null
+                      "type": "object",
+                      "example": null,
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     }
                   }
                 },
@@ -7098,7 +7405,7 @@
             }
           },
           "409": {
-            "description": "현재 상태에서 할 수 없는 동작",
+            "description": "현재 상태에서 할 수 없는 동작 / 소비기한이 지나 만료 처리됨 (POST_EXPIRED)",
             "content": {
               "application/json": {
                 "schema": {
@@ -7113,6 +7420,17 @@
                       "error": {
                         "code": "INVALID_TRADE_STATUS",
                         "message": "현재 거래 상태에서는 처리할 수 없습니다."
+                      }
+                    }
+                  },
+                  "POST_EXPIRED": {
+                    "summary": "POST_EXPIRED",
+                    "value": {
+                      "success": false,
+                      "data": null,
+                      "error": {
+                        "code": "POST_EXPIRED",
+                        "message": "소비기한이 지나 거래할 수 없는 게시물입니다."
                       }
                     }
                   }
@@ -7229,8 +7547,12 @@
                       }
                     },
                     "error": {
-                      "type": "null",
-                      "example": null
+                      "type": "object",
+                      "example": null,
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     }
                   }
                 },
@@ -7385,8 +7707,12 @@
                       }
                     },
                     "error": {
-                      "type": "null",
-                      "example": null
+                      "type": "object",
+                      "example": null,
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     }
                   }
                 },
@@ -7644,8 +7970,12 @@
                       ]
                     },
                     "error": {
-                      "type": "null",
-                      "example": null
+                      "type": "object",
+                      "example": null,
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     }
                   }
                 },
@@ -7754,8 +8084,12 @@
                       }
                     },
                     "error": {
-                      "type": "null",
-                      "example": null
+                      "type": "object",
+                      "example": null,
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     }
                   }
                 },
@@ -7893,8 +8227,12 @@
                       }
                     },
                     "error": {
-                      "type": "null",
-                      "example": null
+                      "type": "object",
+                      "example": null,
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     }
                   }
                 },
@@ -8004,8 +8342,12 @@
                       }
                     },
                     "error": {
-                      "type": "null",
-                      "example": null
+                      "type": "object",
+                      "example": null,
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     }
                   }
                 },
@@ -8137,8 +8479,12 @@
                       }
                     },
                     "error": {
-                      "type": "null",
-                      "example": null
+                      "type": "object",
+                      "example": null,
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     }
                   }
                 },
@@ -8276,8 +8622,12 @@
                       }
                     },
                     "error": {
-                      "type": "null",
-                      "example": null
+                      "type": "object",
+                      "example": null,
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     }
                   }
                 },
@@ -8329,7 +8679,7 @@
     "/api/posts/{postId}/chat-rooms": {
       "post": {
         "summary": "채팅방 생성",
-        "description": "게시물 작성자와의 채팅방을 만든다. 같은 게시물·같은 상대의 방이 있으면 그 방을 돌려준다(created=false). 내가 나갔던 방이면 다시 참여한다.",
+        "description": "게시물 작성자와의 채팅방을 만든다(구매자 전용). 같은 게시물·같은 구매자의 방이 있으면 그 방을 돌려준다(created=false). 내가 나갔던 방이면 다시 참여한다.",
         "tags": [
           "chat"
         ],
@@ -8373,8 +8723,12 @@
                       }
                     },
                     "error": {
-                      "type": "null",
-                      "example": null
+                      "type": "object",
+                      "example": null,
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     }
                   }
                 },
@@ -8473,7 +8827,7 @@
     "/api/me/chat-rooms/{chatRoomId}": {
       "delete": {
         "summary": "채팅방 나가기",
-        "description": "채팅방을 내 목록에서 삭제한다. 상대 목록에는 남고, 상대가 새 메시지를 보내도 내 목록에 다시 나타나지 않는다. 진행 중 거래가 있어도 나갈 수 있으며 거래 상태는 바뀌지 않는다.",
+        "description": "채팅방을 내 목록에서 숨긴다. 상대 목록에는 남는다. 상대가 새 메시지를 보내거나 거래 SYSTEM 메시지가 생기면 내 목록에 다시 나타나고, 나가기 전 메시지도 그대로 볼 수 있다. 구매자는 게시물의 채팅방 생성 API로도 다시 들어올 수 있다. 진행 중 거래가 있어도 나갈 수 있으며 거래 상태는 바뀌지 않는다.",
         "tags": [
           "chat"
         ],
@@ -8501,11 +8855,19 @@
                       "example": true
                     },
                     "data": {
-                      "type": "null"
+                      "type": "object",
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     },
                     "error": {
-                      "type": "null",
-                      "example": null
+                      "type": "object",
+                      "example": null,
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     }
                   }
                 },
@@ -8628,8 +8990,12 @@
                       }
                     },
                     "error": {
-                      "type": "null",
-                      "example": null
+                      "type": "object",
+                      "example": null,
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     }
                   }
                 },
@@ -8772,8 +9138,12 @@
                       "$ref": "#/components/schemas/ChatMessage"
                     },
                     "error": {
-                      "type": "null",
-                      "example": null
+                      "type": "object",
+                      "example": null,
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     }
                   }
                 },
@@ -8965,8 +9335,12 @@
                       }
                     },
                     "error": {
-                      "type": "null",
-                      "example": null
+                      "type": "object",
+                      "example": null,
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     }
                   }
                 },
@@ -9131,8 +9505,12 @@
                       }
                     },
                     "error": {
-                      "type": "null",
-                      "example": null
+                      "type": "object",
+                      "example": null,
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     }
                   }
                 },
@@ -9219,8 +9597,12 @@
                       }
                     },
                     "error": {
-                      "type": "null",
-                      "example": null
+                      "type": "object",
+                      "example": null,
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     }
                   }
                 },
@@ -9346,8 +9728,12 @@
                       }
                     },
                     "error": {
-                      "type": "null",
-                      "example": null
+                      "type": "object",
+                      "example": null,
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     }
                   }
                 },
@@ -9400,7 +9786,7 @@
     "/api/me/ai-waste-reports": {
       "post": {
         "summary": "AI 상세 리포트 생성 (크레딧 차감)",
-        "description": "크레딧을 차감하고 해당 월의 consumption_events로 AI 상세 낭비 리포트를 만든다. 같은 월을 이미 샀으면 차감 없이 기존 리포트를 돌려준다(cost=0). 생성은 10초 이상 걸릴 수 있으며, 생성에 실패하면 차감하지 않는다.",
+        "description": "크레딧을 차감하고 해당 월의 consumption_events로 AI 상세 낭비 리포트를 만든다. 같은 월을 이미 샀으면 차감 없이 기존 리포트를 돌려준다(chargedCredit=0). 생성은 10초 이상 걸릴 수 있으며, 생성에 실패하면 차감하지 않는다.",
         "tags": [
           "report",
           "credit"
@@ -9447,11 +9833,31 @@
                       "example": true
                     },
                     "data": {
-                      "$ref": "#/components/schemas/AiWasteReport"
+                      "allOf": [
+                        {
+                          "$ref": "#/components/schemas/AiWasteReport"
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "chargedCredit"
+                          ],
+                          "properties": {
+                            "chargedCredit": {
+                              "type": "integer",
+                              "description": "이번 요청으로 실제 차감된 크레딧. 이미 산 월을 다시 요청하면 0"
+                            }
+                          }
+                        }
+                      ]
                     },
                     "error": {
-                      "type": "null",
-                      "example": null
+                      "type": "object",
+                      "example": null,
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     }
                   }
                 },
@@ -9471,7 +9877,8 @@
                     "suggestions": [
                       "상추는 다음 장보기에서 절반만 사 보세요."
                     ],
-                    "createdAt": "2026-11-12T11:00:00+09:00"
+                    "createdAt": "2026-11-12T11:00:00+09:00",
+                    "chargedCredit": 5
                   },
                   "error": null
                 }
@@ -9639,8 +10046,12 @@
                       }
                     },
                     "error": {
-                      "type": "null",
-                      "example": null
+                      "type": "object",
+                      "example": null,
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     }
                   }
                 },
@@ -9675,7 +10086,7 @@
     "/api/me/ai-waste-reports/{aiReportId}": {
       "get": {
         "summary": "AI 리포트 상세",
-        "description": "산 AI 리포트를 다시 연다. 차감은 없다(cost는 구매 당시 차감액).",
+        "description": "산 AI 리포트를 다시 연다. 차감은 없으며 cost는 구매 당시 차감액이다.",
         "tags": [
           "report"
         ],
@@ -9714,8 +10125,12 @@
                       "$ref": "#/components/schemas/AiWasteReport"
                     },
                     "error": {
-                      "type": "null",
-                      "example": null
+                      "type": "object",
+                      "example": null,
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
                     }
                   }
                 },
@@ -9820,6 +10235,361 @@
         "security": [],
         "x-apidog-status": "released"
       }
+    },
+    "/api/me/push-tokens": {
+      "put": {
+        "summary": "푸시 토큰 등록",
+        "description": "앱 실행·로그인 시 기기의 FCM 토큰을 등록한다(멱등). 같은 토큰이 다른 사용자에게 등록돼 있으면 현재 사용자로 옮긴다(기기에서 계정을 바꾼 경우). 사용자당 여러 기기를 허용한다. 회원 탈퇴 시 토큰을 모두 삭제하고, FCM이 무효 토큰으로 응답하면 서버가 삭제한다.",
+        "operationId": "registerPushToken",
+        "tags": [
+          "notification"
+        ],
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "token",
+                  "platform"
+                ],
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512,
+                    "description": "FCM 등록 토큰"
+                  },
+                  "platform": {
+                    "type": "string",
+                    "enum": [
+                      "ANDROID",
+                      "IOS"
+                    ]
+                  }
+                }
+              },
+              "example": {
+                "token": "fcm-token-example",
+                "platform": "ANDROID"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "pushTokenId"
+                      ],
+                      "properties": {
+                        "pushTokenId": {
+                          "type": "integer",
+                          "format": "int64"
+                        }
+                      }
+                    },
+                    "error": {
+                      "type": "object",
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "pushTokenId": 3
+                  },
+                  "error": null
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "검증 실패",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "examples": {
+                  "INVALID_REQUEST": {
+                    "summary": "INVALID_REQUEST",
+                    "value": {
+                      "success": false,
+                      "data": null,
+                      "error": {
+                        "code": "INVALID_REQUEST",
+                        "message": "요청이 올바르지 않습니다."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "x-apidog-status": "designing"
+      }
+    },
+    "/api/me/push-tokens/unregister": {
+      "post": {
+        "summary": "푸시 토큰 해제",
+        "description": "로그아웃 직전에 이 기기의 토큰을 해제한다. 내 토큰이 아니거나 없는 토큰이어도 200이다(멱등). 토큰을 URL에 노출하지 않기 위해 DELETE 대신 본문을 받는 POST를 쓴다.",
+        "operationId": "unregisterPushToken",
+        "tags": [
+          "notification"
+        ],
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "token"
+                ],
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512,
+                    "description": "FCM 등록 토큰"
+                  }
+                }
+              },
+              "example": {
+                "token": "fcm-token-example"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEmpty"
+                },
+                "example": {
+                  "success": true,
+                  "data": null,
+                  "error": null
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "검증 실패",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "examples": {
+                  "INVALID_REQUEST": {
+                    "summary": "INVALID_REQUEST",
+                    "value": {
+                      "success": false,
+                      "data": null,
+                      "error": {
+                        "code": "INVALID_REQUEST",
+                        "message": "요청이 올바르지 않습니다."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "x-apidog-status": "designing"
+      }
+    },
+    "/api/me/dashboard": {
+      "get": {
+        "summary": "마이페이지 대시보드",
+        "description": "이번 달 낭비 통계, 누적 절약 금액, 절약 스트릭을 한 번에 조회한다. 별도 테이블 없이 consumption_events와 inventory_items를 요청 시점에 집계한다. 날짜 기준은 Asia/Seoul.\n\n- 절약 금액 = consumed 이벤트 amount 합 + shared 이벤트 amount 합(안 버리고 먹거나 나눈 만큼). amount가 없는 이벤트는 0으로 본다\n- 절약 스트릭 = 마지막 disposed 이벤트 다음 날부터 오늘까지 연속 일수. 폐기 기록이 없으면 가입일부터 센다. 자동 폐기도 폐기로 센다\n- 사용자를 탓하지 않는 톤으로 보여 주도록 폐기 수치보다 절약 수치를 앞에 둔다",
+        "operationId": "getDashboard",
+        "tags": [
+          "logic",
+          "user"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "thisMonth",
+                        "totalSavedAmount",
+                        "savingStreakDays",
+                        "lastDisposedOn",
+                        "activeIngredientCount",
+                        "expiringSoonCount"
+                      ],
+                      "properties": {
+                        "thisMonth": {
+                          "type": "object",
+                          "required": [
+                            "yearMonth",
+                            "savedAmount",
+                            "consumedCount",
+                            "sharedCount",
+                            "wastedAmount",
+                            "wastedCount"
+                          ],
+                          "properties": {
+                            "yearMonth": {
+                              "type": "string",
+                              "pattern": "^\\d{4}-\\d{2}$"
+                            },
+                            "savedAmount": {
+                              "type": "integer",
+                              "description": "이번 달 절약 금액(원)"
+                            },
+                            "consumedCount": {
+                              "type": "integer",
+                              "description": "이번 달 소진으로 끝난 재고 수"
+                            },
+                            "sharedCount": {
+                              "type": "integer",
+                              "description": "이번 달 나눔·판매로 넘긴 재고 수"
+                            },
+                            "wastedAmount": {
+                              "type": "integer",
+                              "description": "이번 달 폐기 금액(원)"
+                            },
+                            "wastedCount": {
+                              "type": "integer",
+                              "description": "이번 달 폐기로 끝난 재고 수"
+                            }
+                          }
+                        },
+                        "totalSavedAmount": {
+                          "type": "integer",
+                          "description": "가입 후 누적 절약 금액(원)"
+                        },
+                        "savingStreakDays": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "lastDisposedOn": {
+                          "type": "string",
+                          "format": "date",
+                          "nullable": true,
+                          "description": "마지막 폐기 날짜. 없으면 null"
+                        },
+                        "activeIngredientCount": {
+                          "type": "integer",
+                          "description": "보유 중인 재고 수"
+                        },
+                        "expiringSoonCount": {
+                          "type": "integer",
+                          "description": "설정의 expiryAlertDays 이내로 소비기한이 남은 재고 수"
+                        }
+                      }
+                    },
+                    "error": {
+                      "type": "object",
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "thisMonth": {
+                      "yearMonth": "2026-11",
+                      "savedAmount": 18500,
+                      "consumedCount": 9,
+                      "sharedCount": 1,
+                      "wastedAmount": 4000,
+                      "wastedCount": 2
+                    },
+                    "totalSavedAmount": 96200,
+                    "savingStreakDays": 6,
+                    "lastDisposedOn": "2026-11-06",
+                    "activeIngredientCount": 14,
+                    "expiringSoonCount": 3
+                  },
+                  "error": null
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "x-apidog-status": "designing"
+      }
     }
   },
   "components": {
@@ -9853,7 +10623,7 @@
             "type": "boolean"
           },
           "data": {
-            "type": "null"
+            "description": "응답 데이터. 형태는 각 API에서 정의한다"
           },
           "error": {
             "type": "object",
@@ -9870,7 +10640,11 @@
             "example": false
           },
           "data": {
-            "type": "null"
+            "type": "object",
+            "nullable": true,
+            "enum": [
+              null
+            ]
           },
           "error": {
             "$ref": "#/components/schemas/ErrorObject"
@@ -9894,8 +10668,12 @@
             "example": false
           },
           "data": {
-            "type": "null",
-            "example": null
+            "type": "object",
+            "example": null,
+            "nullable": true,
+            "enum": [
+              null
+            ]
           },
           "error": {
             "type": "object",
@@ -10560,8 +11338,12 @@
             "$ref": "#/components/schemas/PurchaseDetail"
           },
           "error": {
-            "type": "null",
-            "example": null
+            "type": "object",
+            "example": null,
+            "nullable": true,
+            "enum": [
+              null
+            ]
           }
         }
       },
@@ -10748,8 +11530,12 @@
             "$ref": "#/components/schemas/PurchaseConfirmResult"
           },
           "error": {
-            "type": "null",
-            "example": null
+            "type": "object",
+            "example": null,
+            "nullable": true,
+            "enum": [
+              null
+            ]
           }
         }
       },
@@ -10819,8 +11605,12 @@
             }
           },
           "error": {
-            "type": "null",
-            "example": null
+            "type": "object",
+            "example": null,
+            "nullable": true,
+            "enum": [
+              null
+            ]
           }
         }
       },
@@ -11086,7 +11876,8 @@
             "type": "string"
           },
           "description": {
-            "type": "string"
+            "type": "string",
+            "description": "설명 없이 등록하면 빈 문자열"
           },
           "images": {
             "type": "array",
@@ -11158,28 +11949,30 @@
           "categoryBaseValue",
           "freshnessFactor"
         ],
-        "description": "추천가 = 카테고리 기준값 × 수량 × 신선도 계수(소비기한이 적게 남을수록 낮음). 판매가는 추천가 ±20% 안에서만 정할 수 있다.",
+        "description": "추천가 = round(카테고리·단위별 기준값 × 수량 × 신선도 계수). 기준값은 credit_base_values의 (카테고리, 기준 단위) 행에서 가져온다. g은 kg으로, ml은 L로 환산한 뒤 계산하고 개·팩·봉·병·캔·통은 그 단위 그대로 쓴다. 소비기한이 적게 남을수록 신선도 계수가 낮다. 판매가는 추천가 ±20% 이내(minPrice~maxPrice)에서만 정할 수 있다. eligible=false이거나 saleAllowed=false면 null",
         "properties": {
           "recommendedPrice": {
             "type": "integer"
           },
           "minPrice": {
             "type": "integer",
-            "description": "floor(추천가 × 0.8)"
+            "minimum": 1,
+            "description": "max(1, ceil(추천가 × 0.8))"
           },
           "maxPrice": {
             "type": "integer",
-            "description": "ceil(추천가 × 1.2)"
+            "description": "floor(추천가 × 1.2)"
           },
           "categoryBaseValue": {
-            "type": "integer",
-            "description": "카테고리·단위당 기준 크레딧"
+            "type": "number",
+            "description": "재고의 카테고리·기준 단위(kg, L, 또는 개·팩 등) 1당 기준 크레딧"
           },
           "freshnessFactor": {
             "type": "number",
             "description": "0~1"
           }
-        }
+        },
+        "nullable": true
       },
       "PostIneligibleReason": {
         "type": "string",
@@ -11188,9 +11981,10 @@
           "NOT_ACTIVE",
           "ALREADY_POSTED",
           "EXPIRES_TOO_SOON",
-          "PROHIBITED_CATEGORY"
+          "NOT_IN_CATALOG",
+          "PROHIBITED_ITEM"
         ],
-        "description": "ALREADY_USED=사용량이 0이 아님, NOT_ACTIVE=소진·폐기된 재고, ALREADY_POSTED=이미 게시된 재고, EXPIRES_TOO_SOON=소비기한이 1일 미만 남음, PROHIBITED_CATEGORY=날고기·수산물·조리식품"
+        "description": "ALREADY_USED=사용량이 0이 아님, NOT_ACTIVE=소진·폐기된 재고, ALREADY_POSTED=이미 게시된 재고, EXPIRES_TOO_SOON=소비기한이 1일 미만 남음, NOT_IN_CATALOG=카탈로그를 고르지 않고 이름만 입력한 재고(품목 판별 불가), PROHIBITED_ITEM=게시 금지 품목(ingredient_catalog.post_allowed=false: 날고기·수산물 등)"
       },
       "TradeSummary": {
         "type": "object",
@@ -11293,7 +12087,7 @@
             "type": "string",
             "format": "date-time",
             "nullable": true,
-            "description": "ACCEPTED 상태에서 수령 확인이 없을 때 자동 처리되는 시각"
+            "description": "ACCEPTED 거래의 자동 완료 시각(수락 시각 + 72시간). 그 전에 수령 확인·취소가 없으면 자동 완료된다"
           },
           "reviewWritten": {
             "type": "boolean",
@@ -11405,9 +12199,10 @@
               "TRADE_REJECTED",
               "TRADE_CANCELED",
               "TRADE_COMPLETED",
+              "TRADE_AUTO_COMPLETE_SOON",
               null
             ],
-            "description": "SYSTEM 메시지의 거래 이벤트"
+            "description": "SYSTEM 메시지의 거래 이벤트. TRADE_AUTO_COMPLETE_SOON은 자동 완료 24시간 전 안내"
           },
           "sentAt": {
             "type": "string",
@@ -11534,7 +12329,7 @@
           },
           "cost": {
             "type": "integer",
-            "description": "차감된 크레딧. 이미 산 리포트를 다시 열면 0"
+            "description": "이 리포트를 살 때 차감된 크레딧(구매 당시 비용)"
           },
           "summary": {
             "type": "string"
@@ -11654,6 +12449,46 @@
             "description": "오프셋 없는 로컬 일시, 예: 2026-09-17T10:30:00"
           }
         }
+      },
+      "ApiResponseEmpty": {
+        "type": "object",
+        "required": [
+          "success",
+          "data",
+          "error"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "data": {
+            "type": "object",
+            "nullable": true,
+            "enum": [
+              null
+            ]
+          },
+          "error": {
+            "type": "object",
+            "nullable": true,
+            "enum": [
+              null
+            ]
+          }
+        }
+      },
+      "SaleBlockedReason": {
+        "type": "string",
+        "nullable": true,
+        "enum": [
+          "NO_PRICE_BASIS",
+          "ZERO_PRICE",
+          null
+        ],
+        "description": "NO_PRICE_BASIS=재고의 (카테고리, 단위) 기준값이 없음, ZERO_PRICE=계산된 추천가가 0. 두 경우 모두 나눔(SHARE)만 허용한다. 판매 가능하면 null"
       }
     },
     "responses": {
