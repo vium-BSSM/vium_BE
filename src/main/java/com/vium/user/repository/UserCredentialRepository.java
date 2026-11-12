@@ -83,6 +83,12 @@ public class UserCredentialRepository {
 		return jdbcTemplate.update(sql, params.toArray());
 	}
 
+	public int softDelete(Long userId, LocalDateTime now) {
+		return jdbcTemplate.update(
+			"update users set deleted_at = ?, updated_at = ? where id = ? and deleted_at is null",
+			Timestamp.valueOf(now), Timestamp.valueOf(now), userId);
+	}
+
 	public record Credentials(Long id, String email, String displayName, String passwordHash) {
 		@Override
 		public String toString() { return "Credentials[REDACTED]"; }

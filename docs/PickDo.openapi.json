@@ -889,6 +889,98 @@
           }
         ],
         "x-apidog-status": "released"
+      },
+      "delete": {
+        "summary": "회원 탈퇴",
+        "deprecated": false,
+        "description": "Access Token의 사용자 ID로 계정을 소프트 삭제(deleted_at 세팅)하고 해당 사용자의 모든 세션(user_sessions)을 삭제한다. 요청 본문과 비밀번호 확인은 없다. 재고·구매·이미지 등 users 외 개인 데이터는 이번 범위에서 삭제하지 않는다. 삭제 직후 GET/PATCH /api/me, 토큰 리프레시, 이미지 업로드(POST /api/me/images)는 401이다. 그 외 사용자 존재 여부를 확인하지 않는 보호 엔드포인트(재고 등)는 기존 Access Token이 만료될 때까지(최대 1시간) 통과할 수 있다. 탈퇴한 이메일은 users.email의 완전 unique 제약으로 재가입에 영구적으로 재사용할 수 없다. 이미 탈퇴한 계정이 같은 토큰으로 다시 호출해도 401이다.",
+        "tags": [
+          "user"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "회원 탈퇴 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "enum": [
+                        null
+                      ],
+                      "nullable": true
+                    },
+                    "error": {
+                      "type": "object",
+                      "enum": [
+                        null
+                      ],
+                      "description": "성공 시 null",
+                      "properties": {},
+                      "nullable": true
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "data": null,
+                  "error": null
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "required": false,
+                "description": "회원 탈퇴 응답 캐시 금지",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "no-store"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access Token 누락·만료·무효 또는 존재하지 않거나 이미 탈퇴한 사용자",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "UNAUTHORIZED",
+                    "message": "인증이 필요합니다."
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "x-apidog-status": "released"
       }
     },
     "/api/me/ingredients": {
