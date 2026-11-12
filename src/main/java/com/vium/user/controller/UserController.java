@@ -8,10 +8,12 @@ import com.vium.image.service.ImageService;
 import com.vium.user.dto.ProfileUpdateRequest;
 import com.vium.user.dto.UserProfileResponse;
 import com.vium.user.dto.UserProfileRow;
+import com.vium.user.service.AccountDeletionService;
 import com.vium.user.service.UserProfileService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -23,6 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class UserController {
 	private final UserProfileService userProfileService;
+	private final AccountDeletionService accountDeletionService;
 	private final ImageService imageService;
 	private final CurrentUserProvider currentUserProvider;
 
@@ -45,6 +48,12 @@ public class UserController {
 		var row = userProfileService.updateProfile(userId, request.displayName(), request.profileImageId());
 		return ResponseEntity.ok().cacheControl(CacheControl.noStore())
 			.body(ApiResponse.ok(toResponse(row)));
+	}
+
+	@DeleteMapping
+	public ResponseEntity<ApiResponse<Void>> deleteAccount() {
+		accountDeletionService.deleteAccount(currentUserProvider.getCurrentUserId());
+		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(ApiResponse.ok(null));
 	}
 
 	private UserProfileResponse toResponse(UserProfileRow row) {
