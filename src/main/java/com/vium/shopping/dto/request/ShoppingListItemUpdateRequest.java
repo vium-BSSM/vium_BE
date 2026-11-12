@@ -1,5 +1,7 @@
 package com.vium.shopping.dto.request;
 
+import jakarta.validation.constraints.NotNull;
+
 /**
  * 장보기 리스트 항목 체크 상태 변경 요청 DTO
  *
@@ -17,6 +19,7 @@ package com.vium.shopping.dto.request;
  */
 public record ShoppingListItemUpdateRequest(
 	/** 체크 상태 (true=구매 완료, false=미완료) */
+	@NotNull(message = "isChecked는 필수입니다.")
 	Boolean isChecked
 ) {
 }
