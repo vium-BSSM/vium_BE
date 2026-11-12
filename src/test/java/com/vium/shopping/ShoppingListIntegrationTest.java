@@ -98,6 +98,79 @@ class ShoppingListIntegrationTest {
 	}
 
 	@Test
+	void addShoppingListItemWithTooLongFieldsReturns400() throws Exception {
+		String longName = "가".repeat(121);
+		String longReason = "나".repeat(201);
+
+		postItem("{\"customName\":\"" + longName + "\",\"unitId\":4}")
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+		postItem("{\"customName\":\"계란\",\"unitId\":4,\"reason\":\"" + longReason + "\"}")
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+		assertThat(countItems()).isZero();
+	}
+
+	@Test
+	void addShoppingListItemWithInvalidQuantityReturns400() throws Exception {
+		postItem("{\"customName\":\"계란\",\"suggestedQuantity\":0,\"unitId\":4}")
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+		postItem("{\"customName\":\"계란\",\"suggestedQuantity\":1.0001,\"unitId\":4}")
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+		assertThat(countItems()).isZero();
+	}
+
+	@Test
+	void addShoppingListItemWithUnknownUnitReturns400() throws Exception {
+		postItem("{\"customName\":\"계란\",\"unitId\":99}")
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+		assertThat(countItems()).isZero();
+	}
+
+	@Test
+	void addShoppingListItemWithUnknownCatalogReturns404() throws Exception {
+		postItem("{\"ingredientCatalogId\":999999,\"unitId\":4}")
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.error.code").value("NOT_FOUND"));
+		assertThat(countItems()).isZero();
+	}
+
+	@Test
+	void updateCheckStatusWithoutIsCheckedReturns400() throws Exception {
+		jdbcTemplate.update("""
+			insert into "shopping_list_items"
+			("id", "user_id", "custom_name", "suggested_quantity", "unit_id", "reason", "is_checked", "created_at")
+			values (4, ?, '양파', 1, 4, '테스트', false, CURRENT_TIMESTAMP)
+			""", userId);
+
+		for (String body : new String[] {"{}", "{\"isChecked\":null}"}) {
+			mockMvc.perform(patch("/api/me/shopping-list-items/4")
+					.header("Authorization", "Bearer " + tokenService.issue(userId).accessToken())
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(body))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+		}
+		Boolean checked = jdbcTemplate.queryForObject(
+			"select \"is_checked\" from \"shopping_list_items\" where \"id\" = 4", Boolean.class);
+		assertThat(checked).isFalse();
+	}
+
+	private org.springframework.test.web.servlet.ResultActions postItem(String body) throws Exception {
+		return mockMvc.perform(post("/api/me/shopping-list-items")
+			.header("Authorization", "Bearer " + tokenService.issue(userId).accessToken())
+			.contentType(MediaType.APPLICATION_JSON)
+			.content(body));
+	}
+
+	private Integer countItems() {
+		return jdbcTemplate.queryForObject("select count(*) from \"shopping_list_items\"", Integer.class);
+	}
+
+	@Test
 	void getShoppingListAllowsNullUnitWithoutError() throws Exception {
 		jdbcTemplate.update("""
 			insert into "shopping_list_items"

@@ -5,6 +5,7 @@ import com.vium.global.code.UnitRepository;
 import com.vium.global.exception.BusinessException;
 import com.vium.global.exception.ErrorCode;
 import com.vium.global.exception.NotFoundException;
+import com.vium.ingredient.service.IngredientCatalogService;
 import com.vium.shopping.dto.request.ShoppingListItemCreateRequest;
 import com.vium.shopping.dto.request.ShoppingListItemUpdateRequest;
 import com.vium.shopping.dto.response.ShoppingListItemResponse;
@@ -39,6 +40,7 @@ public class ShoppingListService {
 	private final ShoppingListItemRepository shoppingListItemRepository;
 	private final ShoppingListItemQueryRepository shoppingListItemQueryRepository;
 	private final UnitRepository unitRepository;
+	private final IngredientCatalogService ingredientCatalogService;
 
 	/**
 	 * 장보기 리스트 조회
@@ -151,6 +153,16 @@ public class ShoppingListService {
 		// - ingredientCatalogId 또는 customName 중 하나는 필수
 		// - customName의 공백 제거
 		ShoppingListItemCreateRequest validatedRequest = request.validate();
+
+		// 존재하지 않는 ID를 그대로 저장하면 외래키 오류(500)가 나므로 먼저 확인한다.
+		// 재고 등록과 같은 규칙: 단위는 400, 카탈로그는 404
+		if (validatedRequest.unitId() != null && !unitRepository.existsById(validatedRequest.unitId())) {
+			throw new BusinessException(ErrorCode.INVALID_REQUEST, "존재하지 않는 unitId 입니다");
+		}
+		if (validatedRequest.ingredientCatalogId() != null
+			&& !ingredientCatalogService.existsById(validatedRequest.ingredientCatalogId())) {
+			throw new NotFoundException("식재료를 찾을 수 없습니다");
+		}
 
 		// Step 2: 중복 확인
 		// 같은 ingredient_catalog_id로 이미 항목이 있으면 추가하지 않음

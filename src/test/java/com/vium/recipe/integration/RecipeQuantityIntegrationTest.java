@@ -336,6 +336,41 @@ class RecipeQuantityIntegrationTest {
 		assertThat(remaining(CARROT_INVENTORY_ID)).isEqualByComparingTo("4");
 	}
 
+	@Test
+	void usageRateOutOfRangeIsRejectedByItemValidation() throws Exception {
+		for (String rate : new String[] {"101", "-1"}) {
+			complete("{\"usages\":[{\"inventoryId\":1,\"usageRate\":" + rate + "}]}")
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"))
+				.andExpect(jsonPath("$.error.message").value(
+					org.hamcrest.Matchers.startsWith("usages[0].usageRate:")));
+		}
+
+		assertThat(remaining(CARROT_INVENTORY_ID)).isEqualByComparingTo("4");
+		assertThat(eventCount(CARROT_INVENTORY_ID)).isZero();
+	}
+
+	@Test
+	void negativeWasteAmountIsRejected() throws Exception {
+		complete("""
+			{"usages":[{"inventoryId":1,"usedQuantity":2,"wasteQuantity":1,"wasteAmount":-500}]}
+			""")
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+
+		assertThat(remaining(CARROT_INVENTORY_ID)).isEqualByComparingTo("4");
+		assertThat(eventCount(CARROT_INVENTORY_ID)).isZero();
+	}
+
+	@Test
+	void missingInventoryIdIsRejected() throws Exception {
+		complete("""
+			{"usages":[{"usedQuantity":1}]}
+			""")
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+	}
+
 	// ===== 요리 완료: 재고 접근 오류 =====
 
 	@Test

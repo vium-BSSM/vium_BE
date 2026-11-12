@@ -1,5 +1,6 @@
 package com.vium.recipe.dto;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -12,7 +13,7 @@ import java.util.List;
 public record RecipeCompleteRequest(
 	@NotEmpty(message = "사용 재료 목록이 비어있습니다.")
 	@Size(max = 50, message = "사용 재료는 최대 50개입니다.")
-	List<UsageDto> usages
+	List<@Valid UsageDto> usages
 ) {
 
 	public record UsageDto(
