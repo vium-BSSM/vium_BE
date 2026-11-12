@@ -361,3 +361,6 @@ COMMENT ON TABLE uploaded_images IS 'S3 이미지 메타데이터. ready=false�
 
 ALTER TABLE purchases ADD FOREIGN KEY (image_id) REFERENCES uploaded_images(id);
 ALTER TABLE purchase_items ADD FOREIGN KEY (storage_method_id) REFERENCES storage_methods(id);
+
+-- V11: 프로필 이미지
+ALTER TABLE users ADD COLUMN profile_image_id BIGINT REFERENCES uploaded_images(id);

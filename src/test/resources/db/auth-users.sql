@@ -9,6 +9,7 @@ CREATE TABLE "users" (
   "push_enabled" boolean NOT NULL DEFAULT true,
   "created_at" timestamp NOT NULL,
   "updated_at" timestamp NOT NULL,
-  "deleted_at" timestamp
+  "deleted_at" timestamp,
+  "profile_image_id" bigint REFERENCES uploaded_images(id)
 );
 ALTER TABLE user_sessions ADD CONSTRAINT fk_auth_test_user FOREIGN KEY (user_id) REFERENCES users(id);

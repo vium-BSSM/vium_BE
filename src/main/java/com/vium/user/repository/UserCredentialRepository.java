@@ -1,8 +1,11 @@
 package com.vium.user.repository;
 
 import com.vium.user.dto.UserIdentity;
+import com.vium.user.dto.UserProfileRow;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -52,6 +55,32 @@ public class UserCredentialRepository {
 		return Boolean.TRUE.equals(jdbcTemplate.queryForObject(
 			"select exists (select 1 from users where id = ? and deleted_at is null)",
 			Boolean.class, userId));
+	}
+
+	public Optional<UserProfileRow> findActiveProfileById(Long userId) {
+		return jdbcTemplate.query("""
+			select id, email, display_name, profile_image_id from users
+			where id = ? and deleted_at is null
+			""", (rs, rowNum) -> new UserProfileRow(rs.getLong("id"), rs.getString("email"),
+				rs.getString("display_name"), (Long) rs.getObject("profile_image_id")), userId).stream().findFirst();
+	}
+
+	public int updateProfile(Long userId, String displayName, Long profileImageId, LocalDateTime now) {
+		List<String> setClauses = new ArrayList<>();
+		List<Object> params = new ArrayList<>();
+		if (displayName != null) {
+			setClauses.add("display_name = ?");
+			params.add(displayName);
+		}
+		if (profileImageId != null) {
+			setClauses.add("profile_image_id = ?");
+			params.add(profileImageId);
+		}
+		setClauses.add("updated_at = ?");
+		params.add(Timestamp.valueOf(now));
+		params.add(userId);
+		String sql = "update users set " + String.join(", ", setClauses) + " where id = ? and deleted_at is null";
+		return jdbcTemplate.update(sql, params.toArray());
 	}
 
 	public record Credentials(Long id, String email, String displayName, String passwordHash) {
