@@ -10,6 +10,10 @@ PR/develop에는 배포하지 않는다. 대기 중 새 main이 생긴 오래된
 ## 준비된 AWS 설정
 
 - 서울 ECR `vium-be`, Immutable, AES-256.
+- 수명주기 정책 정의: [ecr-lifecycle-policy.json](../scripts/deploy/ecr-lifecycle-policy.json).
+  미태그 이미지는 push 후 7일, 전체 이미지는 최근 push 10개를 보존한다.
+  적용은 아래 수동 절차를 따르며 CD·EC2 역할 권한은 바꾸지 않는다.
+  롤백은 로컬 이미지를 사용하므로 ECR 만료와 무관하다.
 - GitHub OIDC 역할 `vium-github-actions`: ECR 로그인/푸시/DescribeImages,
   `AWS-RunShellScript` 및 운영 EC2 하나에 SendCommand, GetCommandInvocation.
 - 신뢰 정책: audience `sts.amazonaws.com`, main의 OIDC subject만 허용.
@@ -24,6 +28,17 @@ PR/develop에는 배포하지 않는다. 대기 중 새 main이 생긴 오래된
 OIDC 인증이 실패하면 실제 저장소의 subject 형식도 확인한다. GitHub의 신규
 저장소/옵트인 설정에서는 조직·저장소 ID가 subject에 포함될 수 있다. 이때도
 와일드카드로 넓히지 않고 실제 main subject와 신뢰 정책을 일치시킨다.
+
+`cd.yml`의 액션(`checkout`, `configure-aws-credentials`) 업데이트는 Dependabot
+PR의 CI에서 실행되지 않고 main 배포 때 처음 실행된다. 릴리스 후 CD의
+`Authenticate to AWS with OIDC` step과 Summary의 Annotations를 확인해야
+검증이 끝난다. #104에서는 `configure-aws-credentials` v6.3.0
+(`e1253824e5c10ff9df46874f81ed3ec929e19cfd`)이 실행되고 Node.js 20 deprecation
+경고가 없는지, `Publish image and deploy through SSM` 성공과 운영 health `UP`을
+확인한다. main push 실행으로 확인하거나 Actions → CD → Run workflow에서
+`main`을 선택한다. 액션 업데이트로 실패하면 실패 로그를 이슈에 남기고
+`cd.yml`의 해당 액션을 이전 SHA로 되돌리는 fix PR을 develop → main으로 반영한다.
+OIDC 인증 실패는 배포 step 전에 중단되므로 기존 운영 앱은 유지된다.
 
 ## 첫 CD 실행과 운영 파일
 
@@ -66,7 +81,7 @@ DB 마이그레이션은 되돌리지 않는다. 이전 앱과 호환되는 마�
 SSM 실행 제한은 1200초, 결과 확인은 최대 1500초다. 강제 취소·프로세스 종료·
 호스트 장애는 자동 복구를 보장하지 않는다. timeout이 나면 SSM command ID로
 실제 명령 상태를 확인하고 재실행한다. 서버 lock이 남아 실행 중이면 새 배포는
-중단한다. GitHub에는 서버 원문 로그를 복사하지 않고 command ID만 기록한다.
+중단한다. GitHub에는 command ID와 검증된 `CLEANUP` 요약만 기록한다. 서버 원문 로그는 복사하지 않는다.
 
 SSM 터미널에서 현재 상태를 확인하려면:
 
@@ -83,6 +98,9 @@ curl --fail --silent --show-error https://api.vium.site/actuator/health
 
 수동 복구는 실제 이전 정상 릴리스 경로로 아래 placeholder를 교체한 뒤
 SSM 터미널에서 실행한다. 이미지를 삭제하지 않았다면 추가 다운로드가 필요 없다.
+자동 정리는 롤백 대상과 최근 성공한 서로 다른 이미지 3개를 남긴다. 그보다 오래된
+릴리스로 돌아가려면 ECR 로그인 후 `docker pull <compose.image.yml의 digest 참조>`가
+먼저 필요하다. 해당 이미지가 ECR에도 없으면 그 릴리스로는 돌아갈 수 없다.
 
 ```bash
 sudo bash <<'ROLLBACK'
@@ -109,16 +127,69 @@ DB 복구는 별도 판단이 필요하다. CD 전환 후에는 기존 deploymen
 Git checkout 방식 대신 이 릴리스 경로를 사용한다. 서버 애플리케이션 로그는
 위 상태 확인 명령의 `ps`를 `logs --tail 100 app`으로 바꿔 직접 조회한다.
 
-이미지와 릴리스는 자동 삭제하지 않는다. 현재 및 최근 정상 릴리스 최소 3개를
-보존하고 디스크/ECR 용량을 확인한다. 단순히 ECR 최신 이미지 3개만 남기면
-실패한 이미지 때문에 정상 롤백 이미지가 삭제될 수 있다.
+### 자동 정리
+
+CD 성공 후 `current` 교체가 끝나면 같은 `deploy.lock`을 잡은 상태에서
+[scripts/deploy/cleanup.py](../scripts/deploy/cleanup.py)가 정리한다. 실패한 배포에는
+실행하지 않는다. 정리 실패·300초 시간 초과는 경고만 남기며 배포 성공을 바꾸지 않는다.
+
+| 릴리스 분류 | 처리 |
+|---|---|
+| current, 배포 직전 previous | 항상 보존(오래된 수동 롤백 대상도 포함) |
+| `bootstrap.<6자>` | 항상 보존. ECR에 없는 수동 빌드 이미지도 보호 |
+| 최근 성공 SHA 릴리스 | `succeeded` mtime 내림차순으로 서로 다른 이미지 3개가 될 때까지 보존 |
+| 나머지 SHA 릴리스 | 오래된 성공 및 실패·중단 릴리스 삭제 |
+| 알 수 없는 이름, 심볼릭 링크, 일반 파일 | 건드리지 않고 개수 보고 |
+
+같은 이미지 재배포가 끼어 있으면 최근 성공 디렉터리는 3개보다 많을 수 있다.
+디렉터리를 먼저 지운 뒤 이미지를 정리한다. 디렉터리 삭제에 실패하면 해당 이미지도
+보호한다. 보존 릴리스 및 실행·정지 컨테이너의 이미지 ID는 모두 남긴다.
+배포 ECR 저장소 참조만 가진 비보존 이미지를 `docker image rm <ID>`로 삭제한다.
+다른 저장소 태그가 함께 있으면 건너뛴다. 모든 prune 명령과 `--force`는 사용하지 않는다.
+다른 저장소 이미지 및 `/home/ubuntu/vium-releases/` 아카이브는 자동 삭제하지 않는다.
+
+보존 이미지 해석 또는 Docker 조회가 실패하면 이미지 삭제 전체를 건너뛰는
+fail-closed 방식이다. 이때 디렉터리 정리는 계속한다. current/previous가 releases
+밖에 있거나 최근 성공 이미지 범위를 판단할 수 없으면 아무것도 삭제하지 않는다.
+비밀 파일 내용이나 Docker 원문 오류는 출력하지 않는다.
+
+Actions의 `Publish image and deploy through SSM` step에서 마지막 `CLEANUP` 줄을 확인한다.
+`status=ok`는 정상 완료, `partial`은 일부 삭제 실패 또는 이미지 단계 중단,
+`error`는 정리 판단·측정 등의 오류다. `dry_run=1`이면 삭제 수는 **삭제 예정 수**다.
+`releases_kept/removed/unknown`은 보존/삭제/미분류 디렉터리 수,
+`images_kept/removed/failed/skipped`는 보호 이미지 ID/삭제/실패/다른 저장소 중복 참조 수다.
+이미지 단계 전체 중단은 `images_skipped=all`이다. `free_kib_before/after`는
+`/opt/vium`과 Docker root 중 더 작은 가용 KiB이며, `free_kib_min=4194304`는 경고 기준이다.
+요약이 잘려 없으면 `Cleanup summary not found; inspect SSM command ...` 안내를 따라
+SSM 출력을 확인한다. 이미지 레이어 공유 때문에 이미지 표시 크기 합계와 회수량은 다르다.
+
+정리 후 두 경로 중 하나라도 4 GiB 미만이면 경고한다. Grafana의 디스크 4 GiB/10분
+알림도 함께 사용한다([모니터링](monitoring.md)). 첫 배포는 다음 표지 파일로 미리 본다.
+
+```bash
+sudo touch /opt/vium/shared/cleanup-dry-run
+```
+
+배포 후 `dry_run=1`과 SSM 보존·삭제 목록을 확인한다. current/previous/bootstrap와
+최근 서로 다른 정상 이미지 3개가 보호되는지 확인한 뒤 다음 명령으로 실제 정리를 켠다.
+
+```bash
+sudo rm /opt/vium/shared/cleanup-dry-run
+```
+
+Actions → CD → Run workflow(`main`)로 다시 배포한다. `dry_run=0`, 삭제 수,
+여유 공간 증가, `docker system df`, health `UP`, 직전 성공 릴리스 보존을 확인한다.
+다음 배포에서도 보존 범위가 유지되는지 확인한다. 운영 dry-run·실제 정리 검증은 미완료다.
 
 배포 시작 시 `/opt/vium`과 Docker data root 파일시스템 각각의 여유 공간을
 확인한다. 하나라도 2 GiB 미만이면 pull/컨테이너 교체 전에 중단한다. 2 GiB는
 현재 소형 이미지 기준의 최소 안전 여유이며 다운로드·압축 해제 공간을 보장하는
 계산값은 아니다. 이미지 크기가 커지면 기준을 높인다.
 
-### 디스크 확인 및 수동 정리
+### 디스크 확인 및 수동 정리 (대체 절차)
+
+자동 정리가 `partial`/`error`일 때, 시작 시 2 GiB 미만으로 배포가 막혔을 때,
+다른 저장소 이미지나 아카이브를 정리할 때 사용한다.
 
 SSM에서 아래를 실행해 현재 릴리스, 최근 성공 기록, 이미지 용량을 확인한다.
 `succeeded` 파일은 bootstrap 또는 새 배포의 health 통과 후 기록된다.
@@ -154,8 +225,38 @@ CLEANUP
 ```
 
 `docker image rm`에는 `--force`를 붙이지 않는다. 실행/정지 컨테이너가 사용하는
-이미지라 삭제가 거부되면 원인을 확인한다. ECR 원격 이미지 정리는 별개이며,
-동일한 정상 릴리스 보존 목록을 기준으로 수행해야 한다.
+이미지라 삭제가 거부되면 원인을 확인한다. ECR 원격 정리는 아래 수명주기 정책 절차를 따른다.
+
+## ECR 수명주기 정책 적용 (운영 반영 미완료)
+
+관리자에게 해당 저장소의 `ecr:GetLifecyclePolicy`, `ecr:PutLifecyclePolicy`,
+`ecr:StartLifecyclePolicyPreview`, `ecr:GetLifecyclePolicyPreview` 권한이 필요하다.
+이미지 수 확인에는 `ecr:DescribeImages`를 사용한다. `vium-github-actions`와
+`vium-ec2-role`은 변경하지 않으며 만료는 ECR 서비스가 수행한다.
+
+```bash
+aws ecr describe-images --repository-name vium-be --region ap-northeast-2 \
+  --query 'length(imageDetails)'
+aws ecr start-lifecycle-policy-preview --repository-name vium-be --region ap-northeast-2 \
+  --lifecycle-policy-text file://scripts/deploy/ecr-lifecycle-policy.json
+aws ecr get-lifecycle-policy-preview --repository-name vium-be --region ap-northeast-2
+```
+
+적용 전 이미지 수와 저장소 크기를 기록한다. 미리보기가 완료되면 만료 대상에
+current와 최근 서로 다른 정상 이미지 3개의 digest가 **없는지 확인한 뒤** 적용한다.
+실패한 push도 최근 10개에 포함되므로 정상 이미지 3개 보존을 원격 정책만으로 보장하지 않는다.
+
+```bash
+aws ecr put-lifecycle-policy --repository-name vium-be --region ap-northeast-2 \
+  --lifecycle-policy-text file://scripts/deploy/ecr-lifecycle-policy.json
+aws ecr get-lifecycle-policy --repository-name vium-be --region ap-northeast-2
+```
+
+콘솔에서는 ECR → `vium-be` → Lifecycle policy에서 같은 JSON을 사용한다.
+만료는 비동기이므로 24시간 안에 이미지 수가 10개 이하로 줄었는지 확인한다.
+2026-11-11 사전 확인 시 정책은 없었고 원격 이미지 수는 미기록이다.
+로컬 ECR 이미지 10개, bootstrap 1개, hello-world 1개, 릴리스 14개,
+아카이브 147M였다. hello-world 삭제와 아카이브 정리는 운영자가 별도로 판단한다.
 
 ## 최초 검증
 

@@ -26,3 +26,7 @@ management:
     metrics:
       export:
         enabled: false
+
+metrics:
+  container-memory:
+    enabled: false

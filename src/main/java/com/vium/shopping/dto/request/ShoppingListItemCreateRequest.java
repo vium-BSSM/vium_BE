@@ -3,7 +3,9 @@ package com.vium.shopping.dto.request;
 import com.vium.global.exception.BusinessException;
 import com.vium.global.exception.ErrorCode;
 import java.math.BigDecimal;
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.Size;
 
 /**
  * 장보기 리스트 항목 추가 요청 DTO
@@ -29,15 +31,19 @@ public record ShoppingListItemCreateRequest(
 	Long ingredientCatalogId,
 
 	/** 사용자 입력 재료명 (nullable) */
+	@Size(max = 120, message = "customName은 120자 이하여야 합니다.")
 	String customName,
 
 	/** 제안 수량 */
+	@DecimalMin(value = "0", inclusive = false, message = "suggestedQuantity는 0보다 커야 합니다.")
+	@Digits(integer = 9, fraction = 3, message = "suggestedQuantity는 정수 9자리, 소수 3자리까지 입력할 수 있습니다.")
 	BigDecimal suggestedQuantity,
 
 	/** 수량 단위 ID */
 	Short unitId,
 
 	/** 제안 이유 */
+	@Size(max = 200, message = "reason은 200자 이하여야 합니다.")
 	String reason
 ) {
 

@@ -171,6 +171,7 @@ com.vium
 │   │                    UserActivityService, UserActivityMetrics
 │   └── repository       UserSettingsRepository, UserCredentialRepository, UserActivityQueryRepository
 └── global
+    ├── monitoring       ContainerMemoryMetrics
     ├── common           ApiResponse
     ├── exception        BusinessException, ErrorCode, GlobalExceptionHandler 등
     ├── security         SecurityConfig, CurrentUserProvider, TokenConfig, JwtProperties
@@ -249,6 +250,7 @@ com.vium
    - 예: `feat/12-ingredient-register`, `fix/27-waste-report-timezone`
 3. **커밋 메시지도 같은 타입 접두사를 쓴다.** 예: `feat: 재료 등록 API 구현 (#12)`
 4. **PR을 올릴 때는 `Closes #이슈번호`로 연결한다.** (PR 템플릿에 이미 자리 있음 → 머지 시 이슈 자동 닫힘)
+5. **Dependabot PR은 예외다.** `dependabot[bot]`이 매월 develop 대상으로 여는 의존성 PR(`dependabot/...` 브랜치, `chore: bump ...`)은 이슈·이슈 번호·`Closes #`가 없다. 이슈를 만들지 않고, PR에 직접 커밋하지 않는다. 필수 CI 통과 후 사용자가 릴리스 노트를 보고 머지한다(자동 머지 없음). 직접 수정이 필요하면 PR을 닫고 이슈를 만든다. 세부 규칙은 `docs/ci.md` Dependabot 절.
 
 ---
 
@@ -284,3 +286,6 @@ com.vium
 
 - Grafana Cloud로 메트릭을 OTLP/HTTP push한다. 기본 비활성이며 `OTLP_METRICS_ENABLED`로 켠다. 추가 프로세스·공개 포트 없이 운영 health 노출을 유지하며 설정·검증·대시보드·알림은 `docs/monitoring.md`를 따른다.
 - 활성 사용자(오늘·7일, `user_sessions.issued_at` 기준)와 가입자(누적·오늘) gauge 4개를 OTLP가 켜져 있을 때 5분마다 DB에서 집계해 보낸다(`metrics.user-activity.enabled`, 기본값은 OTLP 플래그를 따름). 사용자별 라벨은 넣지 않는다. 정의와 패널 쿼리는 `docs/monitoring.md`.
+
+- 컨테이너 메모리 gauge 3개는 `metrics.container-memory.enabled`로 제어하며 기본값은 OTLP 플래그를 따른다. cgroup v2 필수 파일이 없으면 미등록이고, 디스크는 Boot 기본 `disk.free`를 쓴다. 알림 기준은 `docs/monitoring.md`를 따른다.
+- CD 성공 후 `scripts/deploy/cleanup.py`가 current·previous·bootstrap·최근 서로 다른 성공 이미지 3개를 보존하고 나머지 SHA 릴리스와 해당 저장소의 비보존 이미지를 정리한다. prune·`--force`는 금지하며 정리 실패도 배포는 성공이다. 보존 기준 변경 시 `KEEP_DISTINCT_IMAGES`, ECR 정책 테스트, `docs/cd.md`를 함께 바꾼다.

@@ -71,6 +71,33 @@ class OtlpMetricsExportTest {
     }
 
     @Test
+    void containerMemoryIsDisabledByDefaultInMainConfiguration() {
+        configurationRunner("src/main/resources/application.yml").run(context ->
+                assertThat(context.getEnvironment().getProperty("metrics.container-memory.enabled")).isEqualTo("false"));
+    }
+
+    @Test
+    void containerMemoryFollowsEnabledOtlpFlag() {
+        configurationRunner("src/main/resources/application.yml")
+                .withPropertyValues("OTLP_METRICS_ENABLED=true").run(context ->
+                        assertThat(context.getEnvironment().getProperty("metrics.container-memory.enabled")).isEqualTo("true"));
+    }
+
+    @Test
+    void containerMemoryFollowsDisabledOtlpFlag() {
+        configurationRunner("src/main/resources/application.yml")
+                .withPropertyValues("OTLP_METRICS_ENABLED=false").run(context ->
+                        assertThat(context.getEnvironment().getProperty("metrics.container-memory.enabled")).isEqualTo("false"));
+    }
+
+    @Test
+    void testConfigurationDisablesContainerMemoryEvenWithOtlpEnvironmentFlag() {
+        configurationRunner("src/test/resources/application.yml")
+                .withPropertyValues("OTLP_METRICS_ENABLED=true").run(context ->
+                        assertThat(context.getEnvironment().getProperty("metrics.container-memory.enabled")).isEqualTo("false"));
+    }
+
+    @Test
     void mainConfigurationDisablesExportByDefault() {
         runner("src/main/resources/application.yml").run(context -> {
             assertThat(context).hasNotFailed().doesNotHaveBean(OtlpMeterRegistry.class);

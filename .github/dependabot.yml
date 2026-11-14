@@ -1,0 +1,46 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+      time: "09:00"
+      timezone: Asia/Seoul
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+    groups:
+      github-actions:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: gradle
+    directory: /
+    schedule:
+      interval: monthly
+      time: "09:30"
+      timezone: Asia/Seoul
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: chore
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major
+    groups:
+      spring-boot:
+        patterns:
+          - org.springframework.boot
+          - io.spring.dependency-management
+        update-types:
+          - minor
+          - patch
+      libraries:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - gradle-wrapper
+        update-types:
+          - minor
+          - patch

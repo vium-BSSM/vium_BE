@@ -22,4 +22,9 @@ public interface UserSessionRepository extends JpaRepository<UserSession, Long> 
 		where id in (select id from user_sessions where expires_at < :cutoff limit :batchSize)
 		""", nativeQuery = true)
 	int deleteExpiredBefore(@Param("cutoff") LocalDateTime cutoff, @Param("batchSize") int batchSize);
+
+	@Transactional
+	@Modifying
+	@Query("delete from UserSession s where s.userId = :userId")
+	int deleteByUserId(@Param("userId") Long userId);
 }
