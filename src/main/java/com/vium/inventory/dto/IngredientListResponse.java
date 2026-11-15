@@ -14,7 +14,8 @@ public record IngredientListResponse(List<Item> ingredients) {
 		Short unitId,
 		String unit,
 		Short storageMethodId,
-		String storageMethodName
+		String storageMethodName,
+		String imageUrl
 	) {
 	}
 }

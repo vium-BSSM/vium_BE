@@ -17,6 +17,7 @@ public record IngredientRegisterRequest(
 	Short storageMethodId,
 	@PastOrPresent LocalDate purchasedOn,
 	LocalDate expiresOn,
-	@PositiveOrZero Integer amount
+	@PositiveOrZero Integer amount,
+	Long imageId
 ) {
 }
