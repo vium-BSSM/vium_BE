@@ -63,7 +63,7 @@ public class PurchaseConfirmService {
 				.unitPrice(old == null ? null : old.getUnitPrice()).amount(amount).expiresOn(item.expiresOn()).build());
 			var ingredient = inventory.registerFromPurchase(userId, new IngredientRegisterRequest(
 				item.ingredientCatalogId(), item.customName(), item.quantity(), item.unitId(), item.storageMethodId(),
-				purchasedAt.toLocalDate(), item.expiresOn(), item.amount()), saved.getId());
+				purchasedAt.toLocalDate(), item.expiresOn(), item.amount(), null), saved.getId());
 			saved.setExpiresOn(ingredient.expiresOn());
 			ingredients.add(ingredient);
 			if (amount != null) total = total == null ? amount : total.add(amount);

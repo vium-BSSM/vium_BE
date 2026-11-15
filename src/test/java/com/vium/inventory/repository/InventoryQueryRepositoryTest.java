@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.vium.image.config.ImageStorageProperties;
 import com.vium.inventory.dto.IngredientDetailResponse;
 import java.math.BigDecimal;
 import java.sql.ResultSet;
@@ -60,6 +61,7 @@ class InventoryQueryRepositoryTest {
 				RowMapper<IngredientDetailResponse> mapper = invocation.getArgument(1);
 				return mapper.mapRow(resultSet, 0);
 			});
-		return new InventoryQueryRepository(jdbcTemplate);
+		return new InventoryQueryRepository(jdbcTemplate,
+			new ImageStorageProperties(false, "ap-northeast-2", "", "", "https://images.example.com"));
 	}
 }

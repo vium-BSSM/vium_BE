@@ -1,5 +1,6 @@
 package com.vium.inventory.repository;
 
+import com.vium.image.config.ImageStorageProperties;
 import com.vium.inventory.dto.ActiveIngredientState;
 import com.vium.inventory.dto.IngredientDetailResponse;
 import com.vium.inventory.dto.IngredientListResponse;
@@ -17,6 +18,12 @@ import org.springframework.stereotype.Repository;
 public class InventoryQueryRepository {
 
 	private final JdbcTemplate jdbcTemplate;
+	private final ImageStorageProperties imageStorageProperties;
+
+	private String imageUrl(String objectKey) {
+		if (objectKey == null) return null;
+		return imageStorageProperties.publicBaseUrl().replaceAll("/$", "") + "/" + objectKey;
+	}
 
 	public boolean hasConsumptionEvents(Long inventoryItemId, Long userId) {
 		return Boolean.TRUE.equals(jdbcTemplate.queryForObject(
@@ -29,12 +36,13 @@ public class InventoryQueryRepository {
 			select i.id, coalesce(c.name, i.custom_name) as name,
 			       i.remaining_quantity, i.unit_id, u.name as unit,
 			       i.storage_method_id, sm.name as storage_method_name,
-			       i.expires_on
+			       i.expires_on, img.object_key as image_object_key
 			from inventory_items i
 			join item_statuses s on s.id = i.status_id
 			join units u on u.id = i.unit_id
 			left join ingredient_catalog c on c.id = i.ingredient_catalog_id
 			left join storage_methods sm on sm.id = i.storage_method_id
+			left join uploaded_images img on img.id = i.image_id
 			where i.user_id = ? and s.code = ?
 			""";
 		Object[] parameters = {userId, "active"};
@@ -51,7 +59,8 @@ public class InventoryQueryRepository {
 			rs.getObject("unit_id", Short.class),
 			rs.getString("unit"),
 			rs.getObject("storage_method_id", Short.class),
-			rs.getString("storage_method_name")
+			rs.getString("storage_method_name"),
+			imageUrl(rs.getString("image_object_key"))
 		), parameters);
 	}
 
@@ -82,13 +91,14 @@ public class InventoryQueryRepository {
 			       coalesce(c.name, i.custom_name) as name, category.name as category_name,
 			       i.initial_quantity, i.remaining_quantity, i.amount, i.unit_id, u.name as unit,
 			       i.storage_method_id, sm.name as storage_method_name,
-			       s.code as status_code, i.purchased_on, i.expires_on
+			       s.code as status_code, i.purchased_on, i.expires_on, img.object_key as image_object_key
 			from inventory_items i
 			join item_statuses s on s.id = i.status_id
 			join units u on u.id = i.unit_id
 			left join ingredient_catalog c on c.id = i.ingredient_catalog_id
 			left join ingredient_categories category on category.id = c.category_id
 			left join storage_methods sm on sm.id = i.storage_method_id
+			left join uploaded_images img on img.id = i.image_id
 			where i.id = ? and i.user_id = ?
 			""";
 		try {
@@ -108,7 +118,8 @@ public class InventoryQueryRepository {
 					rs.getString("storage_method_name"),
 					rs.getString("status_code"),
 					rs.getObject("purchased_on", LocalDate.class),
-					rs.getObject("expires_on", LocalDate.class));
+					rs.getObject("expires_on", LocalDate.class),
+					imageUrl(rs.getString("image_object_key")));
 			}, inventoryItemId, userId);
 			return Optional.ofNullable(detail);
 		} catch (EmptyResultDataAccessException e) {

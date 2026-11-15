@@ -100,9 +100,7 @@ public class ImageService {
 
 	@Transactional(readOnly = true)
 	public void requireReceiptImage(Long userId, Long imageId) {
-		if (imageId == null || imageId <= 0) throw new BusinessException(ErrorCode.INVALID_REQUEST);
-		images.findByIdAndUserIdAndPurposeAndReadyTrue(imageId, userId, ImagePurpose.RECEIPT)
-			.orElseThrow(() -> new BusinessException(ErrorCode.IMAGE_NOT_FOUND));
+		requirePurposeImage(userId, imageId, ImagePurpose.RECEIPT);
 	}
 
 	@Transactional(readOnly = true)
@@ -116,8 +114,17 @@ public class ImageService {
 
 	@Transactional(readOnly = true)
 	public void requireProfileImage(Long userId, Long imageId) {
+		requirePurposeImage(userId, imageId, ImagePurpose.PROFILE);
+	}
+
+	@Transactional(readOnly = true)
+	public void requireIngredientImage(Long userId, Long imageId) {
+		requirePurposeImage(userId, imageId, ImagePurpose.INGREDIENT);
+	}
+
+	private void requirePurposeImage(Long userId, Long imageId, ImagePurpose purpose) {
 		if (imageId == null || imageId <= 0) throw new BusinessException(ErrorCode.INVALID_REQUEST);
-		images.findByIdAndUserIdAndPurposeAndReadyTrue(imageId, userId, ImagePurpose.PROFILE)
+		images.findByIdAndUserIdAndPurposeAndReadyTrue(imageId, userId, purpose)
 			.orElseThrow(() -> new BusinessException(ErrorCode.IMAGE_NOT_FOUND));
 	}
 
