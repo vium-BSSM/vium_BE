@@ -4209,8 +4209,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {}
+                  "$ref": "#/components/schemas/NotificationListResponse"
                 },
                 "example": {
                   "success": true,
@@ -4271,8 +4270,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {}
+                  "$ref": "#/components/schemas/NotificationReadResponse"
                 },
                 "example": {
                   "success": true,
@@ -4285,6 +4283,24 @@
               }
             },
             "headers": {}
+          },
+          "404": {
+            "description": "리소스를 찾을 수 없습니다. (본인 알림이 아니거나 존재하지 않음 — 둘을 구분하지 않음)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "NOT_FOUND",
+                    "message": "리소스를 찾을 수 없습니다."
+                  }
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
@@ -12489,6 +12505,132 @@
           null
         ],
         "description": "NO_PRICE_BASIS=재고의 (카테고리, 단위) 기준값이 없음, ZERO_PRICE=계산된 추천가가 0. 두 경우 모두 나눔(SHARE)만 허용한다. 판매 가능하면 null"
+      },
+      "NotificationItem": {
+        "type": "object",
+        "required": [
+          "notificationId",
+          "type",
+          "title",
+          "scheduledAt",
+          "sentAt",
+          "readAt"
+        ],
+        "properties": {
+          "notificationId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "type": {
+            "type": "string",
+            "description": "notifications.type 값. expiry / consume_check / shopping_reminder 등"
+          },
+          "title": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string",
+            "nullable": true
+          },
+          "scheduledAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "서버 로컬 타임스탬프(오프셋 없음). notifications.scheduled_at 그대로 반환"
+          },
+          "sentAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "미발송이면 null"
+          },
+          "readAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "읽지 않았으면 null"
+          }
+        }
+      },
+      "NotificationList": {
+        "type": "object",
+        "required": [
+          "notifications"
+        ],
+        "properties": {
+          "notifications": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotificationItem"
+            }
+          }
+        }
+      },
+      "NotificationListResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "data",
+          "error"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/NotificationList"
+          },
+          "error": {
+            "type": "object",
+            "example": null,
+            "nullable": true,
+            "enum": [
+              null
+            ]
+          }
+        }
+      },
+      "NotificationReadResult": {
+        "type": "object",
+        "required": [
+          "notificationId",
+          "readAt"
+        ],
+        "properties": {
+          "notificationId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "readAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "NotificationReadResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "data",
+          "error"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/NotificationReadResult"
+          },
+          "error": {
+            "type": "object",
+            "example": null,
+            "nullable": true,
+            "enum": [
+              null
+            ]
+          }
+        }
       }
     },
     "responses": {
