@@ -1,0 +1,33 @@
+package com.vium.notification.controller;
+
+import com.vium.global.common.ApiResponse;
+import com.vium.global.security.CurrentUserProvider;
+import com.vium.notification.dto.NotificationListResponse;
+import com.vium.notification.dto.NotificationReadResponse;
+import com.vium.notification.service.NotificationService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/api/me/notifications")
+@RequiredArgsConstructor
+public class NotificationController {
+
+	private final NotificationService notifications;
+	private final CurrentUserProvider currentUser;
+
+	@GetMapping
+	public ApiResponse<NotificationListResponse> list(@RequestParam(required = false) Boolean isRead) {
+		return ApiResponse.ok(notifications.list(currentUser.getCurrentUserId(), isRead));
+	}
+
+	@PatchMapping("/{notificationId}/read")
+	public ApiResponse<NotificationReadResponse> markRead(@PathVariable Long notificationId) {
+		return ApiResponse.ok(notifications.markRead(currentUser.getCurrentUserId(), notificationId));
+	}
+}
