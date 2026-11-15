@@ -7,6 +7,7 @@ import com.vium.global.code.UnitRepository;
 import com.vium.global.exception.BusinessException;
 import com.vium.global.exception.ErrorCode;
 import com.vium.global.exception.NotFoundException;
+import com.vium.image.service.ImageService;
 import com.vium.ingredient.service.ExpiryEstimationService;
 import com.vium.ingredient.service.IngredientCatalogService;
 import com.vium.inventory.dto.ActiveIngredientState;
@@ -46,6 +47,7 @@ public class InventoryService {
 	private final ExpiryEstimationService expiryEstimationService;
 	private final InventoryQueryRepository inventoryQueryRepository;
 	private final UserSettingsService userSettingsService;
+	private final ImageService imageService;
 
 	@Transactional
 	public IngredientUpdateResponse update(Long userId, Long inventoryItemId, IngredientUpdateRequest request) {
@@ -62,12 +64,16 @@ public class InventoryService {
 			throw new BusinessException(ErrorCode.INVALID_REQUEST, "존재하지 않는 storageMethodId 입니다");
 		}
 		validateDates(request.purchasedOn(), request.expiresOn());
+		if (request.imageId() != null) {
+			imageService.requireIngredientImage(userId, request.imageId());
+		}
 		ItemStatus status = itemStatusRepository.findById(item.getStatusId())
 			.orElseThrow(() -> new BusinessException(ErrorCode.INTERNAL_ERROR));
 		boolean hasEvents = !item.getUnitId().equals(request.unitId())
 			&& inventoryQueryRepository.hasConsumptionEvents(inventoryItemId, userId);
 		item.updateDetails(customName, request.quantity(), request.unitId(), request.storageMethodId(),
 			request.purchasedOn(), request.expiresOn(), hasEvents);
+		item.changeImage(request.imageId());
 		return new IngredientUpdateResponse(item.getId(), item.getCustomName(), item.getInitialQuantity(),
 			item.getUnitId(), item.getStorageMethodId(), item.getPurchasedOn(), item.getExpiresOn(), status.getCode());
 	}
@@ -168,7 +174,7 @@ public class InventoryService {
 	}
 
 	private IngredientResponse registerItem(Long userId, IngredientRegisterRequest request, Long purchaseItemId) {
-		validate(request);
+		validate(userId, request);
 
 		LocalDate purchasedOn = request.purchasedOn() != null ? request.purchasedOn() : LocalDate.now();
 		LocalDate expiresOn = resolveExpiresOn(request, purchasedOn);
@@ -192,6 +198,7 @@ public class InventoryService {
 			.amount(request.amount() != null ? BigDecimal.valueOf(request.amount()) : null)
 			.purchasedOn(purchasedOn)
 			.expiresOn(expiresOn)
+			.imageId(request.imageId())
 			.build();
 
 		InventoryItem saved = inventoryItemRepository.save(inventoryItem);
@@ -209,7 +216,7 @@ public class InventoryService {
 			saved.getExpiresOn());
 	}
 
-	private void validate(IngredientRegisterRequest request) {
+	private void validate(Long userId, IngredientRegisterRequest request) {
 		if (request.ingredientCatalogId() == null && !StringUtils.hasText(request.customName())) {
 			throw new BusinessException(ErrorCode.INVALID_REQUEST, "ingredientCatalogId 또는 customName 중 하나는 필요합니다");
 		}
@@ -221,6 +228,9 @@ public class InventoryService {
 		}
 		if (request.storageMethodId() != null && !storageMethodRepository.existsById(request.storageMethodId())) {
 			throw new BusinessException(ErrorCode.INVALID_REQUEST, "존재하지 않는 storageMethodId 입니다");
+		}
+		if (request.imageId() != null) {
+			imageService.requireIngredientImage(userId, request.imageId());
 		}
 	}
 

@@ -15,6 +15,7 @@ public record IngredientUpdateRequest(
 	@NotNull Short unitId,
 	@NotNull Short storageMethodId,
 	@NotNull @PastOrPresent LocalDate purchasedOn,
-	@NotNull LocalDate expiresOn
+	@NotNull LocalDate expiresOn,
+	Long imageId
 ) {
 }

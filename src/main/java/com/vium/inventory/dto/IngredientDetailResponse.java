@@ -17,6 +17,7 @@ public record IngredientDetailResponse(
 	String storageMethodName,
 	String statusCode,
 	LocalDate purchasedOn,
-	LocalDate expiresOn
+	LocalDate expiresOn,
+	String imageUrl
 ) {
 }

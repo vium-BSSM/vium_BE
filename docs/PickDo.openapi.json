@@ -1057,6 +1057,12 @@
                     "minimum": 0,
                     "nullable": true,
                     "description": "구매 금액(원). 생략 가능."
+                  },
+                  "imageId": {
+                    "type": "integer",
+                    "format": "int64",
+                    "nullable": true,
+                    "description": "본인이 purpose=INGREDIENT로 업로드한 이미지 ID. 생략 가능."
                   }
                 }
               },
@@ -1068,7 +1074,8 @@
                 "storageMethodId": 1,
                 "purchasedOn": "2026-08-20",
                 "expiresOn": null,
-                "amount": 3200
+                "amount": 3200,
+                "imageId": null
               }
             }
           },
@@ -1204,7 +1211,7 @@
             "headers": {}
           },
           "404": {
-            "description": "존재하지 않는 ingredientCatalogId",
+            "description": "존재하지 않는 ingredientCatalogId, 또는 본인 소유가 아니거나 purpose=INGREDIENT·업로드 완료 상태가 아닌 imageId(IMAGE_NOT_FOUND)",
             "content": {
               "application/json": {
                 "schema": {
@@ -1236,7 +1243,7 @@
       "get": {
         "summary": "식재료 조회",
         "deprecated": false,
-        "description": "목록은 inventoryItemId, name, expiresOn, remainingQuantity, unitId, unit, storageMethodId, storageMethodName만 반환한다. 나머지 필드는 상세 조회(GET /api/me/ingredients/{ingredientId})에서 확인한다.\n\n정렬: expiresOn 오름차순(null은 마지막) → inventoryItemId 오름차순.",
+        "description": "목록은 inventoryItemId, name, expiresOn, remainingQuantity, unitId, unit, storageMethodId, storageMethodName, imageUrl만 반환한다. 나머지 필드는 상세 조회(GET /api/me/ingredients/{ingredientId})에서 확인한다.\n\n정렬: expiresOn 오름차순(null은 마지막) → inventoryItemId 오름차순.",
         "tags": [
           "ingredient"
         ],
@@ -1301,6 +1308,11 @@
                                 "type": "string",
                                 "nullable": true,
                                 "description": "냉장/냉동/실온 텍스트"
+                              },
+                              "imageUrl": {
+                                "type": "string",
+                                "nullable": true,
+                                "description": "등록된 이미지가 없으면 null"
                               }
                             }
                           }
@@ -1336,7 +1348,8 @@
                         "unitId": 1,
                         "unit": "개",
                         "storageMethodId": 1,
-                        "storageMethodName": "냉장"
+                        "storageMethodName": "냉장",
+                        "imageUrl": null
                       }
                     ]
                   },
@@ -1446,6 +1459,11 @@
                           "type": "string",
                           "format": "date",
                           "nullable": true
+                        },
+                        "imageUrl": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "등록된 이미지가 없으면 null"
                         }
                       }
                     },
@@ -1474,7 +1492,8 @@
                     "storageMethodName": "냉장",
                     "statusCode": "active",
                     "purchasedOn": "2026-08-13",
-                    "expiresOn": "2026-08-20"
+                    "expiresOn": "2026-08-20",
+                    "imageUrl": null
                   },
                   "error": null
                 }
@@ -1569,6 +1588,12 @@
                     "type": "string",
                     "format": "date",
                     "description": "purchasedOn보다 빠를 수 없음"
+                  },
+                  "imageId": {
+                    "type": "integer",
+                    "format": "int64",
+                    "nullable": true,
+                    "description": "본인이 purpose=INGREDIENT로 업로드한 이미지 ID. 생략/null이면 기존 이미지를 유지한다(해제는 지원하지 않음)."
                   }
                 },
                 "required": [
@@ -1703,7 +1728,7 @@
             }
           },
           "404": {
-            "description": "NOT_FOUND: 식재료 없음 또는 본인 소유 아님",
+            "description": "NOT_FOUND: 식재료 없음 또는 본인 소유 아님. IMAGE_NOT_FOUND: 본인 소유가 아니거나 purpose=INGREDIENT·업로드 완료 상태가 아닌 imageId",
             "content": {
               "application/json": {
                 "schema": {

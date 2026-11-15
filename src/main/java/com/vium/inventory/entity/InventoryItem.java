@@ -37,6 +37,9 @@ public class InventoryItem {
 	@Column(name = "purchase_item_id")
 	private Long purchaseItemId;
 
+	@Column(name = "image_id")
+	private Long imageId;
+
 	@Column(name = "custom_name")
 	private String customName;
 
@@ -72,9 +75,10 @@ public class InventoryItem {
 	@Builder
 	public InventoryItem(Long userId, Long ingredientCatalogId, String customName, Short statusId,
 			Short storageMethodId, Short unitId, BigDecimal initialQuantity, BigDecimal remainingQuantity,
-			BigDecimal amount, LocalDate purchasedOn, LocalDate expiresOn, Long purchaseItemId) {
+			BigDecimal amount, LocalDate purchasedOn, LocalDate expiresOn, Long purchaseItemId, Long imageId) {
 		this.userId = userId;
 		this.purchaseItemId = purchaseItemId;
+		this.imageId = imageId;
 		this.ingredientCatalogId = ingredientCatalogId;
 		this.customName = customName;
 		this.statusId = statusId;
@@ -120,6 +124,12 @@ public class InventoryItem {
 		this.storageMethodId = storageMethodId;
 		this.purchasedOn = purchasedOn;
 		this.expiresOn = expiresOn;
+	}
+
+	public void changeImage(Long imageId) {
+		if (imageId != null) {
+			this.imageId = imageId;
+		}
 	}
 
 	public void decreaseRemainingQuantity(BigDecimal quantity) {
