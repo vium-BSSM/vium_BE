@@ -56,10 +56,6 @@ class CreditControllerIntegrationTest {
 		when(clock.instant()).thenReturn(NOW);
 		when(clock.getZone()).thenReturn(ZoneId.of("Asia/Seoul"));
 
-		jdbcTemplate.update("""
-			create table if not exists "trades"
-			("id" bigint primary key, "buyer_id" bigint not null, "status" varchar(20) not null, "price" integer not null)
-			""");
 		jdbcTemplate.update("delete from credit_transactions");
 		jdbcTemplate.update("delete from trades");
 		jdbcTemplate.update("delete from users");
@@ -78,7 +74,8 @@ class CreditControllerIntegrationTest {
 	}
 
 	private void seedTrade(long id, Long buyerId, String status, int price) {
-		jdbcTemplate.update("insert into trades (id, buyer_id, status, price) values (?, ?, ?, ?)",
+		jdbcTemplate.update("insert into trades (id, post_id, buyer_id, seller_id, status, price, requested_at) "
+			+ "values (?, 1, ?, 43, ?, ?, CURRENT_TIMESTAMP)",
 			id, buyerId, status, price);
 	}
 

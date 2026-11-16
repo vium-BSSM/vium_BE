@@ -133,3 +133,9 @@ images:
     private-bucket: ${S3_PRIVATE_BUCKET:}
     public-bucket: ${S3_PUBLIC_BUCKET:}
     public-base-url: ${IMAGE_PUBLIC_BASE_URL:}
+
+trade:
+  auto-complete:
+    enabled: ${TRADE_AUTO_COMPLETE_ENABLED:false}
+    cron: ${TRADE_AUTO_COMPLETE_CRON:0 */10 * * * *}
+    time-zone: ${TRADE_AUTO_COMPLETE_TIMEZONE:Asia/Seoul}

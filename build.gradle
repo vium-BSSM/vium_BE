@@ -52,6 +52,7 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+	maxHeapSize = '1g'
 }
 
 tasks.named('bootJar') {
