@@ -27,4 +27,9 @@ public class UserReviewController {
 		return ApiResponse.ok(reviewService.create(currentUserProvider.getCurrentUserId(), tradeId, request));
 	}
 
+	@GetMapping("/api/users/{userId}/reviews")
+	public ApiResponse<UserReviewsResponse> list(@PathVariable Long userId,
+			@RequestParam(required = false) String cursor, @RequestParam(defaultValue = "20") int size) {
+		return ApiResponse.ok(reviewService.list(userId, cursor, size));
+	}
 }
