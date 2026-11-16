@@ -122,6 +122,15 @@ public class ImageService {
 		requirePurposeImage(userId, imageId, ImagePurpose.INGREDIENT);
 	}
 
+	@Transactional(readOnly = true)
+	public void requirePostImage(Long userId, Long imageId) {
+		try {
+			requirePurposeImage(userId, imageId, ImagePurpose.POST);
+		} catch (BusinessException e) {
+			throw new BusinessException(ErrorCode.INVALID_REQUEST, "내가 올린 게시물 이미지만 사용할 수 있습니다.");
+		}
+	}
+
 	private void requirePurposeImage(Long userId, Long imageId, ImagePurpose purpose) {
 		if (imageId == null || imageId <= 0) throw new BusinessException(ErrorCode.INVALID_REQUEST);
 		images.findByIdAndUserIdAndPurposeAndReadyTrue(imageId, userId, purpose)

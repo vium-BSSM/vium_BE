@@ -35,10 +35,6 @@ class ReportControllerIntegrationTest {
 
 	@BeforeEach
 	void setUp() {
-		jdbcTemplate.update("""
-			create table if not exists "posts"
-			("id" bigint primary key, "author_id" bigint not null, "deleted_at" timestamp)
-			""");
 		jdbcTemplate.update("delete from user_reports");
 		jdbcTemplate.update("delete from posts");
 		jdbcTemplate.update("delete from users");
@@ -49,10 +45,11 @@ class ReportControllerIntegrationTest {
 			       (44, 'withdrawn@example.com', 'Withdrawn', null, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 			""");
 		jdbcTemplate.update("""
-			insert into posts (id, author_id, deleted_at) values
-			(100, 43, null),
-			(101, 42, null),
-			(102, 43, CURRENT_TIMESTAMP)
+			insert into posts (id, author_id, inventory_item_id, type, status, title, description, price,
+			is_opened, latitude, longitude, like_count, created_at, updated_at, deleted_at) values
+			(100, 43, 900, 'SHARE', 'OPEN', '제목', '', 0, false, 37.5, 127.0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, null),
+			(101, 42, 901, 'SHARE', 'OPEN', '제목', '', 0, false, 37.5, 127.0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, null),
+			(102, 43, 902, 'SHARE', 'OPEN', '제목', '', 0, false, 37.5, 127.0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 			""");
 		bearer = "Bearer " + tokenService.issue(REPORTER_ID).accessToken();
 	}

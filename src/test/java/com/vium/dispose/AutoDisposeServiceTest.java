@@ -143,6 +143,26 @@ class AutoDisposeServiceTest {
 	}
 
 	@Test
+	void skipsLockedCandidatesWithoutAttemptingDisposalAndCountsAsSkipped() {
+		AutoDisposeCandidate locked = candidate(1L);
+		AutoDisposeCandidate unlocked = candidate(2L);
+		givenCandidates(locked, unlocked);
+		when(inventoryService.isLocked(1L)).thenReturn(true);
+		when(inventoryService.isLocked(2L)).thenReturn(false);
+		when(itemProcessor.disposeOneItem(eq(unlocked), any(), any(), any(), any())).thenReturn(true);
+
+		int processedCount = service.disposeExpiredItems();
+
+		assertThat(processedCount).isEqualTo(1);
+		org.mockito.Mockito.verify(itemProcessor, org.mockito.Mockito.never())
+			.disposeOneItem(eq(locked), any(), any(), any(), any());
+		String combined = appender.list.stream()
+			.map(ILoggingEvent::getFormattedMessage)
+			.reduce("", (a, b) -> a + "\n" + b);
+		assertThat(combined).contains("스킵").contains("1");
+	}
+
+	@Test
 	void returnsCountOfOnlyTrueResultsAcrossMixedOutcomes() {
 		AutoDisposeCandidate processed1 = candidate(1L);
 		AutoDisposeCandidate skipped = candidate(2L);

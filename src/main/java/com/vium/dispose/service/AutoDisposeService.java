@@ -58,6 +58,12 @@ public class AutoDisposeService {
 		int skippedCount = 0;
 		int failedCount = 0;
 		for (AutoDisposeCandidate candidate : candidates) {
+			if (inventoryService.isLocked(candidate.inventoryItemId())) {
+				skippedCount++;
+				log.info("자동 폐기 스킵(게시 중인 재고): inventoryItemId={}, userId={}",
+					candidate.inventoryItemId(), candidate.userId());
+				continue;
+			}
 			try {
 				boolean disposed = itemProcessor.disposeOneItem(
 					candidate, activeStatusId, disposedStatusId, eventSourceId, now);

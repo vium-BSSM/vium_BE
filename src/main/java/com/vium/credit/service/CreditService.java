@@ -4,16 +4,19 @@ import com.vium.credit.dto.CreditTransactionItem;
 import com.vium.credit.dto.CreditTransactionPageResponse;
 import com.vium.credit.entity.CreditTransaction;
 import com.vium.credit.entity.CreditTransactionType;
+import com.vium.credit.repository.CreditBaseValueRepository;
 import com.vium.credit.repository.CreditQueryRepository;
 import com.vium.credit.repository.CreditTransactionRepository;
 import com.vium.global.exception.BusinessException;
 import com.vium.global.exception.ErrorCode;
 import com.vium.user.service.UserProfileService;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
@@ -32,8 +35,18 @@ public class CreditService {
 
 	private final CreditTransactionRepository creditTransactionRepository;
 	private final CreditQueryRepository creditQueryRepository;
+	private final CreditBaseValueRepository creditBaseValueRepository;
 	private final UserProfileService userProfileService;
 	private final Clock clock;
+
+	/**
+	 * post 도메인이 추천가를 계산할 때 쓰는 (카테고리, 기준 단위) 기준값. 시드가 없으면 비어 있다.
+	 */
+	@Transactional(readOnly = true)
+	public Optional<BigDecimal> findBaseValue(Short categoryId, Short unitId) {
+		return creditBaseValueRepository.findByCategoryIdAndUnitId(categoryId, unitId)
+			.map(creditBaseValue -> creditBaseValue.getBaseValue());
+	}
 
 	@Transactional(readOnly = true)
 	public long getAvailableBalance(Long userId) {
