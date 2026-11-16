@@ -27,6 +27,15 @@ public class UserProfileService {
 			.orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED));
 	}
 
+	/**
+	 * 다른 도메인(예: dashboard)이 가입일을 조회할 때 쓴다. UTC 기준 naive 값이다.
+	 */
+	@Transactional(readOnly = true)
+	public LocalDateTime getCreatedAt(Long userId) {
+		return userCredentialRepository.findActiveCreatedAtById(userId)
+			.orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED));
+	}
+
 	@Transactional(readOnly = true)
 	public UserProfileRow getProfileView(Long userId) {
 		return userCredentialRepository.findActiveProfileById(userId)
