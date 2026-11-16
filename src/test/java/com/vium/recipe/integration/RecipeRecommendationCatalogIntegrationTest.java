@@ -36,7 +36,7 @@ class RecipeRecommendationCatalogIntegrationTest {
 		jdbcTemplate.update("INSERT INTO units (id, code, name) VALUES (1, 'ea', '개')");
 		jdbcTemplate.update("INSERT INTO units (id, code, name) VALUES (2, 'g', '그램')");
 		jdbcTemplate.update("INSERT INTO storage_methods (id, code, name) VALUES (1, 'cold', '냉장')");
-		jdbcTemplate.update("INSERT INTO item_statuses (id, code, name) VALUES (1, 'active', '보유중')");
+		jdbcTemplate.update("INSERT INTO item_statuses (id, code, name) VALUES (1, 'active', '보유중'), (4, 'shared', '공유중')");
 		jdbcTemplate.update(
 			"INSERT INTO ingredient_catalog (id, default_unit_id, name, created_at) VALUES (1, 1, '우유', CURRENT_TIMESTAMP)");
 		jdbcTemplate.update(

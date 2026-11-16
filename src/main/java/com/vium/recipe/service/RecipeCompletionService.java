@@ -7,6 +7,7 @@ import com.vium.global.exception.ErrorCode;
 import com.vium.global.exception.InvalidRequestException;
 import com.vium.inventory.entity.InventoryItem;
 import com.vium.inventory.repository.InventoryItemRepository;
+import com.vium.inventory.service.InventoryService;
 import com.vium.recipe.dto.RecipeCompleteRequest;
 import com.vium.recipe.repository.RecipeSuggestionRepository;
 import java.math.BigDecimal;
@@ -26,6 +27,7 @@ public class RecipeCompletionService {
 	private final InventoryItemRepository inventoryItemRepository;
 	private final ItemStatusRepository itemStatusRepository;
 	private final DisposeService disposeService;
+	private final InventoryService inventoryService;
 
 	private static final String STATUS_CONSUMED = "consumed";
 
@@ -50,6 +52,9 @@ public class RecipeCompletionService {
 
 		validateInventoryItems(userId, inventoryIds, inventoryItems);
 		validateUsedQuantities(request.usages(), inventoryItems);
+
+		// 3-1. 게시(공유) 중인 재고는 사용량이 0이어도 사용할 수 없다
+		inventoryService.assertAllNotLocked(inventoryIds);
 
 		// 4. 재고마다 차감
 		Short activeStatusId = getActiveStatusId();

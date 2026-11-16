@@ -56,7 +56,7 @@ class RecipeGenerationIntegrationTest {
 			jdbc.update("delete from " + table);
 		}
 		jdbc.update("insert into units (id,code,name) values (1,'ea','ea')");
-		jdbc.update("insert into item_statuses (id,code,name) values (1,'active','active')");
+		jdbc.update("insert into item_statuses (id,code,name) values (1,'active','active'),(4,'shared','shared')");
 		jdbc.update("insert into ingredient_catalog (id,name,default_unit_id,created_at) values (1,'Egg',1,CURRENT_TIMESTAMP)");
 		jdbc.update("""
 			insert into inventory_items (user_id,ingredient_catalog_id,initial_quantity,remaining_quantity,

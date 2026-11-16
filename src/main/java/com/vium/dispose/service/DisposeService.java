@@ -35,6 +35,7 @@ public class DisposeService {
 
 	private static final String STATUS_CONSUMED = "consumed";
 	private static final String STATUS_DISPOSED = "disposed";
+	private static final String STATUS_SHARED = "shared";
 	private static final String EVENT_SOURCE_MANUAL = "manual";
 
 	@Transactional
@@ -163,8 +164,9 @@ public class DisposeService {
 
 	@Transactional(readOnly = true)
 	public GetConsumptionEventsResponse getEvents(Long userId, LocalDate from, LocalDate to, String eventType) {
-		if (eventType != null && !STATUS_CONSUMED.equals(eventType) && !STATUS_DISPOSED.equals(eventType)) {
-			throw new InvalidRequestException("eventType must be 'consumed' or 'disposed'");
+		if (eventType != null && !STATUS_CONSUMED.equals(eventType) && !STATUS_DISPOSED.equals(eventType)
+				&& !STATUS_SHARED.equals(eventType)) {
+			throw new InvalidRequestException("eventType must be 'consumed', 'disposed' or 'shared'");
 		}
 		return new GetConsumptionEventsResponse(
 			consumptionEventQueryRepository.findEvents(userId, from, to, eventType));

@@ -71,7 +71,7 @@ class DisposeIntegrationTest {
 		jdbcTemplate.update("delete from \"event_sources\"");
 		jdbcTemplate.update("delete from \"ingredient_categories\"");
 
-		jdbcTemplate.update("insert into \"item_statuses\" (\"id\", \"code\", \"name\") values (1, 'active', '보유'), (2, 'consumed', '소진'), (3, 'disposed', '폐기')");
+		jdbcTemplate.update("insert into \"item_statuses\" (\"id\", \"code\", \"name\") values (1, 'active', '보유'), (2, 'consumed', '소진'), (3, 'disposed', '폐기'), (4, 'shared', '공유중')");
 		jdbcTemplate.update("insert into \"event_sources\" (\"id\", \"code\", \"name\") values (1, 'manual', '수동'), (2, 'auto_estimated', '자동추정')");
 		jdbcTemplate.update("""
 			insert into "inventory_items"
@@ -710,7 +710,23 @@ class DisposeIntegrationTest {
 				.header("Authorization", "Bearer " + tokenService.issue(42L).accessToken()))
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.success").value(false))
-			.andExpect(jsonPath("$.error.message").value("eventType must be 'consumed' or 'disposed'"));
+			.andExpect(jsonPath("$.error.message").value("eventType must be 'consumed', 'disposed' or 'shared'"));
+	}
+
+	@Test
+	void getConsumptionEventsEndpoint_SharedEventTypeIsAccepted() throws Exception {
+		jdbcTemplate.update("""
+			insert into "consumption_events"
+			("id", "inventory_item_id", "user_id", "event_type", "event_source_id", "quantity", "amount", "occurred_at", "created_at")
+			values (1, 100, 42, 'consumed', 1, 2, null, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			""");
+
+		mockMvc.perform(get("/api/me/consumption-events?eventType=shared")
+				.header("Authorization", "Bearer " + tokenService.issue(42L).accessToken()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.success").value(true))
+			.andExpect(jsonPath("$.data.events").isArray())
+			.andExpect(jsonPath("$.data.events.length()").value(0));
 	}
 
 	@Test

@@ -27,6 +27,7 @@ import com.vium.user.service.UserSettingsService;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -48,11 +49,13 @@ public class InventoryService {
 	private final InventoryQueryRepository inventoryQueryRepository;
 	private final UserSettingsService userSettingsService;
 	private final ImageService imageService;
+	private final List<InventoryLockChecker> lockCheckers;
 
 	@Transactional
 	public IngredientUpdateResponse update(Long userId, Long inventoryItemId, IngredientUpdateRequest request) {
 		InventoryItem item = inventoryItemRepository.findByIdAndUserId(inventoryItemId, userId)
 			.orElseThrow(() -> new NotFoundException("식재료를 찾을 수 없습니다"));
+		assertNotLocked(inventoryItemId);
 		String customName = normalizeCustomName(request.customName());
 		if (item.getIngredientCatalogId() == null && customName == null) {
 			throw new BusinessException(ErrorCode.INVALID_REQUEST, "카탈로그에 없는 재료는 customName이 필요합니다");
@@ -107,8 +110,17 @@ public class InventoryService {
 	public InventoryItemSnapshot getSnapshotForUpdate(Long userId, Long inventoryItemId) {
 		InventoryItem item = inventoryItemRepository.findByIdAndUserIdForUpdate(inventoryItemId, userId)
 			.orElseThrow(() -> new NotFoundException("Inventory item not found"));
+		assertNotLocked(inventoryItemId);
 		return new InventoryItemSnapshot(item.getId(), item.getUserId(), item.getRemainingQuantity(),
 			item.getInitialQuantity(), item.getAmount());
+	}
+
+	private void assertNotLocked(Long inventoryItemId) {
+		lockCheckers.forEach(checker -> checker.assertNotLocked(inventoryItemId));
+	}
+
+	public void assertAllNotLocked(Collection<Long> inventoryItemIds) {
+		inventoryItemIds.forEach(this::assertNotLocked);
 	}
 
 	@Transactional(readOnly = true)
