@@ -64,4 +64,15 @@ public class ChatMessage {
 		message.createdAt = now;
 		return message;
 	}
+
+	public static ChatMessage system(Long chatRoomId, String content, String systemEvent, LocalDateTime now) {
+		ChatMessage message = new ChatMessage();
+		message.chatRoomId = chatRoomId;
+		message.senderId = null;
+		message.type = ChatMessageType.SYSTEM;
+		message.content = content;
+		message.systemEvent = systemEvent;
+		message.createdAt = now;
+		return message;
+	}
 }
