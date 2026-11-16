@@ -37,6 +37,9 @@ public class CreditTransaction {
 	@Column(name = "trade_id")
 	private Long tradeId;
 
+	@Column(name = "ai_waste_report_id")
+	private Long aiWasteReportId;
+
 	@Column(name = "reward_date")
 	private LocalDate rewardDate;
 
@@ -52,6 +55,13 @@ public class CreditTransaction {
 		transaction.tradeId = tradeId;
 		transaction.rewardDate = rewardDate;
 		transaction.createdAt = createdAt;
+		return transaction;
+	}
+
+	public static CreditTransaction record(Long userId, CreditTransactionType type, int amount, Long tradeId,
+			Long aiWasteReportId, LocalDate rewardDate, LocalDateTime createdAt) {
+		CreditTransaction transaction = record(userId, type, amount, tradeId, rewardDate, createdAt);
+		transaction.aiWasteReportId = aiWasteReportId;
 		return transaction;
 	}
 }

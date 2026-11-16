@@ -99,6 +99,9 @@ credit:
   daily-reward:
     amount: ${CREDIT_DAILY_REWARD_AMOUNT:1}
 
+ai-report:
+  cost: ${AI_REPORT_COST:5}
+
 auth:
   session-cleanup:
     enabled: ${AUTH_SESSION_CLEANUP_ENABLED:false}

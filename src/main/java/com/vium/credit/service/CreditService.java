@@ -61,7 +61,7 @@ public class CreditService {
 	@Transactional
 	public void hold(Long userId, Long tradeId, int amount) {
 		requirePositive(amount);
-		applyLockedChange(userId, CreditTransactionType.TRADE_HOLD, -amount, tradeId, null);
+		applyLockedChange(userId, CreditTransactionType.TRADE_HOLD, -amount, tradeId, null, null);
 	}
 
 	@Transactional
@@ -78,11 +78,16 @@ public class CreditService {
 
 	@Transactional
 	public void deduct(Long userId, int amount, CreditTransactionType type) {
+		deduct(userId, amount, type, null);
+	}
+
+	@Transactional
+	public void deduct(Long userId, int amount, CreditTransactionType type, Long aiWasteReportId) {
 		if (type != CreditTransactionType.AI_REPORT) {
 			throw new IllegalArgumentException("deduct는 AI_REPORT 타입만 허용합니다");
 		}
 		requirePositive(amount);
-		applyLockedChange(userId, type, -amount, null, null);
+		applyLockedChange(userId, type, -amount, null, aiWasteReportId, null);
 	}
 
 	@Transactional
@@ -134,18 +139,24 @@ public class CreditService {
 	}
 
 	private void applyLockedChange(Long userId, CreditTransactionType type, int signedAmount, Long tradeId,
-			LocalDate rewardDate) {
+			Long aiWasteReportId, LocalDate rewardDate) {
 		userProfileService.lockActiveUser(userId);
 		long balance = creditTransactionRepository.sumAmountByUserId(userId);
 		if (balance + signedAmount < 0) {
 			throw new BusinessException(ErrorCode.INSUFFICIENT_CREDIT);
 		}
-		save(userId, type, signedAmount, tradeId, rewardDate);
+		save(userId, type, signedAmount, tradeId, aiWasteReportId, rewardDate);
 	}
 
 	private void save(Long userId, CreditTransactionType type, int amount, Long tradeId, LocalDate rewardDate) {
+		save(userId, type, amount, tradeId, null, rewardDate);
+	}
+
+	private void save(Long userId, CreditTransactionType type, int amount, Long tradeId, Long aiWasteReportId,
+			LocalDate rewardDate) {
 		LocalDateTime now = LocalDateTime.now(clock);
-		creditTransactionRepository.save(CreditTransaction.record(userId, type, amount, tradeId, rewardDate, now));
+		creditTransactionRepository.save(
+			CreditTransaction.record(userId, type, amount, tradeId, aiWasteReportId, rewardDate, now));
 	}
 
 	private void requirePositive(int amount) {
