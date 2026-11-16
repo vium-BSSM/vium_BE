@@ -57,6 +57,17 @@ public class UserCredentialRepository {
 			Boolean.class, userId));
 	}
 
+	/**
+	 * 호출자의 트랜잭션 안에서 users 행을 잠근다. 같은 커넥션을 공유하는 JdbcTemplate이
+	 * 활성 트랜잭션에 참여하므로, 트랜잭션이 끝날 때까지 다른 트랜잭션의 동일 행 잠금 시도를 막는다.
+	 */
+	public boolean lockActiveById(Long userId) {
+		List<Long> ids = jdbcTemplate.query(
+			"select id from users where id = ? and deleted_at is null for update",
+			(rs, rowNum) -> rs.getLong("id"), userId);
+		return !ids.isEmpty();
+	}
+
 	public Optional<UserProfileRow> findActiveProfileById(Long userId) {
 		return jdbcTemplate.query("""
 			select id, email, display_name, profile_image_id from users
