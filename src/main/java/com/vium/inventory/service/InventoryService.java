@@ -20,6 +20,7 @@ import com.vium.inventory.dto.IngredientUpdateRequest;
 import com.vium.inventory.dto.IngredientUpdateResponse;
 import com.vium.inventory.dto.InventoryItemSnapshot;
 import com.vium.inventory.dto.InventoryState;
+import com.vium.inventory.dto.TradeTransferSnapshot;
 import com.vium.inventory.entity.InventoryItem;
 import com.vium.inventory.repository.InventoryItemRepository;
 import com.vium.inventory.repository.InventoryQueryRepository;
@@ -316,5 +317,37 @@ public class InventoryService {
 			return ingredientCatalogService.getNameById(ingredientCatalogId);
 		}
 		return null;
+	}
+
+	/** 거래 완료 전용: 게시물 잠금 훅 대신 재고 행 잠금과 active 검증을 수행한다. */
+	@Transactional
+	public TradeTransferSnapshot closeAsSharedForTrade(Long sellerId, Long inventoryItemId) {
+		InventoryItem item = inventoryItemRepository.findByIdAndUserIdForUpdate(inventoryItemId, sellerId)
+			.orElseThrow(() -> new NotFoundException("식재료를 찾을 수 없습니다"));
+		Short activeId = tradeStatusId("active");
+		if (!item.getStatusId().equals(activeId) || item.getRemainingQuantity().signum() <= 0) {
+			throw new BusinessException(ErrorCode.INVENTORY_NOT_ACTIVE);
+		}
+		TradeTransferSnapshot snapshot = new TradeTransferSnapshot(item.getId(), item.getIngredientCatalogId(),
+			item.getCustomName(), item.getUnitId(), item.getStorageMethodId(), item.getRemainingQuantity(),
+			item.getInitialQuantity(), item.getAmount(), item.getExpiresOn());
+		item.updateStatus(item.getRemainingQuantity(), tradeStatusId("shared"));
+		return snapshot;
+	}
+
+	/** 자동 완료 시 이미 지난 소비기한도 원본 그대로 이전한다. 판매자 이미지·구매 금액은 이전하지 않는다. */
+	@Transactional
+	public Long registerFromTrade(Long buyerId, TradeTransferSnapshot source, LocalDate purchasedOn) {
+		return inventoryItemRepository.save(InventoryItem.builder().userId(buyerId)
+			.ingredientCatalogId(source.ingredientCatalogId()).customName(source.customName())
+			.unitId(source.unitId()).storageMethodId(source.storageMethodId()).statusId(tradeStatusId("active"))
+			.initialQuantity(source.remainingQuantity()).remainingQuantity(source.remainingQuantity())
+			.expiresOn(source.expiresOn()).purchasedOn(purchasedOn).build()).getId();
+	}
+
+	private Short tradeStatusId(String code) {
+		return itemStatusRepository.findByCode(code)
+			.orElseThrow(() -> new BusinessException(ErrorCode.INTERNAL_ERROR, "item_statuses 시드 데이터가 없습니다"))
+			.getId();
 	}
 }

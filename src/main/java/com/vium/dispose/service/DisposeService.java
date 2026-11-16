@@ -221,4 +221,13 @@ public class DisposeService {
 			.map(status -> status.getId())
 			.orElseThrow(() -> new NotFoundException("Status not found: " + code));
 	}
+
+	@Transactional
+	public void recordSharedEvent(Long userId, Long inventoryItemId, BigDecimal quantity, BigDecimal amount,
+			LocalDateTime occurredAt) {
+		Short sourceId = eventSourceRepository.findByCode(EVENT_SOURCE_MANUAL)
+			.orElseThrow(() -> new NotFoundException("Event source not found: " + EVENT_SOURCE_MANUAL)).getId();
+		consumptionEventRepository.save(ConsumptionEvent.create(
+			inventoryItemId, userId, STATUS_SHARED, sourceId, quantity, amount, occurredAt));
+	}
 }
