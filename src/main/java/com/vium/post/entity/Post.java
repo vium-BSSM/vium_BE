@@ -115,4 +115,36 @@ public class Post {
 		this.status = next;
 		this.updatedAt = now;
 	}
+
+	public boolean isOwnedBy(Long userId) {
+		return this.authorId.equals(userId);
+	}
+
+	public void softDelete(LocalDateTime now) {
+		this.deletedAt = now;
+		this.updatedAt = now;
+	}
+
+	public void changeTitle(String title, LocalDateTime now) {
+		this.title = title;
+		this.updatedAt = now;
+	}
+
+	public void changeDescription(String description, LocalDateTime now) {
+		this.description = description == null ? "" : description;
+		this.updatedAt = now;
+	}
+
+	public void changePrice(int price, LocalDateTime now) {
+		this.price = price;
+		this.updatedAt = now;
+	}
+
+	public void incrementLikeCount() {
+		this.likeCount = this.likeCount + 1;
+	}
+
+	public void decrementLikeCount() {
+		this.likeCount = Math.max(0, this.likeCount - 1);
+	}
 }

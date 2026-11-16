@@ -115,6 +115,21 @@ public class InventoryService {
 			item.getInitialQuantity(), item.getAmount());
 	}
 
+	/**
+	 * 게시물 등록(post 도메인)이 재고의 보관 방법을 함께 갱신할 때 쓴다.
+	 * 다른 필드는 건드리지 않는다. 등록 시점에는 아직 게시물이 없으므로 잠금 검사를 통과한다.
+	 */
+	@Transactional
+	public void updateStorageMethod(Long userId, Long inventoryItemId, Short storageMethodId) {
+		InventoryItem item = inventoryItemRepository.findByIdAndUserId(inventoryItemId, userId)
+			.orElseThrow(() -> new NotFoundException("식재료를 찾을 수 없습니다"));
+		assertNotLocked(inventoryItemId);
+		if (!storageMethodRepository.existsById(storageMethodId)) {
+			throw new BusinessException(ErrorCode.INVALID_REQUEST, "존재하지 않는 storageMethodId 입니다");
+		}
+		item.changeStorageMethod(storageMethodId);
+	}
+
 	private void assertNotLocked(Long inventoryItemId) {
 		lockCheckers.forEach(checker -> checker.assertNotLocked(inventoryItemId));
 	}
