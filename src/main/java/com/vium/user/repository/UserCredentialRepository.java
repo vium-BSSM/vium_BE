@@ -51,6 +51,13 @@ public class UserCredentialRepository {
 				rs.getString("display_name")), userId).stream().findFirst();
 	}
 
+	public Optional<LocalDateTime> findActiveCreatedAtById(Long userId) {
+		return jdbcTemplate.query("""
+			select created_at from users
+			where id = ? and deleted_at is null
+			""", (rs, rowNum) -> rs.getObject("created_at", LocalDateTime.class), userId).stream().findFirst();
+	}
+
 	public boolean existsActiveById(Long userId) {
 		return Boolean.TRUE.equals(jdbcTemplate.queryForObject(
 			"select exists (select 1 from users where id = ? and deleted_at is null)",
