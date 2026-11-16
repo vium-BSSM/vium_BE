@@ -131,6 +131,25 @@ public class ImageService {
 		}
 	}
 
+	@Transactional(readOnly = true)
+	public void requireChatImage(Long userId, Long imageId) {
+		try {
+			requirePurposeImage(userId, imageId, ImagePurpose.CHAT);
+		} catch (BusinessException e) {
+			throw new BusinessException(ErrorCode.INVALID_REQUEST, "내가 업로드한 채팅 이미지만 사용할 수 있습니다.");
+		}
+	}
+
+	/**
+	 * 채팅 참여자 검증을 마친 뒤 호출한다. 소유자 검사 없이 CHAT 이미지의 임시 조회 URL을 발급한다.
+	 */
+	@Transactional(readOnly = true)
+	public ImageAccessResponse accessChatImage(Long imageId) {
+		var image = images.findByIdAndPurposeAndReadyTrue(imageId, ImagePurpose.CHAT)
+			.orElseThrow(() -> new BusinessException(ErrorCode.IMAGE_NOT_FOUND));
+		return storage.access(image);
+	}
+
 	private void requirePurposeImage(Long userId, Long imageId, ImagePurpose purpose) {
 		if (imageId == null || imageId <= 0) throw new BusinessException(ErrorCode.INVALID_REQUEST);
 		images.findByIdAndUserIdAndPurposeAndReadyTrue(imageId, userId, purpose)
