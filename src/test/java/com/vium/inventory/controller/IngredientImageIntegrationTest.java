@@ -52,7 +52,7 @@ class IngredientImageIntegrationTest {
 			""");
 		jdbcTemplate.update("insert into units (id, code, name) values (1, 'ea', '개')");
 		jdbcTemplate.update("insert into storage_methods (id, code, name) values (1, 'cold', '냉장')");
-		jdbcTemplate.update("insert into item_statuses (id, code, name) values (1, 'active', '보유중')");
+		jdbcTemplate.update("insert into item_statuses (id, code, name) values (1, 'active', '보유중'), (4, 'shared', '공유중')");
 	}
 
 	@Test

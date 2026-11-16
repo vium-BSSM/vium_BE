@@ -51,7 +51,7 @@ class AutoDisposeIntegrationTest {
 		jdbcTemplate.update("delete from \"item_statuses\"");
 		jdbcTemplate.update("delete from \"event_sources\"");
 
-		jdbcTemplate.update("insert into \"item_statuses\" (\"id\", \"code\", \"name\") values (1, 'active', '보유'), (2, 'consumed', '소진'), (3, 'disposed', '폐기')");
+		jdbcTemplate.update("insert into \"item_statuses\" (\"id\", \"code\", \"name\") values (1, 'active', '보유'), (2, 'consumed', '소진'), (3, 'disposed', '폐기'), (4, 'shared', '공유중')");
 		jdbcTemplate.update("insert into \"event_sources\" (\"id\", \"code\", \"name\") values (1, 'manual', '수동'), (2, 'auto_estimated', '자동추정')");
 	}
 

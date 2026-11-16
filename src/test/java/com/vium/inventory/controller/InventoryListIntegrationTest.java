@@ -42,7 +42,7 @@ class InventoryListIntegrationTest {
 		jdbcTemplate.update("insert into units (id, code, name) values (1, 'ea', '개')");
 		jdbcTemplate.update("""
 			insert into item_statuses (id, code, name)
-			values (1, 'active', '보유중'), (2, 'consumed', '소진'), (3, 'disposed', '폐기')
+			values (1, 'active', '보유중'), (2, 'consumed', '소진'), (3, 'disposed', '폐기'), (4, 'shared', '공유중')
 			""");
 		jdbcTemplate.update("insert into ingredient_categories (id, name) values (1, '유제품')");
 		jdbcTemplate.update("""
