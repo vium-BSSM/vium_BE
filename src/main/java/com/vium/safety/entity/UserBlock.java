@@ -27,4 +27,12 @@ public class UserBlock {
 
 	@Column(name = "created_at", nullable = false)
 	private LocalDateTime createdAt;
+
+	public static UserBlock create(Long blockerId, Long blockedId, LocalDateTime createdAt) {
+		UserBlock block = new UserBlock();
+		block.blockerId = blockerId;
+		block.blockedId = blockedId;
+		block.createdAt = createdAt;
+		return block;
+	}
 }

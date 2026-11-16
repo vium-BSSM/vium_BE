@@ -44,6 +44,16 @@ public class UserProfileService {
 		}
 	}
 
+	/**
+	 * 다른 도메인(예: safety)이 대상 사용자가 존재하고 탈퇴하지 않았는지만 확인할 때 쓴다. 잠그지 않는다.
+	 */
+	@Transactional(readOnly = true)
+	public void requireActiveUser(Long userId) {
+		if (!userCredentialRepository.existsActiveById(userId)) {
+			throw new BusinessException(ErrorCode.USER_NOT_FOUND);
+		}
+	}
+
 	@Transactional
 	public UserProfileRow updateProfile(Long userId, String rawDisplayName, Long profileImageId) {
 		String displayName = normalizeDisplayName(rawDisplayName);

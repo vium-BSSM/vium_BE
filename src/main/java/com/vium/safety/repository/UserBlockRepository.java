@@ -21,4 +21,8 @@ public interface UserBlockRepository extends JpaRepository<UserBlock, UserBlockI
 
 	@Query("select b.blockerId from UserBlock b where b.blockedId = :userId")
 	List<Long> findBlockerIdsByBlockedId(@Param("userId") Long userId);
+
+	boolean existsByBlockerIdAndBlockedId(Long blockerId, Long blockedId);
+
+	void deleteByBlockerIdAndBlockedId(Long blockerId, Long blockedId);
 }

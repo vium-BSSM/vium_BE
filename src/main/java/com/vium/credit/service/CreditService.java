@@ -1,7 +1,10 @@
 package com.vium.credit.service;
 
+import com.vium.credit.dto.CreditTransactionItem;
+import com.vium.credit.dto.CreditTransactionPageResponse;
 import com.vium.credit.entity.CreditTransaction;
 import com.vium.credit.entity.CreditTransactionType;
+import com.vium.credit.repository.CreditQueryRepository;
 import com.vium.credit.repository.CreditTransactionRepository;
 import com.vium.global.exception.BusinessException;
 import com.vium.global.exception.ErrorCode;
@@ -9,7 +12,11 @@ import com.vium.user.service.UserProfileService;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,16 +24,25 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class CreditService {
 
+	private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
 	private static final int SAVING_BONUS_DAILY_LIMIT = 3;
 	private static final int SAVING_BONUS_AMOUNT = 1;
+	private static final int MIN_TRANSACTION_PAGE_SIZE = 1;
+	private static final int MAX_TRANSACTION_PAGE_SIZE = 50;
 
 	private final CreditTransactionRepository creditTransactionRepository;
+	private final CreditQueryRepository creditQueryRepository;
 	private final UserProfileService userProfileService;
 	private final Clock clock;
 
 	@Transactional(readOnly = true)
 	public long getAvailableBalance(Long userId) {
 		return creditTransactionRepository.sumAmountByUserId(userId);
+	}
+
+	@Transactional(readOnly = true)
+	public long getHeldBalance(Long userId) {
+		return creditQueryRepository.sumHeldBalance(userId);
 	}
 
 	@Transactional
@@ -67,6 +83,41 @@ public class CreditService {
 		}
 		save(sellerId, CreditTransactionType.SAVING_BONUS, SAVING_BONUS_AMOUNT, tradeId, today);
 		return true;
+	}
+
+	@Transactional(readOnly = true)
+	public CreditTransactionPageResponse getTransactionPage(Long userId, CreditTransactionType type, Long cursor,
+			int size) {
+		if (size < MIN_TRANSACTION_PAGE_SIZE || size > MAX_TRANSACTION_PAGE_SIZE) {
+			throw new BusinessException(ErrorCode.INVALID_REQUEST,
+				"size는 " + MIN_TRANSACTION_PAGE_SIZE + "~" + MAX_TRANSACTION_PAGE_SIZE + " 사이여야 합니다");
+		}
+		List<CreditTransaction> rows = creditTransactionRepository
+			.findPage(userId, type, cursor, PageRequest.of(0, size + 1));
+		boolean hasNext = rows.size() > size;
+		List<CreditTransaction> page = hasNext ? rows.subList(0, size) : rows;
+		List<CreditTransactionItem> items = page.stream()
+			.map(t -> new CreditTransactionItem(t.getId(), t.getType(), t.getAmount(), t.getTradeId(),
+				t.getCreatedAt().atZone(SEOUL).toOffsetDateTime()))
+			.toList();
+		Long nextCursor = hasNext ? page.get(page.size() - 1).getId() : null;
+		return new CreditTransactionPageResponse(items, nextCursor, hasNext);
+	}
+
+	@Transactional
+	public long claimDailyReward(Long userId, int amount) {
+		LocalDate today = LocalDate.now(clock);
+		if (creditTransactionRepository
+				.countByUserIdAndTypeAndRewardDate(userId, CreditTransactionType.DAILY_REWARD, today) > 0) {
+			throw new BusinessException(ErrorCode.DAILY_REWARD_ALREADY_CLAIMED);
+		}
+		try {
+			creditTransactionRepository.saveAndFlush(CreditTransaction.record(
+				userId, CreditTransactionType.DAILY_REWARD, amount, null, today, LocalDateTime.now(clock)));
+		} catch (DataIntegrityViolationException claimedByConcurrentRequest) {
+			throw new BusinessException(ErrorCode.DAILY_REWARD_ALREADY_CLAIMED);
+		}
+		return creditTransactionRepository.sumAmountByUserId(userId);
 	}
 
 	private void applyLockedChange(Long userId, CreditTransactionType type, int signedAmount, Long tradeId,
