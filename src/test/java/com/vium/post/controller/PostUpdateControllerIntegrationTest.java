@@ -10,6 +10,8 @@ import com.vium.post.entity.Post;
 import com.vium.post.entity.PostStatus;
 import com.vium.post.entity.PostType;
 import com.vium.post.repository.PostRepository;
+import com.vium.trade.entity.Trade;
+import com.vium.trade.repository.TradeRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDate;
@@ -50,6 +52,9 @@ class PostUpdateControllerIntegrationTest {
 
 	@Autowired
 	private Clock clock;
+
+	@Autowired
+	private TradeRepository tradeRepository;
 
 	private long nextCatalogId = 1;
 	private long nextInventoryItemId = 1;
@@ -328,6 +333,20 @@ class PostUpdateControllerIntegrationTest {
 	@Test
 	void returns409ForExpiredPost() throws Exception {
 		Post post = createPost(PostType.SHARE, PostStatus.EXPIRED, 0, null);
+
+		mockMvc.perform(patch("/api/me/posts/" + post.getId()).header("Authorization", bearer(USER_ID))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{"title":"새제목"}
+					"""))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error.code").value("POST_LOCKED"));
+	}
+
+	@Test
+	void returns409ForOpenPostWithRequestedTrade() throws Exception {
+		Post post = createPost(PostType.SHARE, PostStatus.OPEN, 0, null);
+		tradeRepository.save(Trade.request(post.getId(), OTHER_USER_ID, USER_ID, 0, LocalDateTime.now(clock)));
 
 		mockMvc.perform(patch("/api/me/posts/" + post.getId()).header("Authorization", bearer(USER_ID))
 				.contentType(MediaType.APPLICATION_JSON)

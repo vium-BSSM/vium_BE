@@ -9,6 +9,7 @@ import com.vium.post.entity.Post;
 import com.vium.post.entity.PostImage;
 import com.vium.post.entity.PostStatus;
 import com.vium.post.entity.PostType;
+import com.vium.post.repository.PostDetailQueryRepository;
 import com.vium.post.repository.PostImageRepository;
 import java.time.Clock;
 import java.time.LocalDateTime;
@@ -32,6 +33,7 @@ public class PostUpdateService {
 	private final PostImageRepository postImageRepository;
 	private final PostPricingService postPricingService;
 	private final PostDetailAssembler postDetailAssembler;
+	private final PostDetailQueryRepository postDetailQueryRepository;
 	private final Clock clock;
 
 	@Transactional
@@ -45,6 +47,9 @@ public class PostUpdateService {
 			throw new BusinessException(ErrorCode.POST_NOT_FOUND);
 		}
 		if (post.getStatus() != PostStatus.OPEN) {
+			throw new BusinessException(ErrorCode.POST_LOCKED);
+		}
+		if (postDetailQueryRepository.existsActiveTrade(postId)) {
 			throw new BusinessException(ErrorCode.POST_LOCKED);
 		}
 
