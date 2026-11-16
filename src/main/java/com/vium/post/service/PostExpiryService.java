@@ -12,7 +12,7 @@ import org.springframework.stereotype.Service;
  * 소비기한이 지난 OPEN 게시물을 EXPIRED로 바꾼다. 스케줄러({@link PostExpiryScheduler})와
  * post.expiry.enabled 값과 무관하게 항상 빈으로 존재해야 하므로, 활성화 조건은 스케줄러에 둔다.
  * AutoDisposeService와 같은 원칙: 게시물 한 건 실패가 나머지를 막지 않는다(항목별 try/catch,
- * PostStateService.markExpired가 각자 자기 트랜잭션에서 실행된다).
+ * PostExpiryProcessor.expire가 각자 자기 트랜잭션에서 실행된다).
  */
 @Slf4j
 @Service
@@ -20,7 +20,7 @@ import org.springframework.stereotype.Service;
 public class PostExpiryService {
 
 	private final PostExpiryQueryRepository postExpiryQueryRepository;
-	private final PostStateService postStateService;
+	private final PostExpiryProcessor postExpiryProcessor;
 	private final Clock clock;
 
 	public int expireOpenPosts() {
@@ -31,8 +31,7 @@ public class PostExpiryService {
 		int failedCount = 0;
 		for (Long postId : postIds) {
 			try {
-				postStateService.markExpired(postId);
-				processedCount++;
+				if (postExpiryProcessor.expire(postId)) processedCount++;
 			} catch (Exception e) {
 				failedCount++;
 				log.error("게시물 만료 처리 실패: postId={}", postId, e);

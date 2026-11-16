@@ -3,7 +3,6 @@ package com.vium.post.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -25,19 +24,19 @@ import org.junit.jupiter.api.Test;
 class PostExpiryServiceTest {
 
 	private final PostExpiryQueryRepository postExpiryQueryRepository = mock(PostExpiryQueryRepository.class);
-	private final PostStateService postStateService = mock(PostStateService.class);
+	private final PostExpiryProcessor postExpiryProcessor = mock(PostExpiryProcessor.class);
 	private final Clock clock = Clock.fixed(Instant.parse("2026-11-01T00:00:00Z"), ZoneOffset.UTC);
 
 	private final PostExpiryService service =
-		new PostExpiryService(postExpiryQueryRepository, postStateService, clock);
+		new PostExpiryService(postExpiryQueryRepository, postExpiryProcessor, clock);
 
 	@Test
 	void continuesProcessingRemainingPostsWhenOneThrows() {
 		when(postExpiryQueryRepository.findOpenPostIdsWithExpiredIngredient(LocalDate.now(clock)))
 			.thenReturn(List.of(1L, 2L, 3L));
-		doNothing().when(postStateService).markExpired(1L);
-		doThrow(new IllegalStateException("이미 RESERVED")).when(postStateService).markExpired(2L);
-		doNothing().when(postStateService).markExpired(3L);
+		when(postExpiryProcessor.expire(1L)).thenReturn(true);
+		doThrow(new IllegalStateException("이미 RESERVED")).when(postExpiryProcessor).expire(2L);
+		when(postExpiryProcessor.expire(3L)).thenReturn(true);
 
 		int processedCount = service.expireOpenPosts();
 
@@ -48,7 +47,7 @@ class PostExpiryServiceTest {
 	void doesNotPropagateExceptionWhenAllPostsFail() {
 		when(postExpiryQueryRepository.findOpenPostIdsWithExpiredIngredient(LocalDate.now(clock)))
 			.thenReturn(List.of(1L, 2L));
-		doThrow(new IllegalStateException("boom")).when(postStateService).markExpired(anyLong());
+		doThrow(new IllegalStateException("boom")).when(postExpiryProcessor).expire(anyLong());
 
 		int[] processedCount = new int[1];
 		assertThatCode(() -> processedCount[0] = service.expireOpenPosts()).doesNotThrowAnyException();
@@ -64,6 +63,6 @@ class PostExpiryServiceTest {
 		int processedCount = service.expireOpenPosts();
 
 		assertThat(processedCount).isZero();
-		verify(postStateService, never()).markExpired(anyLong());
+		verify(postExpiryProcessor, never()).expire(anyLong());
 	}
 }

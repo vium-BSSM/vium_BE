@@ -469,6 +469,7 @@ CREATE TABLE "trades" (
   "requested_at" timestamp NOT NULL,
   "accepted_at" timestamp,
   "auto_resolve_at" timestamp,
+  "auto_complete_notified_at" timestamp,
   "completed_at" timestamp,
   "closed_at" timestamp,
   CONSTRAINT "chk_trades_status" CHECK ("status" IN ('REQUESTED', 'ACCEPTED', 'COMPLETED', 'REJECTED', 'CANCELED'))
@@ -726,3 +727,5 @@ ALTER TABLE "user_push_tokens" ADD FOREIGN KEY ("user_id") REFERENCES "users" ("
 ALTER TABLE uploaded_images DROP CONSTRAINT uploaded_images_purpose_check;
 ALTER TABLE uploaded_images ADD CONSTRAINT uploaded_images_purpose_check
     CHECK (purpose IN ('RECEIPT', 'PROFILE', 'RECIPE', 'INGREDIENT', 'POST', 'CHAT'));
+
+COMMENT ON COLUMN "trades"."auto_complete_notified_at" IS '자동 완료 24시간 전 안내를 보낸 시각. 중복 안내 방지';
