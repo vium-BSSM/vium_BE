@@ -54,6 +54,12 @@ public class PostDetailQueryRepository {
 		}
 	}
 
+	public boolean existsActiveTrade(Long postId) {
+		return Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+			"select exists (select 1 from trades where post_id = ? and status in ('REQUESTED', 'ACCEPTED'))",
+			Boolean.class, postId));
+	}
+
 	public Long findActiveTradeId(Long postId, Long userId) {
 		String sql = """
 			select id from trades

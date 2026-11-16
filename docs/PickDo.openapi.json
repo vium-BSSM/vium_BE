@@ -6316,7 +6316,7 @@
             }
           },
           "409": {
-            "description": "삭제할 수 없는 상태",
+            "description": "삭제할 수 없는 상태 (OPEN 게시물의 REQUESTED 거래도 포함)",
             "content": {
               "application/json": {
                 "schema": {

@@ -471,6 +471,7 @@ Table trades {
   cancel_reason varchar(200)
   requested_at timestamp [not null]
   accepted_at timestamp
+  auto_complete_notified_at timestamp [note: '자동 완료 24시간 전 안내를 보낸 시각. 중복 안내 방지']
   auto_resolve_at timestamp [note: '자동 완료 시각 = accepted_at + 72시간. 24시간 전 SYSTEM 메시지로 안내']
   completed_at timestamp
   closed_at timestamp [note: '거절·취소 시각']
