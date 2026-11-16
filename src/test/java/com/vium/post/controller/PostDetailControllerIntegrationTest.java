@@ -9,6 +9,11 @@ import com.vium.post.entity.Post;
 import com.vium.post.entity.PostStatus;
 import com.vium.post.entity.PostType;
 import com.vium.post.repository.PostRepository;
+import com.vium.trade.entity.Trade;
+import com.vium.trade.entity.TradeReview;
+import com.vium.trade.entity.TradeStatus;
+import com.vium.trade.repository.TradeRepository;
+import com.vium.trade.repository.TradeReviewRepository;
 import java.time.LocalDateTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -23,8 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 @SpringBootTest(properties = "spring.datasource.url=jdbc:h2:mem:post-detail-get-test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1")
 @AutoConfigureMockMvc
 @Transactional
-@Sql(scripts = {"/db/inventory-query-support.sql", "/db/trade-reference-support.sql"},
-	executionPhase = Sql.ExecutionPhase.BEFORE_TEST_CLASS)
+@Sql(scripts = "/db/inventory-query-support.sql", executionPhase = Sql.ExecutionPhase.BEFORE_TEST_CLASS)
 class PostDetailControllerIntegrationTest {
 
 	private static final Long AUTHOR_ID = 7L;
@@ -42,6 +46,12 @@ class PostDetailControllerIntegrationTest {
 
 	@Autowired
 	private PostRepository postRepository;
+
+	@Autowired
+	private TradeRepository tradeRepository;
+
+	@Autowired
+	private TradeReviewRepository tradeReviewRepository;
 
 	private long nextInventoryItemId = 1;
 
@@ -179,27 +189,45 @@ class PostDetailControllerIntegrationTest {
 	@Test
 	void showsActiveTradeIdWhenViewerIsParticipant() throws Exception {
 		Post post = createPost(PostStatus.RESERVED, false);
-		jdbcTemplate.update("""
-			insert into trades (id, post_id, buyer_id, seller_id, status, price, requested_at)
-			values (1, ?, ?, ?, 'REQUESTED', 1000, CURRENT_TIMESTAMP)
-			""", post.getId(), VIEWER_ID, AUTHOR_ID);
+		Trade trade = tradeRepository.save(Trade.builder()
+			.postId(post.getId())
+			.buyerId(VIEWER_ID)
+			.sellerId(AUTHOR_ID)
+			.status(TradeStatus.REQUESTED)
+			.price(1000)
+			.requestedAt(LocalDateTime.now())
+			.build());
 
 		mockMvc.perform(get("/api/posts/" + post.getId()).header("Authorization", bearer(VIEWER_ID)))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.data.activeTradeId").value(1));
+			.andExpect(jsonPath("$.data.activeTradeId").value(trade.getId()));
 	}
 
 	@Test
 	void mannerScoreIsAveragedToOneDecimalPlace() throws Exception {
 		Post post = createPost(PostStatus.OPEN, false);
-		jdbcTemplate.update("""
-			insert into trades (id, post_id, buyer_id, seller_id, status, price, requested_at)
-			values (10, ?, 100, ?, 'COMPLETED', 1000, CURRENT_TIMESTAMP)
-			""", post.getId(), AUTHOR_ID);
-		jdbcTemplate.update("""
-			insert into trade_reviews (trade_id, writer_id, target_user_id, manner_score, created_at)
-			values (10, 100, ?, 5, CURRENT_TIMESTAMP), (10, 101, ?, 4, CURRENT_TIMESTAMP)
-			""", AUTHOR_ID, AUTHOR_ID);
+		Trade trade = tradeRepository.save(Trade.builder()
+			.postId(post.getId())
+			.buyerId(100L)
+			.sellerId(AUTHOR_ID)
+			.status(TradeStatus.COMPLETED)
+			.price(1000)
+			.requestedAt(LocalDateTime.now())
+			.build());
+		tradeReviewRepository.save(TradeReview.builder()
+			.tradeId(trade.getId())
+			.writerId(100L)
+			.targetUserId(AUTHOR_ID)
+			.mannerScore((short) 5)
+			.createdAt(LocalDateTime.now())
+			.build());
+		tradeReviewRepository.save(TradeReview.builder()
+			.tradeId(trade.getId())
+			.writerId(101L)
+			.targetUserId(AUTHOR_ID)
+			.mannerScore((short) 4)
+			.createdAt(LocalDateTime.now())
+			.build());
 
 		mockMvc.perform(get("/api/posts/" + post.getId()).header("Authorization", bearer(VIEWER_ID)))
 			.andExpect(status().isOk())

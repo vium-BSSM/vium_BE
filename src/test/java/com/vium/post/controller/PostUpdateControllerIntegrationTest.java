@@ -29,8 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 @SpringBootTest(properties = "spring.datasource.url=jdbc:h2:mem:post-domain-test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1")
 @AutoConfigureMockMvc
 @Transactional
-@Sql(scripts = {"/db/inventory-query-support.sql", "/db/trade-reference-support.sql"},
-	executionPhase = Sql.ExecutionPhase.BEFORE_TEST_CLASS)
+@Sql(scripts = "/db/inventory-query-support.sql", executionPhase = Sql.ExecutionPhase.BEFORE_TEST_CLASS)
 class PostUpdateControllerIntegrationTest {
 
 	private static final Long USER_ID = 42L;

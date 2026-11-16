@@ -10,6 +10,9 @@ import com.vium.post.entity.Post;
 import com.vium.post.entity.PostStatus;
 import com.vium.post.entity.PostType;
 import com.vium.post.repository.PostRepository;
+import com.vium.trade.entity.Trade;
+import com.vium.trade.entity.TradeStatus;
+import com.vium.trade.repository.TradeRepository;
 import java.time.LocalDateTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,8 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 @SpringBootTest(properties = "spring.datasource.url=jdbc:h2:mem:ingredient-delete-test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1")
 @AutoConfigureMockMvc
 @Transactional
-@Sql(scripts = {"/db/inventory-query-support.sql", "/db/trade-reference-support.sql"},
-	executionPhase = Sql.ExecutionPhase.BEFORE_TEST_CLASS)
+@Sql(scripts = "/db/inventory-query-support.sql", executionPhase = Sql.ExecutionPhase.BEFORE_TEST_CLASS)
 class IngredientDeleteControllerIntegrationTest {
 
 	private static final Long USER_ID = 42L;
@@ -42,6 +44,9 @@ class IngredientDeleteControllerIntegrationTest {
 
 	@Autowired
 	private PostRepository postRepository;
+
+	@Autowired
+	private TradeRepository tradeRepository;
 
 	@Autowired
 	private jakarta.persistence.EntityManager entityManager;
@@ -216,10 +221,15 @@ class IngredientDeleteControllerIntegrationTest {
 	@Test
 	void returns409HasHistoryForTradeReceivedInventory() throws Exception {
 		Long itemId = insertInventoryItem(USER_ID);
-		jdbcTemplate.update("""
-			insert into trades (post_id, buyer_id, seller_id, status, price, buyer_inventory_item_id, requested_at)
-			values (999, ?, 998, 'COMPLETED', 1000, ?, CURRENT_TIMESTAMP)
-			""", USER_ID, itemId);
+		tradeRepository.save(Trade.builder()
+			.postId(999L)
+			.buyerId(USER_ID)
+			.sellerId(998L)
+			.status(TradeStatus.COMPLETED)
+			.price(1000)
+			.buyerInventoryItemId(itemId)
+			.requestedAt(LocalDateTime.now())
+			.build());
 
 		mockMvc.perform(delete("/api/me/ingredients/" + itemId).header("Authorization", bearer(USER_ID)))
 			.andExpect(status().isConflict())
