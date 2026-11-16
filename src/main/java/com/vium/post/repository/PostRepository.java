@@ -17,4 +17,6 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 	Optional<Post> findByIdForUpdate(@Param("id") Long id);
 
 	boolean existsByInventoryItemIdAndDeletedAtIsNullAndStatusIn(Long inventoryItemId, Collection<PostStatus> statuses);
+
+	Optional<Post> findByIdAndDeletedAtIsNull(Long id);
 }

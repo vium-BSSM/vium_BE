@@ -38,6 +38,14 @@ public class NotificationService {
 		return new NotificationReadResponse(notification.getId(), notification.getReadAt());
 	}
 
+	/**
+	 * 재료 삭제(post 도메인)가 해당 재고를 가리키는 알림을 함께 정리할 때 쓴다.
+	 */
+	@Transactional
+	public void deleteByInventoryItemId(Long inventoryItemId) {
+		notifications.deleteByInventoryItemId(inventoryItemId);
+	}
+
 	private NotificationDto toDto(Notification notification) {
 		return new NotificationDto(notification.getId(), notification.getType(), notification.getTitle(),
 			notification.getBody(), notification.getScheduledAt(), notification.getSentAt(), notification.getReadAt());

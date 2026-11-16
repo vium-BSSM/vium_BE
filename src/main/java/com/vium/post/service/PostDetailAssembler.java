@@ -34,6 +34,33 @@ public class PostDetailAssembler {
 	private final PostDetailQueryRepository postDetailQueryRepository;
 	private final PostLikeRepository postLikeRepository;
 
+	/**
+	 * 좌표가 주어지면 Haversine으로 distanceMeters를 계산해 채운다(목록/상세 GET이 쓴다).
+	 * 좌표가 없으면 2-인자 assemble과 동일하게 distanceMeters는 null이다.
+	 */
+	@Transactional(readOnly = true)
+	public PostDetailResponse assemble(Post post, Long viewerId, Double latitude, Double longitude) {
+		PostDetailResponse base = assemble(post, viewerId);
+		if (latitude == null || longitude == null) {
+			return base;
+		}
+		int distanceMeters = haversineMeters(latitude, longitude, post.getLatitude(), post.getLongitude());
+		return new PostDetailResponse(base.postId(), base.type(), base.status(), base.title(), base.description(),
+			base.images(), base.author(), base.ingredient(), base.price(), distanceMeters, base.likeCount(),
+			base.likedByMe(), base.isMine(), base.activeTradeId(), base.createdAt(), base.updatedAt());
+	}
+
+	private static int haversineMeters(double lat1, double lng1, double lat2, double lng2) {
+		double earthRadiusMeters = 6_371_000;
+		double dLat = Math.toRadians(lat2 - lat1);
+		double dLng = Math.toRadians(lng2 - lng1);
+		double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+			+ Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+			* Math.sin(dLng / 2) * Math.sin(dLng / 2);
+		double c = 2 * Math.asin(Math.sqrt(a));
+		return (int) Math.round(earthRadiusMeters * c);
+	}
+
 	@Transactional(readOnly = true)
 	public PostDetailResponse assemble(Post post, Long viewerId) {
 		IngredientDetailResponse ingredientDetail = inventoryService.getDetail(post.getAuthorId(), post.getInventoryItemId());

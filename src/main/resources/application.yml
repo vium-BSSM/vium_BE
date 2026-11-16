@@ -89,6 +89,12 @@ disposal:
     cron: ${DISPOSAL_AUTO_DISPOSE_CRON:0 10 0 * * *}
     time-zone: ${DISPOSAL_AUTO_DISPOSE_TIMEZONE:Asia/Seoul}
 
+post:
+  expiry:
+    enabled: ${POST_EXPIRY_ENABLED:false}
+    cron: ${POST_EXPIRY_CRON:0 0 0 * * *}
+    time-zone: ${POST_EXPIRY_TIMEZONE:Asia/Seoul}
+
 credit:
   daily-reward:
     amount: ${CREDIT_DAILY_REWARD_AMOUNT:1}

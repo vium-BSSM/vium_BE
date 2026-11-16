@@ -65,6 +65,22 @@ public class PostDetailQueryRepository {
 		return ids.isEmpty() ? null : ids.get(0);
 	}
 
+	/**
+	 * 재료 삭제 전 이력 확인용. 삭제된 게시물도 이력으로 친다(deleted_at 무시).
+	 */
+	public boolean existsAnyPostForInventoryItem(Long inventoryItemId) {
+		return Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+			"select exists (select 1 from posts where inventory_item_id = ?)", Boolean.class, inventoryItemId));
+	}
+
+	/**
+	 * 재료 삭제 전 이력 확인용. 거래로 받아 생긴 재고인지(trades.buyer_inventory_item_id) 확인한다.
+	 */
+	public boolean existsTradeReceivingInventoryItem(Long inventoryItemId) {
+		return Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+			"select exists (select 1 from trades where buyer_inventory_item_id = ?)", Boolean.class, inventoryItemId));
+	}
+
 	private String imageUrl(String objectKey) {
 		if (objectKey == null) {
 			return null;
