@@ -33,9 +33,10 @@ public class DisposeController {
 	}
 
 	@GetMapping("/api/me/waste-reports")
-	public ResponseEntity<ApiResponse<GetWasteReportsResponse>> getWasteReports() {
+	public ResponseEntity<ApiResponse<GetWasteReportsResponse>> getWasteReports(
+			@RequestParam(required = false) String yearMonth) {
 		Long userId = currentUserProvider.getCurrentUserId();
-		GetWasteReportsResponse response = wasteReportService.getReports(userId);
+		GetWasteReportsResponse response = wasteReportService.getReports(userId, yearMonth);
 		return ResponseEntity.ok(ApiResponse.ok(response));
 	}
 

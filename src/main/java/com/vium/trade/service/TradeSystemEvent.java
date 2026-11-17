@@ -1,0 +1,6 @@
+package com.vium.trade.service;
+
+public enum TradeSystemEvent {
+	TRADE_REQUESTED, TRADE_ACCEPTED, TRADE_REJECTED, TRADE_CANCELED,
+	TRADE_COMPLETED, TRADE_AUTO_COMPLETE_SOON
+}

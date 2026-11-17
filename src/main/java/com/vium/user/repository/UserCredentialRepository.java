@@ -51,10 +51,28 @@ public class UserCredentialRepository {
 				rs.getString("display_name")), userId).stream().findFirst();
 	}
 
+	public Optional<LocalDateTime> findActiveCreatedAtById(Long userId) {
+		return jdbcTemplate.query("""
+			select created_at from users
+			where id = ? and deleted_at is null
+			""", (rs, rowNum) -> rs.getObject("created_at", LocalDateTime.class), userId).stream().findFirst();
+	}
+
 	public boolean existsActiveById(Long userId) {
 		return Boolean.TRUE.equals(jdbcTemplate.queryForObject(
 			"select exists (select 1 from users where id = ? and deleted_at is null)",
 			Boolean.class, userId));
+	}
+
+	/**
+	 * 호출자의 트랜잭션 안에서 users 행을 잠근다. 같은 커넥션을 공유하는 JdbcTemplate이
+	 * 활성 트랜잭션에 참여하므로, 트랜잭션이 끝날 때까지 다른 트랜잭션의 동일 행 잠금 시도를 막는다.
+	 */
+	public boolean lockActiveById(Long userId) {
+		List<Long> ids = jdbcTemplate.query(
+			"select id from users where id = ? and deleted_at is null for update",
+			(rs, rowNum) -> rs.getLong("id"), userId);
+		return !ids.isEmpty();
 	}
 
 	public Optional<UserProfileRow> findActiveProfileById(Long userId) {

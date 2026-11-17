@@ -14,6 +14,8 @@ import org.springframework.data.repository.query.Param;
 public interface UploadedImageRepository extends JpaRepository<UploadedImage, Long> {
 	Optional<UploadedImage> findByIdAndUserIdAndPurposeAndReadyTrue(Long id, Long userId, ImagePurpose purpose);
 
+	Optional<UploadedImage> findByIdAndPurposeAndReadyTrue(Long id, ImagePurpose purpose);
+
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("select i from UploadedImage i where i.id = :id")
 	Optional<UploadedImage> lockById(@Param("id") Long id);

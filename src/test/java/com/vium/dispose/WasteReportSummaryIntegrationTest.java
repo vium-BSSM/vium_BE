@@ -60,6 +60,14 @@ class WasteReportSummaryIntegrationTest {
 			""", itemId, userId, type, amount, java.sql.Timestamp.valueOf(at));
 	}
 
+	private void itemWithCreatedAt(long id, long userId, String customName, Integer amount, String createdAt) {
+		jdbc.update("""
+			insert into "inventory_items"
+			("id", "user_id", "custom_name", "status_id", "unit_id", "initial_quantity", "remaining_quantity", "amount", "created_at", "updated_at")
+			values (?, ?, ?, 1, 1, 1, 1, ?, ?, ?)
+			""", id, userId, customName, amount, java.sql.Timestamp.valueOf(createdAt), java.sql.Timestamp.valueOf(createdAt));
+	}
+
 	private void stubReports(WasteReportDto... reports) {
 		doReturn(List.of(reports)).when(repository).findReports(42L);
 	}
@@ -137,5 +145,83 @@ class WasteReportSummaryIntegrationTest {
 			.andExpect(jsonPath("$.data.reports[0].periodEnd").value("2026-10-31"))
 			.andExpect(jsonPath("$.data.reports[0].totalWastedAmount").value(1500))
 			.andExpect(jsonPath("$.data.reports[0].totalSavedAmount").value(0));
+	}
+
+	@Test
+	void newFieldsAreComputedWithBoundariesAndUserIsolation() throws Exception {
+		// 월 경계: 1일 00:00:00 포함, 다음 달 1일 00:00:00/전달 말일 23:59:59 제외
+		itemWithCreatedAt(1, 42, "두부", 2000, "2026-10-01 00:00:00");
+		itemWithCreatedAt(2, 42, "사과", 1000, "2026-10-31 23:59:59");
+		itemWithCreatedAt(3, 42, "빵", null, "2026-10-15 00:00:00"); // amount null -> 제외
+		itemWithCreatedAt(4, 42, "우유", 500, "2026-11-01 00:00:00"); // 월 밖 -> 제외
+		itemWithCreatedAt(5, 42, "계란", 4000, "2026-09-30 23:59:59"); // 월 밖 -> 제외
+
+		item(10, 42, "폐기전용", null, 100);
+		item(11, 42, "소진전용", null, 100);
+		item(12, 42, "폐기+소진", null, 100);
+		event(10, 42, "disposed", 100, "2026-10-05 00:00:00");
+		event(11, 42, "consumed", null, "2026-10-06 00:00:00");
+		event(12, 42, "disposed", 50, "2026-10-07 00:00:00");
+		event(12, 42, "consumed", null, "2026-10-07 00:00:00");
+		event(10, 42, "shared", 200, "2026-10-08 00:00:00");
+		event(11, 42, "shared", 300, "2026-10-09 00:00:00");
+
+		// 다른 사용자: 격리 확인
+		item(20, 99, "남", null, 999);
+		itemWithCreatedAt(21, 99, "남2", 999, "2026-10-10 00:00:00");
+		event(20, 99, "disposed", 999, "2026-10-10 00:00:00");
+		event(20, 99, "shared", 999, "2026-10-10 00:00:00");
+
+		stubReports(october());
+
+		mockMvc.perform(get("/api/me/waste-reports").header("Authorization", auth()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.reports[0].wastedItemCount").value(2))
+			.andExpect(jsonPath("$.data.reports[0].fullyConsumedCount").value(1))
+			.andExpect(jsonPath("$.data.reports[0].purchaseTotalAmount").value(3000))
+			.andExpect(jsonPath("$.data.reports[0].sharedCount").value(2))
+			.andExpect(jsonPath("$.data.reports[0].sharedAmount").value(500));
+	}
+
+	@Test
+	void yearMonthReturnsSingleReportForThatMonth() throws Exception {
+		item(1, 42, "두부", null, 2000);
+		event(1, 42, "disposed", 1500, "2026-10-10 10:00:00");
+		event(1, 42, "consumed", null, "2026-10-11 10:00:00");
+
+		mockMvc.perform(get("/api/me/waste-reports").param("yearMonth", "2026-10")
+				.header("Authorization", auth()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.reports.length()").value(1))
+			.andExpect(jsonPath("$.data.reports[0].wasteReportId").value(202610))
+			.andExpect(jsonPath("$.data.reports[0].periodStart").value("2026-10-01"))
+			.andExpect(jsonPath("$.data.reports[0].periodEnd").value("2026-10-31"))
+			.andExpect(jsonPath("$.data.reports[0].totalWastedAmount").value(1500))
+			.andExpect(jsonPath("$.data.reports[0].expiredCount").value(1));
+	}
+
+	@Test
+	void yearMonthWithNoEventsReturnsEmptyArray() throws Exception {
+		mockMvc.perform(get("/api/me/waste-reports").param("yearMonth", "2026-10")
+				.header("Authorization", auth()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.reports.length()").value(0));
+	}
+
+	@Test
+	void invalidYearMonthFormatReturns400() throws Exception {
+		mockMvc.perform(get("/api/me/waste-reports").param("yearMonth", "2026/10")
+				.header("Authorization", auth()))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+	}
+
+	@Test
+	void omittedYearMonthKeepsExistingBehavior() throws Exception {
+		stubReports(october());
+
+		mockMvc.perform(get("/api/me/waste-reports").header("Authorization", auth()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.reports[0].wasteReportId").value(202610));
 	}
 }

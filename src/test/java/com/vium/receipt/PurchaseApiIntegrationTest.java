@@ -49,7 +49,7 @@ class PurchaseApiIntegrationTest {
 		}
 		jdbc.update("insert into units (id,code,name) values (1,'ea','개')");
 		jdbc.update("insert into storage_methods (id,code,name) values (1,'cold','냉장')");
-		jdbc.update("insert into item_statuses (id,code,name) values (1,'active','보유중')");
+		jdbc.update("insert into item_statuses (id,code,name) values (1,'active','보유중'),(4,'shared','공유중')");
 		jdbc.update("insert into purchase_sources (id,code,name) values (1,'emart','이마트')");
 		jdbc.update("insert into ingredient_catalog (id,default_unit_id,name,created_at) values (1,1,'우유',CURRENT_TIMESTAMP)");
 		jdbc.update("insert into expiry_estimation_rules (id,ingredient_catalog_id,storage_method_id,shelf_life_days,effective_from) values (1,1,1,7,DATE '2026-01-01')");

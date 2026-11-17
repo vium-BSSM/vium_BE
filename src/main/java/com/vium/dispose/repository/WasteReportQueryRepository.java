@@ -92,6 +92,70 @@ public class WasteReportQueryRepository {
 		}, userId, Timestamp.valueOf(start), Timestamp.valueOf(end));
 	}
 
+	/** 구간 [start, end) 에 등록된(created_at 기준) 재고의 amount 합. null 제외, 없으면 0. */
+	public long sumPurchaseTotalAmount(Long userId, LocalDateTime start, LocalDateTime end) {
+		String sql = """
+			select coalesce(sum(amount), 0) as total
+			from inventory_items
+			where user_id = ? and amount is not null
+			  and created_at >= ? and created_at < ?
+			""";
+		BigDecimal total = jdbcTemplate.queryForObject(sql, (rs, rowNum) -> rs.getBigDecimal("total"),
+			userId, Timestamp.valueOf(start), Timestamp.valueOf(end));
+		return total.longValue();
+	}
+
+	/** 구간 [start, end) 에서 shared 이벤트가 있는 서로 다른 재고 수. */
+	public int countSharedItems(Long userId, LocalDateTime start, LocalDateTime end) {
+		String sql = """
+			select count(distinct inventory_item_id) as cnt
+			from consumption_events
+			where user_id = ? and event_type = 'shared'
+			  and occurred_at >= ? and occurred_at < ?
+			""";
+		return jdbcTemplate.queryForObject(sql, Integer.class,
+			userId, Timestamp.valueOf(start), Timestamp.valueOf(end));
+	}
+
+	/** 구간 [start, end) 의 shared 이벤트 amount 합. null 제외, 없으면 0. */
+	public long sumSharedAmount(Long userId, LocalDateTime start, LocalDateTime end) {
+		String sql = """
+			select coalesce(sum(amount), 0) as total
+			from consumption_events
+			where user_id = ? and event_type = 'shared' and amount is not null
+			  and occurred_at >= ? and occurred_at < ?
+			""";
+		BigDecimal total = jdbcTemplate.queryForObject(sql, (rs, rowNum) -> rs.getBigDecimal("total"),
+			userId, Timestamp.valueOf(start), Timestamp.valueOf(end));
+		return total.longValue();
+	}
+
+	/** 구간 [start, end) 의 disposed 이벤트 amount 합. null 제외, 없으면 0. */
+	public long sumDisposedAmount(Long userId, LocalDateTime start, LocalDateTime end) {
+		String sql = """
+			select coalesce(sum(amount), 0) as total
+			from consumption_events
+			where user_id = ? and event_type = 'disposed' and amount is not null
+			  and occurred_at >= ? and occurred_at < ?
+			""";
+		BigDecimal total = jdbcTemplate.queryForObject(sql, (rs, rowNum) -> rs.getBigDecimal("total"),
+			userId, Timestamp.valueOf(start), Timestamp.valueOf(end));
+		return total.longValue();
+	}
+
+	/** 구간 [start, end) 에 consumed/disposed/shared 이벤트가 하나라도 있는지. */
+	public boolean hasAnyEvents(Long userId, LocalDateTime start, LocalDateTime end) {
+		String sql = """
+			select exists (
+			  select 1 from consumption_events
+			  where user_id = ? and event_type in ('consumed', 'disposed', 'shared')
+			    and occurred_at >= ? and occurred_at < ?
+			)
+			""";
+		return Boolean.TRUE.equals(jdbcTemplate.queryForObject(sql, Boolean.class,
+			userId, Timestamp.valueOf(start), Timestamp.valueOf(end)));
+	}
+
 	public List<WastePatternDto> findPatterns(Long userId) {
 		String sql = """
 			select ic.id as category_id,

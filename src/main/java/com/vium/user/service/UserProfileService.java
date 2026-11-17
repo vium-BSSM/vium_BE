@@ -27,10 +27,40 @@ public class UserProfileService {
 			.orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED));
 	}
 
+	/**
+	 * 다른 도메인(예: dashboard)이 가입일을 조회할 때 쓴다. UTC 기준 naive 값이다.
+	 */
+	@Transactional(readOnly = true)
+	public LocalDateTime getCreatedAt(Long userId) {
+		return userCredentialRepository.findActiveCreatedAtById(userId)
+			.orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED));
+	}
+
 	@Transactional(readOnly = true)
 	public UserProfileRow getProfileView(Long userId) {
 		return userCredentialRepository.findActiveProfileById(userId)
 			.orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED));
+	}
+
+	/**
+	 * 다른 도메인(예: credit)이 users 행을 잠그고 존재 여부를 확인할 때 쓴다.
+	 * 호출자의 트랜잭션에 합류하며, 잠금은 그 트랜잭션이 끝날 때까지 유지된다.
+	 */
+	@Transactional
+	public void lockActiveUser(Long userId) {
+		if (!userCredentialRepository.lockActiveById(userId)) {
+			throw new BusinessException(ErrorCode.USER_NOT_FOUND);
+		}
+	}
+
+	/**
+	 * 다른 도메인(예: safety)이 대상 사용자가 존재하고 탈퇴하지 않았는지만 확인할 때 쓴다. 잠그지 않는다.
+	 */
+	@Transactional(readOnly = true)
+	public void requireActiveUser(Long userId) {
+		if (!userCredentialRepository.existsActiveById(userId)) {
+			throw new BusinessException(ErrorCode.USER_NOT_FOUND);
+		}
 	}
 
 	@Transactional

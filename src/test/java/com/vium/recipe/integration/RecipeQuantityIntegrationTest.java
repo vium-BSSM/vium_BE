@@ -43,7 +43,7 @@ class RecipeQuantityIntegrationTest {
 	@BeforeEach
 	void setUp() {
 		jdbc.update("insert into units (id,code,name) values (1,'ea','개'),(2,'g','g')");
-		jdbc.update("insert into item_statuses (id,code,name) values (1,'active','보유중'),(2,'consumed','소진'),(3,'disposed','폐기')");
+		jdbc.update("insert into item_statuses (id,code,name) values (1,'active','보유중'),(2,'consumed','소진'),(3,'disposed','폐기'),(4,'shared','공유중')");
 		jdbc.update("insert into event_sources (id,code,name) values (1,'manual','수동')");
 		jdbc.update("""
 			insert into ingredient_catalog (id,name,default_unit_id,created_at)

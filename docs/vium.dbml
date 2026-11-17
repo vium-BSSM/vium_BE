@@ -1,9 +1,9 @@
-// PickDo(비움) DB 스키마 — Flyway V1~V11 적용 결과 + 거래 기능 설계안
+// PickDo(비움) DB 스키마 — Flyway V1~V14 적용 결과
 Project PickDo {
   database_type: "PostgreSQL"
   Note: '''
-  post·trade·credit·chat·safety·ai_report 그룹과 credit_base_values·user_push_tokens는 추가 기능(#143) 설계안이며 아직 마이그레이션이 없다.
-  위치 컬럼은 PostGIS geography(Point, 4326)를 쓴다.
+  post·trade·credit·chat·safety·ai_report 그룹과 credit_base_values·user_push_tokens는 거래 기능(#143)으로 V13~V14에서 적용됐다. Java 코드는 아직 이 테이블들을 쓰지 않는다.
+  위치 컬럼은 PostGIS geography 대신 latitude/longitude(double precision)를 쓴다. 이 그룹의 시각 컬럼은 전부 timestamp(시간대 없음)이며 DEFAULT now()를 쓰지 않는다.
   '''
 }
 
@@ -83,7 +83,7 @@ Table item_statuses {
 
   Note: '''
   active / consumed / disposed
-  거래 기능: shared(나눔·판매로 넘김) 추가 예정
+  거래 기능: shared(나눔·판매) V14에서 추가
   '''
 }
 
@@ -262,8 +262,8 @@ Table user_push_tokens {
   user_id bigint [not null]
   token varchar(512) [unique, not null, note: 'FCM 등록 토큰. 다른 사용자가 같은 토큰을 등록하면 소유자를 옮긴다']
   platform varchar(10) [not null, note: 'ANDROID / IOS']
-  created_at timestamptz [not null]
-  updated_at timestamptz [not null, note: '마지막 등록 시각']
+  created_at timestamp [not null]
+  updated_at timestamp [not null, note: '마지막 등록 시각']
 
   indexes {
     user_id
@@ -271,7 +271,6 @@ Table user_push_tokens {
 
   Note: '''
   푸시 발송 대상 기기. 로그아웃 시 해제 API로, 회원 탈퇴 시 전부, FCM 무효 토큰 응답 시 서버가 삭제한다
-  설계안이며 아직 마이그레이션이 없다
   '''
 }
 
@@ -397,12 +396,12 @@ Table uploaded_images {
   Note: '''
   S3 이미지 메타데이터. ready=false는 업로드 중 또는 정리 재시도 대상
   content_type IN ('image/jpeg', 'image/png')
-  purpose IN ('RECEIPT', 'PROFILE', 'RECIPE') (거래 기능: 'POST', 'CHAT' 추가 예정)
+  purpose IN ('RECEIPT', 'PROFILE', 'RECIPE', 'INGREDIENT', 'POST', 'CHAT')
   (size_bytes >= 1) AND (size_bytes <= 5242880)
   '''
 }
 
-// ---------------------------------------------------------------- 거래 기능 설계안 (#143, 마이그레이션 미적용)
+// ---------------------------------------------------------------- 거래 기능 (#143, V13~V14 적용)
 
 Table posts {
   id bigint [pk, increment]
@@ -415,20 +414,21 @@ Table posts {
   price integer [not null, default: 0, note: '크레딧. SHARE면 0']
   recommended_price integer [note: '게시 시점 추천가. 판매가는 max(1, ceil(추천가×0.8)) ~ floor(추천가×1.2)']
   is_opened boolean [not null]
-  location geography [not null, note: 'geography(Point, 4326). 게시 위치']
+  latitude float [not null, note: 'PostGIS geography 대신 double precision. -90~90']
+  longitude float [not null, note: 'PostGIS geography 대신 double precision. -180~180']
   like_count integer [not null, default: 0]
-  created_at timestamptz [not null]
-  updated_at timestamptz [not null]
-  deleted_at timestamptz [note: '삭제 시 재고 잠금 해제']
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+  deleted_at timestamp [note: '삭제 시 재고 잠금 해제']
 
   indexes {
     (status, created_at)
     author_id
     inventory_item_id [note: 'deleted_at IS NULL 부분 유니크']
+    (latitude, longitude)
   }
 
   Note: '''
-  location은 GiST 인덱스가 필요하다. DBML은 btree·hash만 지원하므로 마이그레이션에서 USING GIST로 선언한다
   게시 잠금: deleted_at IS NULL AND status IN ('OPEN', 'RESERVED')인 게시물의 재고는 소진/폐기·수정·요리 완료 차감이 잠긴다 (공통 재고 변경 경로에서 검사)
   거래가 완료되면 판매자 재고는 shared 상태로 종료되며, 이후 변경 제한은 재고 상태 규칙으로 처리한다
   type IN ('SHARE', 'SALE')
@@ -451,7 +451,7 @@ Table post_images {
 Table post_likes {
   user_id bigint [not null]
   post_id bigint [not null]
-  created_at timestamptz [not null]
+  created_at timestamp [not null]
 
   indexes {
     (user_id, post_id) [pk]
@@ -469,11 +469,12 @@ Table trades {
   buyer_inventory_item_id bigint [unique, note: '완료 시 구매자에게 생긴 재고. 거래 하나에 재고 하나']
   canceled_by_id bigint
   cancel_reason varchar(200)
-  requested_at timestamptz [not null]
-  accepted_at timestamptz
-  auto_resolve_at timestamptz [note: '자동 완료 시각 = accepted_at + 72시간. 24시간 전 SYSTEM 메시지로 안내']
-  completed_at timestamptz
-  closed_at timestamptz [note: '거절·취소 시각']
+  requested_at timestamp [not null]
+  accepted_at timestamp
+  auto_complete_notified_at timestamp [note: '자동 완료 24시간 전 안내를 보낸 시각. 중복 안내 방지']
+  auto_resolve_at timestamp [note: '자동 완료 시각 = accepted_at + 72시간. 24시간 전 SYSTEM 메시지로 안내']
+  completed_at timestamp
+  closed_at timestamp [note: '거절·취소 시각']
 
   indexes {
     post_id [note: 'status IN (REQUESTED, ACCEPTED) 부분 유니크: 게시물당 진행 중 거래 1건']
@@ -496,7 +497,7 @@ Table trade_reviews {
   target_user_id bigint [not null]
   manner_score smallint [not null, note: '1~5']
   content varchar(500)
-  created_at timestamptz [not null]
+  created_at timestamp [not null]
 
   indexes {
     (trade_id, writer_id) [unique]
@@ -513,7 +514,7 @@ Table credit_transactions {
   ai_waste_report_id bigint
   reward_date date [note: 'DAILY_REWARD(하루 1회)·SAVING_BONUS(판매자당 하루 3회) 상한 판단용 (Asia/Seoul)']
   provider_transaction_id varchar(100) [unique, note: '오퍼월 중복 지급 방지']
-  created_at timestamptz [not null]
+  created_at timestamp [not null]
 
   indexes {
     (user_id, created_at)
@@ -534,8 +535,8 @@ Table chat_rooms {
   post_id bigint [not null]
   buyer_id bigint [not null]
   seller_id bigint [not null]
-  last_message_at timestamptz
-  created_at timestamptz [not null]
+  last_message_at timestamp
+  created_at timestamp [not null]
 
   indexes {
     (post_id, buyer_id) [unique]
@@ -546,7 +547,7 @@ Table chat_participants {
   chat_room_id bigint [not null]
   user_id bigint [not null]
   last_read_message_id bigint
-  left_at timestamptz [note: '나가기. 상대가 새 메시지를 보내거나 구매자가 채팅방 생성을 다시 호출하면 null로 복귀']
+  left_at timestamp [note: '나가기. 상대가 새 메시지를 보내거나 구매자가 채팅방 생성을 다시 호출하면 null로 복귀']
 
   indexes {
     (chat_room_id, user_id) [pk]
@@ -562,7 +563,7 @@ Table chat_messages {
   content varchar(1000)
   image_id bigint
   system_event varchar(30) [note: 'TRADE_REQUESTED / ACCEPTED / REJECTED / CANCELED / COMPLETED / AUTO_COMPLETE_SOON']
-  created_at timestamptz [not null]
+  created_at timestamp [not null]
 
   indexes {
     (chat_room_id, id) [note: 'id DESC, 커서 페이지네이션']
@@ -572,7 +573,7 @@ Table chat_messages {
 Table user_blocks {
   blocker_id bigint [not null]
   blocked_id bigint [not null]
-  created_at timestamptz [not null]
+  created_at timestamp [not null]
 
   indexes {
     (blocker_id, blocked_id) [pk]
@@ -591,7 +592,7 @@ Table user_reports {
   reason varchar(20) [not null, note: 'SPAM / FRAUD / PROHIBITED_ITEM / ABUSIVE / ETC']
   detail varchar(500)
   status varchar(20) [not null, default: 'RECEIVED', note: 'RECEIVED / REVIEWED']
-  created_at timestamptz [not null]
+  created_at timestamp [not null]
 
   indexes {
     (reporter_id, target_user_id) [note: 'target_type = USER 부분 유니크']
@@ -613,7 +614,7 @@ Table ai_waste_reports {
   summary text [not null]
   insights jsonb [not null, note: '[{title, body}]']
   suggestions jsonb [not null, note: '[string]']
-  created_at timestamptz [not null]
+  created_at timestamp [not null]
 
   indexes {
     (user_id, year_month) [unique]

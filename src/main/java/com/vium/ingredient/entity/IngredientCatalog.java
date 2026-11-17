@@ -29,6 +29,9 @@ public class IngredientCatalog {
 
 	private String name;
 
+	@Column(name = "post_allowed", nullable = false, columnDefinition = "boolean default true")
+	private Boolean postAllowed;
+
 	@Column(name = "created_at", nullable = false)
 	private LocalDateTime createdAt;
 }

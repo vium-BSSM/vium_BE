@@ -35,6 +35,7 @@ public class DisposeService {
 
 	private static final String STATUS_CONSUMED = "consumed";
 	private static final String STATUS_DISPOSED = "disposed";
+	private static final String STATUS_SHARED = "shared";
 	private static final String EVENT_SOURCE_MANUAL = "manual";
 
 	@Transactional
@@ -163,8 +164,9 @@ public class DisposeService {
 
 	@Transactional(readOnly = true)
 	public GetConsumptionEventsResponse getEvents(Long userId, LocalDate from, LocalDate to, String eventType) {
-		if (eventType != null && !STATUS_CONSUMED.equals(eventType) && !STATUS_DISPOSED.equals(eventType)) {
-			throw new InvalidRequestException("eventType must be 'consumed' or 'disposed'");
+		if (eventType != null && !STATUS_CONSUMED.equals(eventType) && !STATUS_DISPOSED.equals(eventType)
+				&& !STATUS_SHARED.equals(eventType)) {
+			throw new InvalidRequestException("eventType must be 'consumed', 'disposed' or 'shared'");
 		}
 		return new GetConsumptionEventsResponse(
 			consumptionEventQueryRepository.findEvents(userId, from, to, eventType));
@@ -218,5 +220,14 @@ public class DisposeService {
 		return itemStatusRepository.findByCode(code)
 			.map(status -> status.getId())
 			.orElseThrow(() -> new NotFoundException("Status not found: " + code));
+	}
+
+	@Transactional
+	public void recordSharedEvent(Long userId, Long inventoryItemId, BigDecimal quantity, BigDecimal amount,
+			LocalDateTime occurredAt) {
+		Short sourceId = eventSourceRepository.findByCode(EVENT_SOURCE_MANUAL)
+			.orElseThrow(() -> new NotFoundException("Event source not found: " + EVENT_SOURCE_MANUAL)).getId();
+		consumptionEventRepository.save(ConsumptionEvent.create(
+			inventoryItemId, userId, STATUS_SHARED, sourceId, quantity, amount, occurredAt));
 	}
 }

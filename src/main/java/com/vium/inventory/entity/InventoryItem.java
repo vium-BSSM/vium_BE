@@ -126,6 +126,10 @@ public class InventoryItem {
 		this.expiresOn = expiresOn;
 	}
 
+	public void changeStorageMethod(Short storageMethodId) {
+		this.storageMethodId = storageMethodId;
+	}
+
 	public void changeImage(Long imageId) {
 		if (imageId != null) {
 			this.imageId = imageId;

@@ -20,6 +20,7 @@ import com.vium.inventory.dto.IngredientUpdateRequest;
 import com.vium.inventory.dto.IngredientUpdateResponse;
 import com.vium.inventory.dto.InventoryItemSnapshot;
 import com.vium.inventory.dto.InventoryState;
+import com.vium.inventory.dto.TradeTransferSnapshot;
 import com.vium.inventory.entity.InventoryItem;
 import com.vium.inventory.repository.InventoryItemRepository;
 import com.vium.inventory.repository.InventoryQueryRepository;
@@ -27,6 +28,7 @@ import com.vium.user.service.UserSettingsService;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -48,11 +50,13 @@ public class InventoryService {
 	private final InventoryQueryRepository inventoryQueryRepository;
 	private final UserSettingsService userSettingsService;
 	private final ImageService imageService;
+	private final List<InventoryLockChecker> lockCheckers;
 
 	@Transactional
 	public IngredientUpdateResponse update(Long userId, Long inventoryItemId, IngredientUpdateRequest request) {
 		InventoryItem item = inventoryItemRepository.findByIdAndUserId(inventoryItemId, userId)
 			.orElseThrow(() -> new NotFoundException("식재료를 찾을 수 없습니다"));
+		assertNotLocked(inventoryItemId);
 		String customName = normalizeCustomName(request.customName());
 		if (item.getIngredientCatalogId() == null && customName == null) {
 			throw new BusinessException(ErrorCode.INVALID_REQUEST, "카탈로그에 없는 재료는 customName이 필요합니다");
@@ -107,8 +111,56 @@ public class InventoryService {
 	public InventoryItemSnapshot getSnapshotForUpdate(Long userId, Long inventoryItemId) {
 		InventoryItem item = inventoryItemRepository.findByIdAndUserIdForUpdate(inventoryItemId, userId)
 			.orElseThrow(() -> new NotFoundException("Inventory item not found"));
+		assertNotLocked(inventoryItemId);
 		return new InventoryItemSnapshot(item.getId(), item.getUserId(), item.getRemainingQuantity(),
 			item.getInitialQuantity(), item.getAmount());
+	}
+
+	/**
+	 * 게시물 등록(post 도메인)이 재고의 보관 방법을 함께 갱신할 때 쓴다.
+	 * 다른 필드는 건드리지 않는다. 등록 시점에는 아직 게시물이 없으므로 잠금 검사를 통과한다.
+	 */
+	@Transactional
+	public void updateStorageMethod(Long userId, Long inventoryItemId, Short storageMethodId) {
+		InventoryItem item = inventoryItemRepository.findByIdAndUserId(inventoryItemId, userId)
+			.orElseThrow(() -> new NotFoundException("식재료를 찾을 수 없습니다"));
+		assertNotLocked(inventoryItemId);
+		if (!storageMethodRepository.existsById(storageMethodId)) {
+			throw new BusinessException(ErrorCode.INVALID_REQUEST, "존재하지 않는 storageMethodId 입니다");
+		}
+		item.changeStorageMethod(storageMethodId);
+	}
+
+	private void assertNotLocked(Long inventoryItemId) {
+		lockCheckers.forEach(checker -> checker.assertNotLocked(inventoryItemId));
+	}
+
+	public void assertAllNotLocked(Collection<Long> inventoryItemIds) {
+		inventoryItemIds.forEach(this::assertNotLocked);
+	}
+
+	/**
+	 * 예외 없이 잠금 여부만 확인한다. 호출부가 자체 메시지로 예외를 던질 때 쓴다(예: 재료 삭제).
+	 */
+	@Transactional(readOnly = true)
+	public boolean isLocked(Long inventoryItemId) {
+		return lockCheckers.stream().anyMatch(checker -> checker.isLocked(inventoryItemId));
+	}
+
+	@Transactional(readOnly = true)
+	public boolean hasConsumptionEvents(Long userId, Long inventoryItemId) {
+		return inventoryQueryRepository.hasConsumptionEvents(inventoryItemId, userId);
+	}
+
+	/**
+	 * 재료 하드 삭제(post 도메인의 재료 삭제 API 전용). consumption_events를 남기지 않는다.
+	 * 잠금·이력 검사는 호출부가 먼저 수행한다.
+	 */
+	@Transactional
+	public void hardDelete(Long userId, Long inventoryItemId) {
+		InventoryItem item = inventoryItemRepository.findByIdAndUserId(inventoryItemId, userId)
+			.orElseThrow(() -> new NotFoundException("식재료를 찾을 수 없습니다"));
+		inventoryItemRepository.delete(item);
 	}
 
 	@Transactional(readOnly = true)
@@ -265,5 +317,37 @@ public class InventoryService {
 			return ingredientCatalogService.getNameById(ingredientCatalogId);
 		}
 		return null;
+	}
+
+	/** 거래 완료 전용: 게시물 잠금 훅 대신 재고 행 잠금과 active 검증을 수행한다. */
+	@Transactional
+	public TradeTransferSnapshot closeAsSharedForTrade(Long sellerId, Long inventoryItemId) {
+		InventoryItem item = inventoryItemRepository.findByIdAndUserIdForUpdate(inventoryItemId, sellerId)
+			.orElseThrow(() -> new NotFoundException("식재료를 찾을 수 없습니다"));
+		Short activeId = tradeStatusId("active");
+		if (!item.getStatusId().equals(activeId) || item.getRemainingQuantity().signum() <= 0) {
+			throw new BusinessException(ErrorCode.INVENTORY_NOT_ACTIVE);
+		}
+		TradeTransferSnapshot snapshot = new TradeTransferSnapshot(item.getId(), item.getIngredientCatalogId(),
+			item.getCustomName(), item.getUnitId(), item.getStorageMethodId(), item.getRemainingQuantity(),
+			item.getInitialQuantity(), item.getAmount(), item.getExpiresOn());
+		item.updateStatus(item.getRemainingQuantity(), tradeStatusId("shared"));
+		return snapshot;
+	}
+
+	/** 자동 완료 시 이미 지난 소비기한도 원본 그대로 이전한다. 판매자 이미지·구매 금액은 이전하지 않는다. */
+	@Transactional
+	public Long registerFromTrade(Long buyerId, TradeTransferSnapshot source, LocalDate purchasedOn) {
+		return inventoryItemRepository.save(InventoryItem.builder().userId(buyerId)
+			.ingredientCatalogId(source.ingredientCatalogId()).customName(source.customName())
+			.unitId(source.unitId()).storageMethodId(source.storageMethodId()).statusId(tradeStatusId("active"))
+			.initialQuantity(source.remainingQuantity()).remainingQuantity(source.remainingQuantity())
+			.expiresOn(source.expiresOn()).purchasedOn(purchasedOn).build()).getId();
+	}
+
+	private Short tradeStatusId(String code) {
+		return itemStatusRepository.findByCode(code)
+			.orElseThrow(() -> new BusinessException(ErrorCode.INTERNAL_ERROR, "item_statuses 시드 데이터가 없습니다"))
+			.getId();
 	}
 }
