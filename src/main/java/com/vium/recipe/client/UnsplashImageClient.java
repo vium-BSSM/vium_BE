@@ -3,20 +3,31 @@ package com.vium.recipe.client;
 import com.vium.recipe.config.ImageSearchProperties;
 import com.vium.recipe.dto.ImageSearchResponse;
 import com.vium.recipe.dto.ImageSearchResult;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
 @Component
-@RequiredArgsConstructor
 @Slf4j
 public class UnsplashImageClient implements ImageSearchClient {
 
-	private final ImageSearchProperties properties;
+	private static final String UNSPLASH_BASE_URL = "https://api.unsplash.com";
+	private static final String SEARCH_PATH = "/search/photos";
 
-	private static final String UNSPLASH_API_URL = "https://api.unsplash.com/search/photos";
+	private final ImageSearchProperties properties;
+	private final RestClient restClient;
+
+	@Autowired
+	public UnsplashImageClient(ImageSearchProperties properties) {
+		this(properties, RestClient.builder().baseUrl(UNSPLASH_BASE_URL).build());
+	}
+
+	UnsplashImageClient(ImageSearchProperties properties, RestClient restClient) {
+		this.properties = properties;
+		this.restClient = restClient;
+	}
 
 	@Override
 	public ImageSearchResult searchImage(String query) {
@@ -25,10 +36,8 @@ public class UnsplashImageClient implements ImageSearchClient {
 		}
 
 		try {
-			RestClient restClient = RestClient.builder().build();
-
 			ImageSearchResponse searchResponse = restClient.get()
-				.uri(uriBuilder -> uriBuilder.path(UNSPLASH_API_URL)
+				.uri(uriBuilder -> uriBuilder.path(SEARCH_PATH)
 					.queryParam("query", query)
 					.queryParam("per_page", 1)
 					.queryParam("orientation", "landscape")
@@ -66,7 +75,6 @@ public class UnsplashImageClient implements ImageSearchClient {
 		}
 
 		try {
-			RestClient restClient = RestClient.builder().build();
 			restClient.get()
 				.uri(downloadUrl)
 				.header("Authorization", "Client-ID " + properties.getAccessKey())
