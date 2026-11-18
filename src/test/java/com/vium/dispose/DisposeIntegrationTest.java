@@ -714,6 +714,15 @@ class DisposeIntegrationTest {
 	}
 
 	@Test
+	void getConsumptionEventsEndpoint_FromAfterTo() throws Exception {
+		mockMvc.perform(get("/api/me/consumption-events?from=2026-11-20&to=2026-11-01")
+				.header("Authorization", "Bearer " + tokenService.issue(42L).accessToken()))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.success").value(false))
+			.andExpect(jsonPath("$.error.code").value("INVALID_REQUEST"));
+	}
+
+	@Test
 	void getConsumptionEventsEndpoint_SharedEventTypeIsAccepted() throws Exception {
 		jdbcTemplate.update("""
 			insert into "consumption_events"
