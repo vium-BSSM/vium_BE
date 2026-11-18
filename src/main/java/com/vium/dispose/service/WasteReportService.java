@@ -66,7 +66,7 @@ public class WasteReportService {
 		long sharedAmount = wasteReportQueryRepository.sumSharedAmount(userId, start, end);
 		return report.withSummary(counts[0], counts[0] - counts[1], counts[1],
 				wasteReportQueryRepository.findTopWastedItems(userId, start, end))
-			.withExtras(counts[1], counts[0] - counts[1], purchaseTotalAmount, sharedCount, sharedAmount);
+			.withExtras(purchaseTotalAmount, sharedCount, sharedAmount);
 	}
 
 	public GetWastePatternsResponse getPatterns(Long userId) {

@@ -176,8 +176,6 @@ class WasteReportSummaryIntegrationTest {
 
 		mockMvc.perform(get("/api/me/waste-reports").header("Authorization", auth()))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.data.reports[0].wastedItemCount").value(2))
-			.andExpect(jsonPath("$.data.reports[0].fullyConsumedCount").value(1))
 			.andExpect(jsonPath("$.data.reports[0].purchaseTotalAmount").value(3000))
 			.andExpect(jsonPath("$.data.reports[0].sharedCount").value(2))
 			.andExpect(jsonPath("$.data.reports[0].sharedAmount").value(500));
