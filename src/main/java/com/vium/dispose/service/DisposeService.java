@@ -168,6 +168,9 @@ public class DisposeService {
 				&& !STATUS_SHARED.equals(eventType)) {
 			throw new InvalidRequestException("eventType must be 'consumed', 'disposed' or 'shared'");
 		}
+		if (from != null && to != null && from.isAfter(to)) {
+			throw new InvalidRequestException("from must be before or equal to to");
+		}
 		return new GetConsumptionEventsResponse(
 			consumptionEventQueryRepository.findEvents(userId, from, to, eventType));
 	}
