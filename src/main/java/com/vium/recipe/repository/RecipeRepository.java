@@ -4,6 +4,7 @@ import com.vium.recipe.entity.Recipe;
 import com.vium.recipe.entity.RecipeCategory;
 import java.time.Instant;
 import java.util.List;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -16,6 +17,23 @@ public interface RecipeRepository extends JpaRepository<Recipe, Long> {
 	// source = 'AI', 해당 category, 모든 재료가 사용자 보유 재료 안에 있음
 	// (QueryDSL 또는 native query로 별도 구현)
 	List<Recipe> findBySourceAndCategoryOrderByCreatedAtDesc(String source, RecipeCategory category);
+
+	List<Recipe> findByImageUrlIsNullOrderByIdDesc(Pageable pageable);
+
+	/**
+	 * 이미지가 비어 있는 레시피에만 이미지를 채운다. 그 사이 다른 경로로 이미지가 채워졌으면 덮어쓰지 않는다.
+	 *
+	 * @return 채웠으면 1, 이미 이미지가 있으면 0
+	 */
+	@Modifying(clearAutomatically = true)
+	@Transactional
+	@Query("""
+		UPDATE Recipe r
+		SET r.imageUrl = :imageUrl, r.imageAuthorName = :authorName, r.imageAuthorUrl = :authorUrl
+		WHERE r.id = :id AND r.imageUrl IS NULL
+		""")
+	int fillMissingImage(@Param("id") Long id, @Param("imageUrl") String imageUrl,
+		@Param("authorName") String authorName, @Param("authorUrl") String authorUrl);
 
 	/**
 	 * 레시피 상세(분량+단계) 보강 작업을 원자적으로 선점한다.

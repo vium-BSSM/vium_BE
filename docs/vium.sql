@@ -185,6 +185,7 @@ CREATE TABLE "recipes" (
   "image_url" varchar(1000),
   "image_author_name" varchar(255),
   "image_author_url" varchar(500),
+  "image_keyword" varchar(200),
   "detail_status" varchar(20) NOT NULL DEFAULT 'BASIC' CHECK ("detail_status" IN ('BASIC', 'GENERATING', 'DETAILED')),
   "detail_generation_started_at" timestamptz
 );

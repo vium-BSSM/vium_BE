@@ -49,6 +49,9 @@ public class Recipe {
 	@Column(name = "image_author_url", length = 500)
 	private String imageAuthorUrl;
 
+	@Column(name = "image_keyword", length = 200)
+	private String imageKeyword;
+
 	@Column(name = "source", length = 120)
 	private String source;
 
@@ -65,7 +68,7 @@ public class Recipe {
 
 	@Builder
 	public Recipe(String title, String description, RecipeCategory category, Integer cookTime,
-			String imageUrl, String source) {
+			String imageUrl, String imageKeyword, String source) {
 		if (category != null && category.isFilterOnly()) {
 			throw new InvalidRequestException("카테고리 'ALL'은 레시피에 저장할 수 없습니다");
 		}
@@ -74,6 +77,7 @@ public class Recipe {
 		this.category = category;
 		this.cookTime = cookTime;
 		this.imageUrl = imageUrl;
+		this.imageKeyword = imageKeyword;
 		this.source = source;
 		this.createdAt = LocalDateTime.now();
 	}

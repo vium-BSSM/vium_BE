@@ -6,7 +6,6 @@ import com.vium.global.exception.ErrorCode;
 import com.vium.ingredient.service.IngredientCatalogService;
 import com.vium.inventory.entity.InventoryItem;
 import com.vium.inventory.repository.InventoryItemRepository;
-import com.vium.recipe.client.ImageSearchClient;
 import com.vium.recipe.client.LlmRecipeClient;
 import com.vium.recipe.dto.GeneratedRecipe;
 import com.vium.recipe.dto.ImageSearchResult;
@@ -54,7 +53,7 @@ public class RecipeRecommendationService {
 	private final RecipeIngredientRepository recipeIngredientRepository;
 	private final RecipeSuggestionRepository recipeSuggestionRepository;
 	private final LlmRecipeClient llmRecipeClient;
-	private final ImageSearchClient imageSearchClient;
+	private final RecipeImageFinder recipeImageFinder;
 	private final RecipeUrgencyScorer urgencyScorer;
 	private final LlmRecipeValidator llmRecipeValidator;
 	private final ItemStatusRepository itemStatusRepository;
@@ -193,7 +192,7 @@ public class RecipeRecommendationService {
 			}
 			List<GeneratedRecipe> recipes = new ArrayList<>();
 			for (RecipeDto dto : validatedDtos) {
-				ImageSearchResult imageResult = searchImage(dto.imageKeyword(), dto.category());
+				ImageSearchResult imageResult = recipeImageFinder.find(dto.imageKeyword(), dto.category());
 				recipes.add(new GeneratedRecipe(dto, imageResult));
 			}
 
@@ -240,39 +239,6 @@ public class RecipeRecommendationService {
 			.limit(MAX_INGREDIENTS_FOR_LLM)
 			.collect(Collectors.toList());
 	}
-
-	private ImageSearchResult searchImage(String imageKeyword, String category) {
-		try {
-			ImageSearchResult result = imageSearchClient.searchImage(imageKeyword);
-			if (result == null) {
-				String fallbackKeyword = getFallbackKeyword(category);
-				result = imageSearchClient.searchImage(fallbackKeyword);
-			}
-			if (result != null) {
-				try {
-					imageSearchClient.recordDownload(result.downloadUrl());
-				} catch (Exception e) {
-					log.debug("다운로드 기록 호출 실패 (무시): {}", e.getMessage());
-				}
-			}
-			return result;
-		} catch (Exception e) {
-			log.debug("이미지 검색 실패 (무시): {}", e.getMessage());
-			return null;
-		}
-	}
-
-	private String getFallbackKeyword(String category) {
-		return switch (category) {
-			case "KOREAN" -> "korean food";
-			case "CHINESE" -> "chinese food";
-			case "WESTERN" -> "western food";
-			case "JAPANESE" -> "japanese food";
-			case "DESSERT" -> "dessert";
-			default -> "food";
-		};
-	}
-
 
 	private RecommendedRecipesResponse buildResponse(Long userId, UUID batchId, String categoryParam) {
 		List<RecipeSuggestion> suggestions = recipeSuggestionRepository.findByUserIdAndBatchIdOrderByRecipeIdAsc(

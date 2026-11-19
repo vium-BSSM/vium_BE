@@ -83,6 +83,13 @@ unsplash:
   access-key: ${UNSPLASH_ACCESS_KEY}
   timeout-seconds: 3
 
+recipe:
+  image-backfill:
+    enabled: ${RECIPE_IMAGE_BACKFILL_ENABLED:false}
+    cron: ${RECIPE_IMAGE_BACKFILL_CRON:0 20 * * * *}
+    time-zone: ${RECIPE_IMAGE_BACKFILL_TIMEZONE:Asia/Seoul}
+    batch-size: ${RECIPE_IMAGE_BACKFILL_BATCH_SIZE:10}
+
 disposal:
   auto-dispose:
     enabled: ${DISPOSAL_AUTO_DISPOSE_ENABLED:false}
