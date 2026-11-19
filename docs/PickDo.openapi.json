@@ -2277,7 +2277,19 @@
         "tags": [
           "dispose"
         ],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "yearMonth",
+            "in": "query",
+            "description": "생략 시 전체 월별 리포트. 지정 시 해당 월 리포트 단건만 반환(해당 월에 이벤트가 없으면 빈 배열)",
+            "required": false,
+            "example": "",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}$"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "",
@@ -2360,6 +2372,10 @@
                                   }
                                 }
                               },
+                              "purchaseTotalAmount": {
+                                "type": "integer",
+                                "description": "해당 월에 종결된 재고의 구매 금액 합(원). 금액이 없는 재고는 제외"
+                              },
                               "sharedCount": {
                                 "type": "integer",
                                 "description": "해당 월에 나눔·판매로 넘긴 재고 건수. 폐기가 아닌 '구한 양'으로 집계 (거래 기능 도입 후)"
@@ -2411,11 +2427,33 @@
                             "purchaseAmount": 5000,
                             "wasteRatio": 0.8
                           }
-                        ]
+                        ],
+                        "purchaseTotalAmount": 20000,
+                        "sharedCount": 1,
+                        "sharedAmount": 3000
                       }
                     ]
                   },
                   "error": null
+                }
+              }
+            },
+            "headers": {}
+          },
+          "400": {
+            "description": "INVALID_REQUEST: yearMonth가 YYYY-MM 형식이 아님",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "INVALID_REQUEST",
+                    "message": "yearMonth는 YYYY-MM 형식이어야 합니다"
+                  }
                 }
               }
             },
