@@ -13,6 +13,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class RecipeMapper {
 
+	private static final int IMAGE_KEYWORD_MAX_LENGTH = 200;
+
 	public Recipe toRecipeEntity(RecipeDto dto, ImageSearchResult imageResult) {
 		Recipe recipe = Recipe.builder()
 			.title(dto.title())
@@ -20,6 +22,7 @@ public class RecipeMapper {
 			.category(RecipeCategory.valueOf(dto.category()))
 			.cookTime(dto.cookTime())
 			.imageUrl(imageResult != null ? imageResult.imageUrl() : null)
+			.imageKeyword(normalizeImageKeyword(dto.imageKeyword()))
 			.source("AI")
 			.build();
 
@@ -29,6 +32,14 @@ public class RecipeMapper {
 		}
 
 		return recipe;
+	}
+
+	private String normalizeImageKeyword(String imageKeyword) {
+		if (imageKeyword == null || imageKeyword.isBlank()) {
+			return null;
+		}
+		String trimmed = imageKeyword.strip();
+		return trimmed.length() > IMAGE_KEYWORD_MAX_LENGTH ? trimmed.substring(0, IMAGE_KEYWORD_MAX_LENGTH) : trimmed;
 	}
 
 	public List<RecipeIngredient> toRecipeIngredients(Recipe recipe, RecipeDto dto) {

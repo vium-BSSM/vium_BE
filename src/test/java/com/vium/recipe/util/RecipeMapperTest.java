@@ -66,6 +66,7 @@ class RecipeMapperTest {
 		assertNull(recipe.getImageUrl());
 		assertNull(recipe.getImageAuthorName());
 		assertNull(recipe.getImageAuthorUrl());
+		assertEquals("potato soup", recipe.getImageKeyword());
 		assertEquals("AI", recipe.getSource());
 	}
 
