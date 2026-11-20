@@ -2,13 +2,18 @@ package com.vium.notification.service;
 
 import com.vium.global.exception.BusinessException;
 import com.vium.global.exception.ErrorCode;
+import com.vium.inventory.service.InventoryService;
+import com.vium.notification.dto.ExpiryNotificationResponse;
 import com.vium.notification.dto.NotificationDto;
 import com.vium.notification.dto.NotificationListResponse;
 import com.vium.notification.dto.NotificationReadResponse;
 import com.vium.notification.entity.Notification;
 import com.vium.notification.repository.NotificationRepository;
+import com.vium.user.service.UserSettingsService;
 import java.time.Clock;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,6 +23,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class NotificationService {
 
 	private final NotificationRepository notifications;
+	private final InventoryService inventoryService;
+	private final UserSettingsService userSettingsService;
 	private final Clock clock;
 
 	@Transactional(readOnly = true)
@@ -44,6 +51,22 @@ public class NotificationService {
 	@Transactional
 	public void deleteByInventoryItemId(Long inventoryItemId) {
 		notifications.deleteByInventoryItemId(inventoryItemId);
+	}
+
+	/**
+	 * 소비기한 임박 알림(팝업/위젯 공용). notifications 테이블에 행을 만들지 않고 조회 시점에 계산한다.
+	 * 기준은 DashboardQueryRepository.countExpiringSoon과 동일: status=active and expiresOn <= 오늘+expiryAlertDays.
+	 */
+	@Transactional(readOnly = true)
+	public ExpiryNotificationResponse expiringSoon(Long userId) {
+		LocalDate today = LocalDate.now(clock);
+		int expiryAlertDays = userSettingsService.getExpiryAlertDays(userId);
+		LocalDate expiresThrough = today.plusDays(expiryAlertDays);
+		var items = inventoryService.findExpiringIngredients(userId, expiresThrough).stream()
+			.map(item -> new ExpiryNotificationResponse.Item(
+				item.inventoryItemId(), item.name(), (int) ChronoUnit.DAYS.between(today, item.expiresOn())))
+			.toList();
+		return new ExpiryNotificationResponse(items);
 	}
 
 	private NotificationDto toDto(Notification notification) {

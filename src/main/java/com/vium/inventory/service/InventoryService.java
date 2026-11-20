@@ -209,6 +209,15 @@ public class InventoryService {
 		return inventoryQueryRepository.findActiveInventoryStates(userId);
 	}
 
+	/**
+	 * notification 도메인의 임박 알림 조회용(팝업/위젯). list(userId, true)와 같은 조건이지만
+	 * expiresThrough를 호출부가 직접 계산해 전달한다(기준일 계산은 notification 쪽 Clock을 그대로 쓰기 위함).
+	 */
+	@Transactional(readOnly = true)
+	public List<IngredientListResponse.Item> findExpiringIngredients(Long userId, LocalDate expiresThrough) {
+		return inventoryQueryRepository.findActiveIngredients(userId, expiresThrough);
+	}
+
 	@Transactional(readOnly = true)
 	public IngredientDetailResponse getDetail(Long userId, Long inventoryItemId) {
 		return inventoryQueryRepository.findDetailByIdAndUserId(userId, inventoryItemId)
