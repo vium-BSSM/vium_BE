@@ -19,6 +19,7 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,6 +38,7 @@ public class ChatMessageService {
 	private final UserBlockService userBlockService;
 	private final ImageService imageService;
 	private final Clock clock;
+	private final ApplicationEventPublisher eventPublisher;
 
 	@Transactional
 	public ChatMessageListResponse getHistory(Long userId, Long chatRoomId, String cursor, Integer size) {
@@ -88,6 +90,7 @@ public class ChatMessageService {
 		chatParticipantRepository.findById(new ChatParticipantId(chatRoomId, partnerId))
 			.ifPresent(ChatParticipant::rejoin);
 
+		eventPublisher.publishEvent(new ChatMessageSentEvent(chatRoomId, partnerId));
 		return toDto(message, userId);
 	}
 
