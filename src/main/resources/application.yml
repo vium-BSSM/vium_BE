@@ -146,3 +146,14 @@ trade:
     enabled: ${TRADE_AUTO_COMPLETE_ENABLED:false}
     cron: ${TRADE_AUTO_COMPLETE_CRON:0 */10 * * * *}
     time-zone: ${TRADE_AUTO_COMPLETE_TIMEZONE:Asia/Seoul}
+
+fcm:
+  enabled: ${FCM_ENABLED:false}
+  credentials-json: ${FCM_CREDENTIALS_JSON:}
+  timeout-seconds: ${FCM_TIMEOUT_SECONDS:10}
+
+push:
+  expiry:
+    enabled: ${PUSH_EXPIRY_ENABLED:false}
+    cron: ${PUSH_EXPIRY_CRON:0 0 9 * * *}
+    time-zone: ${PUSH_EXPIRY_TIMEZONE:Asia/Seoul}

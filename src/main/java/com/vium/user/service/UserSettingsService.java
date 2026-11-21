@@ -17,7 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class UserSettingsService {
 
 	private static final int EXPIRY_ALERT_DAYS_MIN = 1;
-	private static final int EXPIRY_ALERT_DAYS_MAX = 14;
+	public static final int EXPIRY_ALERT_DAYS_MAX = 14;
 
 	private final UserSettingsRepository userSettingsRepository;
 	private final Clock authClock;

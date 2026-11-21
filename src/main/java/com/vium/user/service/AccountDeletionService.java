@@ -3,6 +3,7 @@ package com.vium.user.service;
 import com.vium.auth.repository.UserSessionRepository;
 import com.vium.global.exception.BusinessException;
 import com.vium.global.exception.ErrorCode;
+import com.vium.notification.service.PushTokenService;
 import com.vium.user.repository.UserCredentialRepository;
 import java.time.Clock;
 import java.time.LocalDateTime;
@@ -16,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class AccountDeletionService {
 	private final UserCredentialRepository userCredentialRepository;
 	private final UserSessionRepository userSessionRepository;
+	private final PushTokenService pushTokenService;
 	private final Clock authClock;
 
 	@Transactional
@@ -26,5 +28,6 @@ public class AccountDeletionService {
 			throw new BusinessException(ErrorCode.UNAUTHORIZED);
 		}
 		userSessionRepository.deleteByUserId(userId);
+		pushTokenService.deleteAllByUserId(userId);
 	}
 }

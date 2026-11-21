@@ -53,4 +53,21 @@ public class Notification {
 			this.readAt = readAt;
 		}
 	}
+
+	public static Notification expiry(Long userId, Long inventoryItemId, String title, String body,
+			LocalDateTime scheduledAt, LocalDateTime createdAt) {
+		Notification notification = new Notification();
+		notification.userId = userId;
+		notification.type = "expiry";
+		notification.inventoryItemId = inventoryItemId;
+		notification.title = title;
+		notification.body = body;
+		notification.scheduledAt = scheduledAt;
+		notification.createdAt = createdAt;
+		return notification;
+	}
+
+	public void markSent(LocalDateTime sentAt) {
+		this.sentAt = sentAt;
+	}
 }
