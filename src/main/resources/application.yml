@@ -157,3 +157,8 @@ push:
     enabled: ${PUSH_EXPIRY_ENABLED:false}
     cron: ${PUSH_EXPIRY_CRON:0 0 9 * * *}
     time-zone: ${PUSH_EXPIRY_TIMEZONE:Asia/Seoul}
+  chat:
+    executor:
+      core-size: 2
+      max-size: 4
+      queue-capacity: 100

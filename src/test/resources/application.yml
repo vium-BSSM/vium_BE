@@ -30,3 +30,10 @@ management:
 metrics:
   container-memory:
     enabled: false
+
+push:
+  chat:
+    executor:
+      core-size: 2
+      max-size: 4
+      queue-capacity: 100
