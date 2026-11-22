@@ -14,6 +14,7 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
 /**
@@ -36,6 +37,7 @@ public class ChatTradeNotifier implements TradeChatNotifier {
 	private final ChatParticipantRepository chatParticipantRepository;
 	private final ChatMessageRepository chatMessageRepository;
 	private final Clock clock;
+	private final ApplicationEventPublisher eventPublisher;
 
 	@Override
 	public void notify(Trade trade, TradeSystemEvent event) {
@@ -43,10 +45,13 @@ public class ChatTradeNotifier implements TradeChatNotifier {
 		ChatRoom room = chatRoomRepository.findByPostIdAndBuyerId(trade.getPostId(), trade.getBuyerId())
 			.orElseGet(() -> createRoom(trade, now));
 
-		chatMessageRepository.save(ChatMessage.system(room.getId(), MESSAGES.get(event), event.name(), now));
+		ChatMessage message = chatMessageRepository.save(
+			ChatMessage.system(room.getId(), MESSAGES.get(event), event.name(), now));
 		room.touchLastMessage(now);
 		rejoin(room.getId(), trade.getBuyerId());
 		rejoin(room.getId(), trade.getSellerId());
+		eventPublisher.publishEvent(new ChatMessageSseEvent(room.getId(), trade.getBuyerId(), message.getId()));
+		eventPublisher.publishEvent(new ChatMessageSseEvent(room.getId(), trade.getSellerId(), message.getId()));
 	}
 
 	private ChatRoom createRoom(Trade trade, LocalDateTime now) {

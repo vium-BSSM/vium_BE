@@ -12,6 +12,7 @@ import org.springframework.context.ApplicationContext;
  * chatPushExecutor(Executor 타입 빈) 도입으로 Spring Boot의 applicationTaskExecutor 자동 구성이
  * @ConditionalOnMissingBean(Executor.class)에 걸려 물러나는 문제를 ChatPushExecutorConfig가 직접
  * 복원한다. 향후 다른 Executor 빈이 추가되어 이 복원이 깨지는 것을 막기 위한 회귀 테스트다.
+ * chatSseExecutor(SSE 브로드캐스트 전용 풀)도 같은 이유로 Executor 타입 빈 목록에 포함된다.
  */
 @SpringBootTest(properties = "spring.datasource.url=jdbc:h2:mem:chat-push-executor-context-test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1")
 class ChatPushExecutorConfigContextTest {
@@ -20,8 +21,8 @@ class ChatPushExecutorConfigContextTest {
 	private ApplicationContext context;
 
 	@Test
-	void applicationTaskExecutorChatPushExecutorAndTaskSchedulerAllExist() {
+	void applicationTaskExecutorChatPushExecutorChatSseExecutorAndTaskSchedulerAllExist() {
 		assertThat(context.getBeanNamesForType(Executor.class))
-			.containsExactlyInAnyOrder("chatPushExecutor", "applicationTaskExecutor", "taskScheduler");
+			.containsExactlyInAnyOrder("chatPushExecutor", "chatSseExecutor", "applicationTaskExecutor", "taskScheduler");
 	}
 }
