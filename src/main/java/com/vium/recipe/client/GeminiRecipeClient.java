@@ -185,7 +185,8 @@ public class GeminiRecipeClient implements LlmRecipeClient {
 			.append("3. expireInDays가 작은 재료를 우선 사용하세요.\n")
 			.append("4. cookTime은 1~180 사이 정수(분)입니다.\n")
 			.append("5. steps는 2~6단계로, 요리 초보도 따라 할 수 있게 한국어로 짧게 쓰세요.\n")
-			.append("6. imageKeyword는 음식 사진 검색용 영어 음식 이름입니다.\n")
+			.append("6. imageKeyword는 title을 그대로 영어로 옮긴, 이 요리 고유의 사진 검색어입니다. ")
+			.append("\"korean food\", \"soup\"처럼 요리 종류나 카테고리를 가리키는 일반적인 표현은 쓰지 마세요.\n")
 			.append("7. reason은 이 레시피를 추천하는 이유를 한국어 한 문장으로 쓰세요.");
 		return sb.toString();
 	}

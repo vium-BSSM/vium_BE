@@ -31,7 +31,7 @@ public class RecipeImageBackfillService {
 		int filled = 0;
 		for (Recipe recipe : targets) {
 			String keyword = recipe.getImageKeyword() != null ? recipe.getImageKeyword() : recipe.getTitle();
-			ImageSearchResult image = recipeImageFinder.find(keyword, recipe.getCategory().name());
+			ImageSearchResult image = recipeImageFinder.find(keyword);
 			if (image == null || image.imageUrl() == null) {
 				continue;
 			}
