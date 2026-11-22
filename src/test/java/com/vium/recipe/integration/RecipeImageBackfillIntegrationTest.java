@@ -45,14 +45,24 @@ class RecipeImageBackfillIntegrationTest {
 	}
 
 	@Test
-	void fallsBackToTitleThenCategoryKeyword() {
+	void fallsBackToTitleWhenKeywordMissing() {
 		long id = insertRecipe("두부 덮밥", "JAPANESE", null, null);
-		when(images.searchImage("두부 덮밥")).thenReturn(null);
-		when(images.searchImage("japanese food")).thenReturn(image("https://img/2"));
+		when(images.searchImage("두부 덮밥")).thenReturn(image("https://img/2"));
 
 		assertThat(service.backfillMissingImages(10)).isEqualTo(1);
 
 		assertThat(row(id)).containsEntry("image_url", "https://img/2");
+	}
+
+	@Test
+	void doesNotRetryWithCategoryKeywordWhenSearchFails() {
+		long id = insertRecipe("두부 덮밥", "JAPANESE", null, null);
+		when(images.searchImage("두부 덮밥")).thenReturn(null);
+
+		assertThat(service.backfillMissingImages(10)).isZero();
+
+		assertThat(row(id).get("image_url")).isNull();
+		verify(images, never()).searchImage("japanese food");
 	}
 
 	@Test

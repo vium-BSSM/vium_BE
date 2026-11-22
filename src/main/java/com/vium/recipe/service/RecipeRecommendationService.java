@@ -192,7 +192,7 @@ public class RecipeRecommendationService {
 			}
 			List<GeneratedRecipe> recipes = new ArrayList<>();
 			for (RecipeDto dto : validatedDtos) {
-				ImageSearchResult imageResult = recipeImageFinder.find(dto.imageKeyword(), dto.category());
+				ImageSearchResult imageResult = recipeImageFinder.find(dto.imageKeyword());
 				recipes.add(new GeneratedRecipe(dto, imageResult));
 			}
 

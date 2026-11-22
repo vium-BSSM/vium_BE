@@ -4187,7 +4187,7 @@
                   "data": {
                     "items": [
                       {
-                        "ingredientId": 1,
+                        "inventoryItemId": 1,
                         "name": "우유",
                         "daysLeft": 2
                       }

@@ -82,6 +82,23 @@ class AccountDeletionIntegrationTest {
 	}
 
 	@Test
+	void deletesAccountsPushTokensOnlyButKeepsOtherUsersTokens() throws Exception {
+		jdbcTemplate.update("delete from \"user_push_tokens\"");
+		jdbcTemplate.update("""
+			insert into "user_push_tokens" (user_id, token, platform, created_at, updated_at)
+			values (42, 'deletion-token-1', 'ANDROID', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+			       (42, 'deletion-token-2', 'IOS', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+			       (43, 'other-token', 'ANDROID', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			""");
+
+		deleteAccount(tokens.accessToken()).andExpect(status().isOk());
+
+		var remainingUserIds = jdbcTemplate.queryForList(
+			"select user_id from \"user_push_tokens\"", Long.class);
+		assertThat(remainingUserIds).containsExactly(43L);
+	}
+
+	@Test
 	void rejectsSubsequentAccessToMeAfterDeletion() throws Exception {
 		deleteAccount(tokens.accessToken()).andExpect(status().isOk());
 

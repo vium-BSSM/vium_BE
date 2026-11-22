@@ -2,6 +2,7 @@ package com.vium.notification.controller;
 
 import com.vium.global.common.ApiResponse;
 import com.vium.global.security.CurrentUserProvider;
+import com.vium.notification.dto.ExpiryNotificationResponse;
 import com.vium.notification.dto.NotificationListResponse;
 import com.vium.notification.dto.NotificationReadResponse;
 import com.vium.notification.service.NotificationService;
@@ -29,5 +30,15 @@ public class NotificationController {
 	@PatchMapping("/{notificationId}/read")
 	public ApiResponse<NotificationReadResponse> markRead(@PathVariable Long notificationId) {
 		return ApiResponse.ok(notifications.markRead(currentUser.getCurrentUserId(), notificationId));
+	}
+
+	@GetMapping("/expiry-popup")
+	public ApiResponse<ExpiryNotificationResponse> expiryPopup() {
+		return ApiResponse.ok(notifications.expiringSoon(currentUser.getCurrentUserId()));
+	}
+
+	@GetMapping("/expiry-widget")
+	public ApiResponse<ExpiryNotificationResponse> expiryWidget() {
+		return ApiResponse.ok(notifications.expiringSoon(currentUser.getCurrentUserId()));
 	}
 }
