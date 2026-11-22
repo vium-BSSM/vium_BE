@@ -91,6 +91,7 @@ public class ChatMessageService {
 			.ifPresent(ChatParticipant::rejoin);
 
 		eventPublisher.publishEvent(new ChatMessageSentEvent(chatRoomId, partnerId));
+		eventPublisher.publishEvent(new ChatMessageSseEvent(chatRoomId, partnerId, message.getId()));
 		return toDto(message, userId);
 	}
 

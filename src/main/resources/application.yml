@@ -162,3 +162,12 @@ push:
       core-size: 2
       max-size: 4
       queue-capacity: 100
+
+sse:
+  heartbeat-interval-seconds: 25
+  max-connections-per-user: 3
+  max-connection-age-seconds: 1800
+  executor:
+    core-size: 2
+    max-size: 4
+    queue-capacity: 100
