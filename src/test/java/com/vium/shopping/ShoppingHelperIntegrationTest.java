@@ -231,7 +231,7 @@ class ShoppingHelperIntegrationTest {
 			// Then: unavailable (최근 3개월 확장 범위에도 이벤트 없음)
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.data.available").value(false))
-			.andExpect(jsonPath("$.data.reason").value("최근 소진·폐기 기록이 없습니다"))
+			.andExpect(jsonPath("$.data.reason").value("최근 먹거나 산 재료 기록이 없습니다"))
 			.andExpect(jsonPath("$.data.basedOnPeriodStart").doesNotExist())
 			.andExpect(jsonPath("$.data.basedOnPeriodEnd").doesNotExist());
 	}
@@ -303,5 +303,164 @@ class ShoppingHelperIntegrationTest {
 			.andExpect(jsonPath("$.data.available").value(true))
 			.andExpect(jsonPath("$.data.basedOnReportMonth").value(org.hamcrest.Matchers.matchesPattern("\\d{4}-\\d{2}")))
 			.andExpect(jsonPath("$.data.basedOnReportMonth").value(lastMonth.toString()));
+	}
+
+	@Test
+	void shoppingHelperIncludesRecentlyPurchasedItemWithoutEvents() throws Exception {
+		// Given: 지난달에 구매했고(purchased_on) 현재 active이며 남은 양이 있는 재고.
+		// 소진·폐기 이벤트가 전혀 없어도 "최근 산 뒤 아직 안 먹은" 품목으로 후보가 되어야 한다.
+		YearMonth lastMonth = YearMonth.now().minusMonths(1);
+		LocalDate purchasedOn = lastMonth.atDay(10);
+
+		jdbcTemplate.update("""
+			insert into "inventory_items"
+			("id", "user_id", "custom_name", "status_id", "unit_id", "initial_quantity",
+			 "remaining_quantity", "purchased_on", "created_at", "updated_at")
+			values (200, ?, '감자', 1, 1, 5, 5, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			""", userId, purchasedOn);
+
+		// When: 이벤트 없이 구매 기록만 있는 상태로 조회
+		mockMvc.perform(get("/api/me/shopping-helper")
+				.header("Authorization", "Bearer " + tokenService.issue(userId).accessToken()))
+			// Then: 소진량 0 - 현재 보유 5 = shortage -5 <= 0이고 현재 보유 > 0 이므로 alreadyHave로 분류된다.
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.available").value(true))
+			.andExpect(jsonPath("$.data.basedOnReportMonth").value(lastMonth.toString()))
+			.andExpect(jsonPath("$.data.alreadyHave.length()").value(1))
+			.andExpect(jsonPath("$.data.alreadyHave[0].ingredientName").value("감자"))
+			.andExpect(jsonPath("$.data.alreadyHave[0].quantity").value(5))
+			.andExpect(jsonPath("$.data.alreadyHave[0].unit").value("ea"))
+			.andExpect(jsonPath("$.data.toBuy.length()").value(0));
+	}
+
+	@Test
+	void shoppingHelperExcludesPurchasedItemOutsideBasePeriod() throws Exception {
+		// Given: 최근 3개월 확장 범위보다도 이전에 구매한 active 재고. 이벤트도 전혀 없다.
+		YearMonth lastMonth = YearMonth.now().minusMonths(1);
+		LocalDate purchasedOn = lastMonth.minusMonths(4).atDay(1);
+
+		jdbcTemplate.update("""
+			insert into "inventory_items"
+			("id", "user_id", "custom_name", "status_id", "unit_id", "initial_quantity",
+			 "remaining_quantity", "purchased_on", "created_at", "updated_at")
+			values (201, ?, '밀가루', 1, 1, 1, 1, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			""", userId, purchasedOn);
+
+		// When: 기준 기간(지난달~3개월 확장) 밖에서만 구매했고 이벤트도 없으므로 후보가 되지 않는다.
+		mockMvc.perform(get("/api/me/shopping-helper")
+				.header("Authorization", "Bearer " + tokenService.issue(userId).accessToken()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.available").value(false))
+			.andExpect(jsonPath("$.data.reason").value("최근 먹거나 산 재료 기록이 없습니다"));
+	}
+
+	@Test
+	void shoppingHelperExcludesPurchasedItemWithZeroRemainingQuantity() throws Exception {
+		// Given: 지난달에 구매했지만 현재 남은 양이 0인 재고(이벤트 없이 상태만 active로 남은 비정상 케이스 포함).
+		// remainingQuantity > 0 조건이 있으므로 후보가 되지 않아야 한다.
+		YearMonth lastMonth = YearMonth.now().minusMonths(1);
+		LocalDate purchasedOn = lastMonth.atDay(5);
+
+		jdbcTemplate.update("""
+			insert into "inventory_items"
+			("id", "user_id", "custom_name", "status_id", "unit_id", "initial_quantity",
+			 "remaining_quantity", "purchased_on", "created_at", "updated_at")
+			values (202, ?, '양파', 1, 1, 3, 0, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			""", userId, purchasedOn);
+
+		mockMvc.perform(get("/api/me/shopping-helper")
+				.header("Authorization", "Bearer " + tokenService.issue(userId).accessToken()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.available").value(false));
+	}
+
+	@Test
+	void shoppingHelperKeepsEventBasedResultsUnchangedWhenPurchasedItemAlsoExists() throws Exception {
+		// Given: 기존 소진 이벤트 기반 후보(계란)와, 구매 기록만 있는 새 후보(감자)가 함께 있는 상황.
+		// 기존 이벤트 기반 결과(suggestedQuantity)가 변하지 않아야 한다.
+		YearMonth lastMonth = YearMonth.now().minusMonths(1);
+		LocalDate monthStart = lastMonth.atDay(1);
+
+		Long consumedItemId = 101L;
+		jdbcTemplate.update("""
+			insert into "inventory_items"
+			("id", "user_id", "custom_name", "status_id", "unit_id", "initial_quantity",
+			 "remaining_quantity", "created_at", "updated_at")
+			values (?, ?, '계란', 2, 1, 10, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			""", consumedItemId, userId);
+		jdbcTemplate.update("""
+			insert into "consumption_events"
+			("inventory_item_id", "user_id", "event_type", "event_source_id", "quantity", "occurred_at", "created_at")
+			values (?, ?, 'consumed', 1, 10, ?, CURRENT_TIMESTAMP)
+			""", consumedItemId, userId, monthStart.atStartOfDay());
+
+		jdbcTemplate.update("""
+			insert into "inventory_items"
+			("id", "user_id", "custom_name", "status_id", "unit_id", "initial_quantity",
+			 "remaining_quantity", "purchased_on", "created_at", "updated_at")
+			values (203, ?, '감자', 1, 1, 5, 5, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			""", userId, monthStart);
+
+		mockMvc.perform(get("/api/me/shopping-helper")
+				.header("Authorization", "Bearer " + tokenService.issue(userId).accessToken()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.toBuy.length()").value(1))
+			.andExpect(jsonPath("$.data.toBuy[0].ingredientName").value("계란"))
+			.andExpect(jsonPath("$.data.toBuy[0].suggestedQuantity").value(10))
+			.andExpect(jsonPath("$.data.alreadyHave.length()").value(1))
+			.andExpect(jsonPath("$.data.alreadyHave[0].ingredientName").value("감자"));
+	}
+
+	@Test
+	void shoppingHelperTreatsDifferentUnitsOfSameNameAsSeparateItems() throws Exception {
+		// Given: 같은 이름(감자)이지만 단위가 다른 두 재고. 단위 환산은 하지 않으므로 별개 품목으로 취급해야 한다.
+		jdbcTemplate.update("insert into \"units\" (\"id\", \"code\", \"name\") values (2, 'g', 'g')");
+
+		YearMonth lastMonth = YearMonth.now().minusMonths(1);
+		LocalDate purchasedOn = lastMonth.atDay(1);
+
+		jdbcTemplate.update("""
+			insert into "inventory_items"
+			("id", "user_id", "custom_name", "status_id", "unit_id", "initial_quantity",
+			 "remaining_quantity", "purchased_on", "created_at", "updated_at")
+			values (210, ?, '감자', 1, 1, 2, 2, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			""", userId, purchasedOn);
+		jdbcTemplate.update("""
+			insert into "inventory_items"
+			("id", "user_id", "custom_name", "status_id", "unit_id", "initial_quantity",
+			 "remaining_quantity", "purchased_on", "created_at", "updated_at")
+			values (211, ?, '감자', 1, 2, 300, 300, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			""", userId, purchasedOn);
+
+		mockMvc.perform(get("/api/me/shopping-helper")
+				.header("Authorization", "Bearer " + tokenService.issue(userId).accessToken()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.alreadyHave.length()").value(2));
+	}
+
+	@Test
+	void shoppingHelperFallsBackToThreeMonthsIncludingPurchasedItem() throws Exception {
+		// Given: 지난달에는 이벤트도 구매 기록도 없고, 두 달 전에만 구매 기록(이벤트 없음)이 있는 재고.
+		YearMonth lastMonth = YearMonth.now().minusMonths(1);
+		YearMonth twoMonthsAgo = YearMonth.now().minusMonths(2);
+		LocalDate purchasedOn = twoMonthsAgo.atDay(15);
+
+		jdbcTemplate.update("""
+			insert into "inventory_items"
+			("id", "user_id", "custom_name", "status_id", "unit_id", "initial_quantity",
+			 "remaining_quantity", "purchased_on", "created_at", "updated_at")
+			values (220, ?, '당근', 1, 1, 4, 4, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			""", userId, purchasedOn);
+
+		YearMonth fallbackStart = lastMonth.minusMonths(2);
+		mockMvc.perform(get("/api/me/shopping-helper")
+				.header("Authorization", "Bearer " + tokenService.issue(userId).accessToken()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.available").value(true))
+			.andExpect(jsonPath("$.data.basedOnReportMonth").value(lastMonth.toString()))
+			.andExpect(jsonPath("$.data.basedOnPeriodStart").value(fallbackStart.toString()))
+			.andExpect(jsonPath("$.data.basedOnPeriodEnd").value(lastMonth.toString()))
+			.andExpect(jsonPath("$.data.alreadyHave.length()").value(1))
+			.andExpect(jsonPath("$.data.alreadyHave[0].ingredientName").value("당근"));
 	}
 }

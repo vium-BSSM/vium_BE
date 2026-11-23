@@ -44,7 +44,7 @@ public class ShoppingHelperService {
 	private static final int FALLBACK_LOOKBACK_MONTHS = 3;
 	private static final Set<Short> COUNT_UNIT_IDS =
 		Set.of((short) 1, (short) 6, (short) 7, (short) 8, (short) 9, (short) 10);
-	private static final String UNAVAILABLE_REASON = "최근 소진·폐기 기록이 없습니다";
+	private static final String UNAVAILABLE_REASON = "최근 먹거나 산 재료 기록이 없습니다";
 
 	private final ShoppingEventQueryRepository shoppingEventQueryRepository;
 	private final InventoryService inventoryService;
@@ -52,11 +52,12 @@ public class ShoppingHelperService {
 
 	public ShoppingHelperResponse getShoppingHelper(Long userId) {
 		YearMonth lastCompletedMonth = getLastCompletedMonth();
+		List<ActiveIngredientState> inventory = inventoryService.listActiveStates(userId);
 
-		Period period = loadPeriod(userId, lastCompletedMonth, lastCompletedMonth);
+		Period period = loadPeriod(userId, lastCompletedMonth, lastCompletedMonth, inventory);
 		if (period.candidateItems().isEmpty()) {
 			YearMonth fallbackStart = lastCompletedMonth.minusMonths((long) FALLBACK_LOOKBACK_MONTHS - 1);
-			period = loadPeriod(userId, fallbackStart, lastCompletedMonth);
+			period = loadPeriod(userId, fallbackStart, lastCompletedMonth, inventory);
 		}
 
 		if (period.candidateItems().isEmpty()) {
@@ -64,7 +65,6 @@ public class ShoppingHelperService {
 		}
 
 		Period effectivePeriod = period;
-		List<ActiveIngredientState> inventory = inventoryService.listActiveStates(userId);
 		Map<ItemKey, BigDecimal> inventoryByKey = getInventoryByKey(inventory);
 
 		List<ClassifiedItem> classified = effectivePeriod.candidateItems().stream()
@@ -129,8 +129,11 @@ public class ShoppingHelperService {
 	/**
 	 * from~to(둘 다 포함) 사이 소진·폐기 이벤트를 모아 후보 품목을 구성한다.
 	 * 소진 또는 폐기 이벤트가 하나라도 있는 품목이 후보가 된다.
+	 *
+	 * 이벤트가 없어도, 같은 기간에 구매(purchased_on)했고 현재 active이며
+	 * 남은 양이 0보다 큰 재고는 후보에 포함한다(최근 산 뒤 아직 소진·폐기 이벤트가 없는 품목도 추천 대상).
 	 */
-	private Period loadPeriod(Long userId, YearMonth from, YearMonth to) {
+	private Period loadPeriod(Long userId, YearMonth from, YearMonth to, List<ActiveIngredientState> inventory) {
 		LocalDate fromDate = from.atDay(1);
 		LocalDate toDate = to.atEndOfMonth();
 
@@ -159,6 +162,17 @@ public class ShoppingHelperService {
 				candidateItems.add(key);
 				unitNameByKey.putIfAbsent(key, event.unitName());
 				consumedByKey.merge(key, event.quantity(), BigDecimal::add);
+			}
+		}
+
+		for (ActiveIngredientState item : inventory) {
+			if (item.remainingQuantity().compareTo(BigDecimal.ZERO) > 0
+				&& item.purchasedOn() != null
+				&& !item.purchasedOn().isBefore(fromDate)
+				&& !item.purchasedOn().isAfter(toDate)) {
+				ItemKey key = new ItemKey(item.ingredientCatalogId(), item.name(), item.unitId());
+				candidateItems.add(key);
+				unitNameByKey.putIfAbsent(key, item.unitName());
 			}
 		}
 

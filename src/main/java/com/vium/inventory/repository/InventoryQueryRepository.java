@@ -71,9 +71,10 @@ public class InventoryQueryRepository {
 	public List<ActiveIngredientState> findActiveInventoryStates(Long userId) {
 		String sql = """
 			select i.ingredient_catalog_id, coalesce(c.name, i.custom_name) as name,
-			       i.unit_id, i.remaining_quantity
+			       i.unit_id, u.name as unit_name, i.remaining_quantity, i.purchased_on
 			from inventory_items i
 			join item_statuses s on s.id = i.status_id
+			join units u on u.id = i.unit_id
 			left join ingredient_catalog c on c.id = i.ingredient_catalog_id
 			where i.user_id = ? and s.code = ?
 			""";
@@ -81,7 +82,9 @@ public class InventoryQueryRepository {
 			rs.getObject("ingredient_catalog_id", Long.class),
 			rs.getString("name"),
 			rs.getShort("unit_id"),
-			rs.getBigDecimal("remaining_quantity")
+			rs.getString("unit_name"),
+			rs.getBigDecimal("remaining_quantity"),
+			rs.getObject("purchased_on", LocalDate.class)
 		), userId, "active");
 	}
 
