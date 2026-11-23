@@ -4381,7 +4381,7 @@
       "get": {
         "summary": "장보기 도우미 뷰",
         "deprecated": false,
-        "description": "[MVP] 장보기 전 '이미 있는 것 / 사야 할 것'을 정리해 보여줘 과잉구매를 막는다. 반성 도구가 아닌 실용 도구로 만드는 핵심 차별점. 현재 보유 재료 목록과 다음 구매량 제안 결과를 결합해 장보기 리스트 형태로 제공한다.\n\n- 기준 기간은 지난달(전월 전체)이며, 지난달에 소진(consumed) 또는 폐기(disposed) 이벤트가 하나라도 있는 품목이 추천 후보가 된다.\n- 지난달에 후보가 하나도 없으면 최근 3개월(지지난달 포함)을 누적해 다시 계산한다. 이 경우 `basedOnPeriodStart`는 3개월 전 달, `basedOnPeriodEnd`는 지난달이 된다. `basedOnReportMonth`는 이 경우에도 항상 \"YYYY-MM\"(지난달) 단일 월 형식을 유지한다.\n- `alreadyHave`: 기준 기간 소진량 ≤ 현재 보유량이면서 현재 보유량 > 0인 품목.\n- `toBuy.suggestedQuantity`: shortage(기준 기간 소진량 − 현재 보유량)에 기준 기간 낭비 비율을 반영해 줄인 값. `suggestedQuantity = shortage × 소진량 ÷ (소진량 + 폐기량)`. 같은 품목을 많이 버렸을수록 추천 수량이 더 줄어든다. 폐기 이벤트가 없는 품목은 비율이 1이 되어 shortage를 그대로 추천한다. 낱개로 세는 단위(개/팩/봉/병/캔/통)는 올림해 정수로 표시한다.\n- 기준 기간(최근 3개월로 확장한 경우 포함)에 소진·폐기 이벤트가 전혀 없으면 `available=false`이고 `alreadyHave`/`toBuy`는 빈 배열이며, `basedOnPeriodStart`/`basedOnPeriodEnd`는 null이다.",
+        "description": "[MVP] 장보기 전 '이미 있는 것 / 사야 할 것'을 정리해 보여줘 과잉구매를 막는다. 반성 도구가 아닌 실용 도구로 만드는 핵심 차별점. 현재 보유 재료 목록과 다음 구매량 제안 결과를 결합해 장보기 리스트 형태로 제공한다.\n\n- 기준 기간은 지난달(전월 전체)이며, 지난달에 소진(consumed) 또는 폐기(disposed) 이벤트가 하나라도 있는 품목, 또는 그 기간에 구매(purchased_on)했고 현재 보유 중(active)이며 남은 양이 있는 품목이 추천 후보가 된다.\n- 지난달에 후보가 하나도 없으면 최근 3개월(지지난달 포함)을 누적해 다시 계산한다. 이 경우 `basedOnPeriodStart`는 3개월 전 달, `basedOnPeriodEnd`는 지난달이 된다. `basedOnReportMonth`는 이 경우에도 항상 \"YYYY-MM\"(지난달) 단일 월 형식을 유지한다.\n- `alreadyHave`: 기준 기간 소진량 ≤ 현재 보유량이면서 현재 보유량 > 0인 품목.\n- `toBuy.suggestedQuantity`: shortage(기준 기간 소진량 − 현재 보유량)에 기준 기간 낭비 비율을 반영해 줄인 값. `suggestedQuantity = shortage × 소진량 ÷ (소진량 + 폐기량)`. 같은 품목을 많이 버렸을수록 추천 수량이 더 줄어든다. 폐기 이벤트가 없는 품목은 비율이 1이 되어 shortage를 그대로 추천한다. 낱개로 세는 단위(개/팩/봉/병/캔/통)는 올림해 정수로 표시한다.\n- 기준 기간(최근 3개월로 확장한 경우 포함)에 소진·폐기 이벤트도, 그 기간에 구매한 보유 재고도 전혀 없으면 `available=false`이고 `alreadyHave`/`toBuy`는 빈 배열이며, `basedOnPeriodStart`/`basedOnPeriodEnd`는 null이다.",
         "tags": [
           "logic",
           "user"
@@ -4411,12 +4411,12 @@
                       "properties": {
                         "available": {
                           "type": "boolean",
-                          "description": "기준 기간(지난달 또는 확장된 최근 3개월)에 소진·폐기 이벤트가 있어 추천 결과를 계산했으면 true"
+                          "description": "기준 기간(지난달 또는 확장된 최근 3개월)에 소진·폐기 이벤트 또는 구매한 보유 재고가 있어 추천 결과를 계산했으면 true"
                         },
                         "reason": {
                           "type": "string",
                           "nullable": true,
-                          "description": "available=false일 때만 값이 있음 (예: \"최근 소진·폐기 기록이 없습니다\")"
+                          "description": "available=false일 때만 값이 있음 (예: \"최근 먹거나 산 재료 기록이 없습니다\")"
                         },
                         "basedOnReportMonth": {
                           "type": "string",
