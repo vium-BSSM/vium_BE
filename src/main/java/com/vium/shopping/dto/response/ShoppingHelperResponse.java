@@ -6,6 +6,8 @@ public record ShoppingHelperResponse(
 	Boolean available,
 	String reason,
 	String basedOnReportMonth,
+	String basedOnPeriodStart,
+	String basedOnPeriodEnd,
 	List<InventoryItemDto> alreadyHave,
 	List<SuggestionItemDto> toBuy
 ) {
@@ -28,11 +30,13 @@ public record ShoppingHelperResponse(
 	) {
 	}
 
-	public static ShoppingHelperResponse unavailable(String basedOnReportMonth) {
+	public static ShoppingHelperResponse unavailable(String basedOnReportMonth, String reason) {
 		return new ShoppingHelperResponse(
 			false,
-			"최신 리포트가 없습니다",
+			reason,
 			basedOnReportMonth,
+			null,
+			null,
 			List.of(),
 			List.of()
 		);

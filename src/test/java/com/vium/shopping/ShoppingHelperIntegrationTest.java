@@ -95,7 +95,8 @@ class ShoppingHelperIntegrationTest {
 			.andExpect(jsonPath("$.data.toBuy[0].unit").value("ea"))
 			// shortage = 소진(5) - 현재 보유(0, active 아님) = 5
 			// 낭비 비율 반영: 5 × 소진(5) ÷ (소진(5)+폐기(2)) = 25/7 ≈ 3.571
-			.andExpect(jsonPath("$.data.toBuy[0].suggestedQuantity").value(3.571));
+			// unit_id 1(개)은 낱개 단위라 올림 → 4
+			.andExpect(jsonPath("$.data.toBuy[0].suggestedQuantity").value(4));
 	}
 
 	@Test
@@ -125,18 +126,19 @@ class ShoppingHelperIntegrationTest {
 
 		// shortage = 소진(2) - 현재 보유(0) = 2
 		// 낭비 비율 반영: 2 × 소진(2) ÷ (소진(2)+폐기(8)) = 4/10 = 0.4
+		// unit_id 1(개)은 낱개 단위라 올림 → 1
 		mockMvc.perform(get("/api/me/shopping-helper")
 				.header("Authorization", "Bearer " + tokenService.issue(userId).accessToken()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.data.toBuy.length()").value(1))
 			.andExpect(jsonPath("$.data.toBuy[0].ingredientName").value("양상추"))
-			.andExpect(jsonPath("$.data.toBuy[0].suggestedQuantity").value(0.4));
+			.andExpect(jsonPath("$.data.toBuy[0].suggestedQuantity").value(1));
 	}
 
 	@Test
-	void shoppingHelperExcludesConsumedOnlyItemWithoutDisposedEvent() throws Exception {
-		// Given: 소진 이벤트만 있고 폐기 이벤트가 전혀 없는 재료.
-		// 후보 판정은 폐기 이벤트 기준이므로(원래 동작), 이런 재료는 소진량이 커도 후보가 아니다.
+	void shoppingHelperIncludesConsumedOnlyItemWithoutDisposedEvent() throws Exception {
+		// Given: 소진 이벤트만 있고 폐기 이벤트가 전혀 없는 재료(예: 매달 다 먹는 계란).
+		// 후보 판정은 소진 또는 폐기 이벤트 중 하나만 있어도 성립하므로 후보가 되어야 한다.
 		YearMonth lastMonth = YearMonth.now().minusMonths(1);
 		LocalDate monthStart = lastMonth.atDay(1);
 
@@ -154,11 +156,16 @@ class ShoppingHelperIntegrationTest {
 			values (?, ?, 'consumed', 1, 10, ?, CURRENT_TIMESTAMP)
 			""", consumedItemId, userId, monthStart.atStartOfDay());
 
-		// When: 이 사용자에게는 지난달 폐기 이벤트가 전혀 없다 → unavailable
+		// When: 폐기 이벤트가 없어도 소진 이벤트만으로 후보가 되어야 한다.
+		// shortage = 소진(10) - 현재 보유(0) = 10, 폐기가 없어 낭비 비율은 1 → 10 그대로 추천
 		mockMvc.perform(get("/api/me/shopping-helper")
 				.header("Authorization", "Bearer " + tokenService.issue(userId).accessToken()))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.data.available").value(false));
+			.andExpect(jsonPath("$.data.available").value(true))
+			.andExpect(jsonPath("$.data.basedOnReportMonth").value(lastMonth.toString()))
+			.andExpect(jsonPath("$.data.toBuy.length()").value(1))
+			.andExpect(jsonPath("$.data.toBuy[0].ingredientName").value("계란"))
+			.andExpect(jsonPath("$.data.toBuy[0].suggestedQuantity").value(10));
 	}
 
 	@Test
@@ -221,8 +228,80 @@ class ShoppingHelperIntegrationTest {
 		// When: 장보기 도우미 조회
 		mockMvc.perform(get("/api/me/shopping-helper")
 				.header("Authorization", "Bearer " + tokenService.issue(userId).accessToken()))
-			// Then: unavailable (지난달 이벤트 없음)
+			// Then: unavailable (최근 3개월 확장 범위에도 이벤트 없음)
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.data.available").value(false));
+			.andExpect(jsonPath("$.data.available").value(false))
+			.andExpect(jsonPath("$.data.reason").value("최근 소진·폐기 기록이 없습니다"))
+			.andExpect(jsonPath("$.data.basedOnPeriodStart").doesNotExist())
+			.andExpect(jsonPath("$.data.basedOnPeriodEnd").doesNotExist());
+	}
+
+	@Test
+	void shoppingHelperFallsBackToThreeMonthsWhenLastMonthHasNoEvents() throws Exception {
+		// Given: 지난달에는 이벤트가 없고, 두 달 전(최근 3개월 범위 안)에만 소진 이벤트가 있음.
+		// 가입한 지 얼마 안 됐거나 기록이 적은 달에도 추천이 나와야 한다.
+		YearMonth lastMonth = YearMonth.now().minusMonths(1);
+		YearMonth twoMonthsAgo = YearMonth.now().minusMonths(2);
+		LocalDate twoMonthsAgoStart = twoMonthsAgo.atDay(1);
+
+		Long itemId = 104L;
+		jdbcTemplate.update("""
+			insert into "inventory_items"
+			("id", "user_id", "custom_name", "status_id", "unit_id", "initial_quantity",
+			 "remaining_quantity", "created_at", "updated_at")
+			values (?, ?, '두부', 2, 1, 4, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			""", itemId, userId);
+
+		jdbcTemplate.update("""
+			insert into "consumption_events"
+			("inventory_item_id", "user_id", "event_type", "event_source_id", "quantity", "occurred_at", "created_at")
+			values (?, ?, 'consumed', 1, 4, ?, CURRENT_TIMESTAMP)
+			""", itemId, userId, twoMonthsAgoStart.atStartOfDay());
+
+		// 확장 범위는 항상 지난달 기준 3개월 전체(lastMonth-2 ~ lastMonth)다.
+		YearMonth fallbackStart = lastMonth.minusMonths(2);
+		mockMvc.perform(get("/api/me/shopping-helper")
+				.header("Authorization", "Bearer " + tokenService.issue(userId).accessToken()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.available").value(true))
+			// basedOnReportMonth는 확장된 경우에도 항상 "YYYY-MM" 단일 월(지난달)을 유지하고,
+			// 실제 확장 범위는 basedOnPeriodStart/basedOnPeriodEnd로 표현한다.
+			.andExpect(jsonPath("$.data.basedOnReportMonth").value(lastMonth.toString()))
+			.andExpect(jsonPath("$.data.basedOnPeriodStart").value(fallbackStart.toString()))
+			.andExpect(jsonPath("$.data.basedOnPeriodEnd").value(lastMonth.toString()))
+			.andExpect(jsonPath("$.data.toBuy.length()").value(1))
+			.andExpect(jsonPath("$.data.toBuy[0].ingredientName").value("두부"))
+			.andExpect(jsonPath("$.data.toBuy[0].suggestedQuantity").value(4));
+	}
+
+	@Test
+	void shoppingHelperBasedOnReportMonthStaysSingleMonthFormatWhenExpandedToThreeMonths() throws Exception {
+		// Given: 지난달에는 이벤트가 없고, 두 달 전에만 소진 이벤트가 있어 3개월로 확장되는 상황.
+		// 프론트가 basedOnReportMonth를 split('-')[1]로 파싱하므로, 확장되어도 "~" 범위 문자열이
+		// 아니라 항상 "YYYY-MM" 단일 월 형식으로 와야 한다.
+		YearMonth lastMonth = YearMonth.now().minusMonths(1);
+		YearMonth twoMonthsAgo = YearMonth.now().minusMonths(2);
+		LocalDate twoMonthsAgoStart = twoMonthsAgo.atDay(1);
+
+		Long itemId = 105L;
+		jdbcTemplate.update("""
+			insert into "inventory_items"
+			("id", "user_id", "custom_name", "status_id", "unit_id", "initial_quantity",
+			 "remaining_quantity", "created_at", "updated_at")
+			values (?, ?, '두부', 2, 1, 4, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			""", itemId, userId);
+
+		jdbcTemplate.update("""
+			insert into "consumption_events"
+			("inventory_item_id", "user_id", "event_type", "event_source_id", "quantity", "occurred_at", "created_at")
+			values (?, ?, 'consumed', 1, 4, ?, CURRENT_TIMESTAMP)
+			""", itemId, userId, twoMonthsAgoStart.atStartOfDay());
+
+		mockMvc.perform(get("/api/me/shopping-helper")
+				.header("Authorization", "Bearer " + tokenService.issue(userId).accessToken()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.available").value(true))
+			.andExpect(jsonPath("$.data.basedOnReportMonth").value(org.hamcrest.Matchers.matchesPattern("\\d{4}-\\d{2}")))
+			.andExpect(jsonPath("$.data.basedOnReportMonth").value(lastMonth.toString()));
 	}
 }

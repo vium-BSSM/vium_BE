@@ -22,18 +22,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 장보기 도우미: 지난달 폐기 이력을 기반으로 추천 후보를 정하고,
- * 소진량과 현재 보유량을 비교해 구매 추천 수량을 계산한다.
+ * 장보기 도우미: 지난달(후보가 없으면 최근 3개월 누적) 소진·폐기 이력을 기반으로
+ * 추천 후보를 정하고, 소진량과 현재 보유량을 비교해 구매 추천 수량을 계산한다.
  *
- * 후보 판정과 unavailable 조건은 "폐기 이벤트" 기준이다(docs/PickDo.openapi.json,
- * CLAUDE.md 어디에도 소진 이벤트만으로 후보가 되거나 unavailable 조건을 완화한다는
- * 근거가 없어 원래 동작을 유지한다). 다만 재료 이름/단위는 inventory_items의
- * active 상태 여부와 무관하게 이벤트 조인 결과에서 직접 가져온다(폐기된 재료도
- * 이름/단위가 정상적으로 매핑되어야 하므로).
+ * 후보 판정은 소진(consumed) 또는 폐기(disposed) 이벤트 중 하나라도 있으면 성립한다.
+ * 폐기 이벤트가 전혀 없는 품목(예: 매달 다 먹는 계란)도 후보가 되어야
+ * "장보기 도우미"의 취지(다음에 뭘 사야 하는지 안내)에 맞는다.
  *
- * toBuy 추천 수량은 지난달 낭비 비율(폐기량 ÷ (소진량+폐기량))만큼 줄여서 계산한다.
- * 같은 품목을 많이 버렸을수록 "지난달만큼" 사지 않도록 유도한다(기능명세서의
- * "다음 구매량 제안" 취지 반영, 구매 이력이 없어 소진·폐기 이벤트로 근사).
+ * toBuy 추천 수량은 기준 기간 낭비 비율(폐기량 ÷ (소진량+폐기량))만큼 줄여서 계산한다.
+ * 폐기가 없으면 비율이 1이 되어 shortage를 그대로 추천한다. 낱개로 세는 단위
+ * (개/팩/봉/병/캔/통)는 소수점이 있으면 올림해 정수로 보여준다.
  */
 @Service
 @RequiredArgsConstructor
@@ -43,6 +41,10 @@ public class ShoppingHelperService {
 	private static final String EVENT_TYPE_DISPOSED = "disposed";
 	private static final String EVENT_TYPE_CONSUMED = "consumed";
 	private static final int QUANTITY_SCALE = 3;
+	private static final int FALLBACK_LOOKBACK_MONTHS = 3;
+	private static final Set<Short> COUNT_UNIT_IDS =
+		Set.of((short) 1, (short) 6, (short) 7, (short) 8, (short) 9, (short) 10);
+	private static final String UNAVAILABLE_REASON = "최근 소진·폐기 기록이 없습니다";
 
 	private final ShoppingEventQueryRepository shoppingEventQueryRepository;
 	private final InventoryService inventoryService;
@@ -50,44 +52,25 @@ public class ShoppingHelperService {
 
 	public ShoppingHelperResponse getShoppingHelper(Long userId) {
 		YearMonth lastCompletedMonth = getLastCompletedMonth();
-		String basedOnReportMonth = lastCompletedMonth.toString();
 
-		LocalDate from = lastCompletedMonth.atDay(1);
-		LocalDate to = lastCompletedMonth.atEndOfMonth();
-
-		List<EventWithItemInfo> disposedEvents =
-			shoppingEventQueryRepository.findEventsWithItemInfo(userId, from, to, EVENT_TYPE_DISPOSED);
-
-		// unavailable 조건: 지난달 폐기 이벤트가 없을 때 (원래 동작)
-		if (!hasPositiveQuantity(disposedEvents)) {
-			return ShoppingHelperResponse.unavailable(basedOnReportMonth);
+		Period period = loadPeriod(userId, lastCompletedMonth, lastCompletedMonth);
+		if (period.candidateItems().isEmpty()) {
+			YearMonth fallbackStart = lastCompletedMonth.minusMonths((long) FALLBACK_LOOKBACK_MONTHS - 1);
+			period = loadPeriod(userId, fallbackStart, lastCompletedMonth);
 		}
 
-		Set<ItemKey> candidateItems = new HashSet<>();
-		Map<ItemKey, String> unitNameByKey = new HashMap<>();
-		Map<ItemKey, BigDecimal> disposedByKey = new HashMap<>();
-		for (EventWithItemInfo event : disposedEvents) {
-			if (event.quantity().compareTo(BigDecimal.ZERO) > 0) {
-				ItemKey key = new ItemKey(event.ingredientCatalogId(), event.ingredientName(), event.unitId());
-				candidateItems.add(key);
-				unitNameByKey.putIfAbsent(key, event.unitName());
-				disposedByKey.merge(key, event.quantity(), BigDecimal::add);
-			}
+		if (period.candidateItems().isEmpty()) {
+			return ShoppingHelperResponse.unavailable(period.to().toString(), UNAVAILABLE_REASON);
 		}
 
-		if (candidateItems.isEmpty()) {
-			return ShoppingHelperResponse.unavailable(basedOnReportMonth);
-		}
-
-		Map<ItemKey, BigDecimal> consumedByKey = getConsumedByKey(userId, from, to, unitNameByKey);
-
+		Period effectivePeriod = period;
 		List<ActiveIngredientState> inventory = inventoryService.listActiveStates(userId);
 		Map<ItemKey, BigDecimal> inventoryByKey = getInventoryByKey(inventory);
 
-		List<ClassifiedItem> classified = candidateItems.stream()
+		List<ClassifiedItem> classified = effectivePeriod.candidateItems().stream()
 			.map(key -> {
-				BigDecimal consumed = consumedByKey.getOrDefault(key, BigDecimal.ZERO);
-				BigDecimal disposed = disposedByKey.getOrDefault(key, BigDecimal.ZERO);
+				BigDecimal consumed = effectivePeriod.consumedByKey().getOrDefault(key, BigDecimal.ZERO);
+				BigDecimal disposed = effectivePeriod.disposedByKey().getOrDefault(key, BigDecimal.ZERO);
 				BigDecimal currentInv = inventoryByKey.getOrDefault(key, BigDecimal.ZERO);
 				BigDecimal shortage = consumed.subtract(currentInv);
 				BigDecimal adjustedShortage = applyWasteRatio(shortage, consumed, disposed);
@@ -95,7 +78,7 @@ public class ShoppingHelperService {
 					key.ingredientCatalogId(),
 					key.ingredientName(),
 					key.unitId(),
-					unitNameByKey.getOrDefault(key, ""),
+					effectivePeriod.unitNameByKey().getOrDefault(key, ""),
 					shortage,
 					adjustedShortage,
 					currentInv
@@ -121,7 +104,7 @@ public class ShoppingHelperService {
 			.map(item -> new SuggestionItemDto(
 				item.ingredientCatalogId,
 				item.ingredientName,
-				item.adjustedShortage,
+				roundForUnit(item.adjustedShortage, item.unitId),
 				item.unitId,
 				item.unit
 			))
@@ -130,7 +113,9 @@ public class ShoppingHelperService {
 		return new ShoppingHelperResponse(
 			true,
 			null,
-			basedOnReportMonth,
+			effectivePeriod.to().toString(),
+			effectivePeriod.from().toString(),
+			effectivePeriod.to().toString(),
 			alreadyHave,
 			toBuy
 		);
@@ -141,14 +126,50 @@ public class ShoppingHelperService {
 		return YearMonth.of(today.getYear(), today.getMonth()).minusMonths(1);
 	}
 
-	private boolean hasPositiveQuantity(List<EventWithItemInfo> events) {
-		return events.stream().anyMatch(event -> event.quantity().compareTo(BigDecimal.ZERO) > 0);
+	/**
+	 * from~to(둘 다 포함) 사이 소진·폐기 이벤트를 모아 후보 품목을 구성한다.
+	 * 소진 또는 폐기 이벤트가 하나라도 있는 품목이 후보가 된다.
+	 */
+	private Period loadPeriod(Long userId, YearMonth from, YearMonth to) {
+		LocalDate fromDate = from.atDay(1);
+		LocalDate toDate = to.atEndOfMonth();
+
+		List<EventWithItemInfo> disposedEvents =
+			shoppingEventQueryRepository.findEventsWithItemInfo(userId, fromDate, toDate, EVENT_TYPE_DISPOSED);
+		List<EventWithItemInfo> consumedEvents =
+			shoppingEventQueryRepository.findEventsWithItemInfo(userId, fromDate, toDate, EVENT_TYPE_CONSUMED);
+
+		Set<ItemKey> candidateItems = new HashSet<>();
+		Map<ItemKey, String> unitNameByKey = new HashMap<>();
+		Map<ItemKey, BigDecimal> disposedByKey = new HashMap<>();
+		Map<ItemKey, BigDecimal> consumedByKey = new HashMap<>();
+
+		for (EventWithItemInfo event : disposedEvents) {
+			if (event.quantity().compareTo(BigDecimal.ZERO) > 0) {
+				ItemKey key = new ItemKey(event.ingredientCatalogId(), event.ingredientName(), event.unitId());
+				candidateItems.add(key);
+				unitNameByKey.putIfAbsent(key, event.unitName());
+				disposedByKey.merge(key, event.quantity(), BigDecimal::add);
+			}
+		}
+
+		for (EventWithItemInfo event : consumedEvents) {
+			if (event.quantity().compareTo(BigDecimal.ZERO) > 0) {
+				ItemKey key = new ItemKey(event.ingredientCatalogId(), event.ingredientName(), event.unitId());
+				candidateItems.add(key);
+				unitNameByKey.putIfAbsent(key, event.unitName());
+				consumedByKey.merge(key, event.quantity(), BigDecimal::add);
+			}
+		}
+
+		return new Period(candidateItems, unitNameByKey, disposedByKey, consumedByKey, from, to);
 	}
 
 	/**
-	 * shortage(부족량)에 지난달 낭비 비율만큼 할인을 적용한다.
+	 * shortage(부족량)에 기준 기간 낭비 비율만큼 할인을 적용한다.
 	 * adjusted = shortage × consumed ÷ (consumed + disposed)
 	 * 예: 소진 5, 폐기 2 → 낭비 비율 2/7 ≈ 28.6% → shortage의 71.4%만 추천.
+	 * 폐기가 없으면(disposed=0) 비율은 1이 되어 shortage를 그대로 추천한다.
 	 */
 	private BigDecimal applyWasteRatio(BigDecimal shortage, BigDecimal consumed, BigDecimal disposed) {
 		BigDecimal totalUsed = consumed.add(disposed);
@@ -159,22 +180,14 @@ public class ShoppingHelperService {
 	}
 
 	/**
-	 * 지난달 소진량을 재료 키별로 집계한다. inventory_items의 active 상태와 무관하게
-	 * 이벤트 조인 결과에서 이름/단위를 가져오므로, 소진 후 상태가 바뀐 재료도 올바르게 집계된다.
+	 * 낱개로 세는 단위(개/팩/봉/병/캔/통)는 소수점이 조금만 있어도 올림해 정수로 보여준다.
+	 * 무게·부피 단위(g/kg/ml/L)는 기존처럼 소수점 3자리를 유지한다.
 	 */
-	private Map<ItemKey, BigDecimal> getConsumedByKey(Long userId, LocalDate from, LocalDate to,
-			Map<ItemKey, String> unitNameByKey) {
-		Map<ItemKey, BigDecimal> result = new HashMap<>();
-		List<EventWithItemInfo> events =
-			shoppingEventQueryRepository.findEventsWithItemInfo(userId, from, to, EVENT_TYPE_CONSUMED);
-
-		for (EventWithItemInfo event : events) {
-			ItemKey key = new ItemKey(event.ingredientCatalogId(), event.ingredientName(), event.unitId());
-			result.merge(key, event.quantity(), BigDecimal::add);
-			unitNameByKey.putIfAbsent(key, event.unitName());
+	private BigDecimal roundForUnit(BigDecimal value, Short unitId) {
+		if (COUNT_UNIT_IDS.contains(unitId)) {
+			return value.setScale(0, RoundingMode.CEILING);
 		}
-
-		return result;
+		return value;
 	}
 
 	/**
@@ -199,5 +212,10 @@ public class ShoppingHelperService {
 
 	record ClassifiedItem(Long ingredientCatalogId, String ingredientName, Short unitId,
 		String unit, BigDecimal shortage, BigDecimal adjustedShortage, BigDecimal currentInventory) {
+	}
+
+	record Period(Set<ItemKey> candidateItems, Map<ItemKey, String> unitNameByKey,
+		Map<ItemKey, BigDecimal> disposedByKey, Map<ItemKey, BigDecimal> consumedByKey,
+		YearMonth from, YearMonth to) {
 	}
 }
