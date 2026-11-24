@@ -66,7 +66,7 @@ public class TradeCommandService {
 			throw new BusinessException(ErrorCode.TRADE_ALREADY_IN_PROGRESS);
 		}
 		if (post.getType() == PostType.SALE) creditService.hold(buyerId, trade.getId(), trade.getPrice());
-		notifiers.forEach(notifier -> notifier.notify(trade, TradeSystemEvent.TRADE_REQUESTED));
+		notifiers.forEach(notifier -> notifier.notify(trade, TradeSystemEvent.TRADE_REQUESTED, buyerId));
 		return new TradeOutcome.Done(TradeResult.from(trade, post.getStatus()));
 	}
 
@@ -82,12 +82,12 @@ public class TradeCommandService {
 			trade.cancel(null, null, now);
 			refund(trade);
 			if (post.getStatus() == PostStatus.OPEN) postStateService.markExpired(post.getId());
-			notify(trade, TradeSystemEvent.TRADE_CANCELED);
+			notify(trade, TradeSystemEvent.TRADE_CANCELED, null);
 			return new TradeOutcome.PostExpired();
 		}
 		trade.accept(now);
 		postStateService.markReserved(post.getId());
-		notify(trade, TradeSystemEvent.TRADE_ACCEPTED);
+		notify(trade, TradeSystemEvent.TRADE_ACCEPTED, userId);
 		return new TradeOutcome.Done(TradeResult.from(trade, post.getStatus()));
 	}
 
@@ -98,7 +98,7 @@ public class TradeCommandService {
 		if (!trade.isSeller(userId)) throw new BusinessException(ErrorCode.TRADE_FORBIDDEN);
 		trade.reject(LocalDateTime.now(clock));
 		refund(trade);
-		notify(trade, TradeSystemEvent.TRADE_REJECTED);
+		notify(trade, TradeSystemEvent.TRADE_REJECTED, userId);
 		return TradeResult.from(trade, locked.post().getStatus());
 	}
 
@@ -111,7 +111,7 @@ public class TradeCommandService {
 		refund(trade);
 		if (post.getStatus() == PostStatus.RESERVED) postStateService.markOpen(post.getId());
 		if (post.getStatus() == PostStatus.OPEN && isExpired(post)) postStateService.markExpired(post.getId());
-		notify(trade, TradeSystemEvent.TRADE_CANCELED);
+		notify(trade, TradeSystemEvent.TRADE_CANCELED, userId);
 		return TradeResult.from(trade, post.getStatus());
 	}
 
@@ -119,15 +119,15 @@ public class TradeCommandService {
 	public TradeCompleteResult complete(Long userId, Long tradeId) {
 		var locked = tradeLockService.lockParticipant(tradeId, userId);
 		if (!locked.trade().isBuyer(userId)) throw new BusinessException(ErrorCode.TRADE_FORBIDDEN);
-		return completionService.complete(locked.trade(), locked.post());
+		return completionService.complete(locked.trade(), locked.post(), userId);
 	}
 
 	private void refund(Trade trade) {
 		if (trade.getPrice() > 0) creditService.refund(trade.getBuyerId(), trade.getId(), trade.getPrice());
 	}
 
-	private void notify(Trade trade, TradeSystemEvent event) {
-		notifiers.forEach(notifier -> notifier.notify(trade, event));
+	private void notify(Trade trade, TradeSystemEvent event, Long actorId) {
+		notifiers.forEach(notifier -> notifier.notify(trade, event, actorId));
 	}
 
 	private boolean isExpired(Post post) {

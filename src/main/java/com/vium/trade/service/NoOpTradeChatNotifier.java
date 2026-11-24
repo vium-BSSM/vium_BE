@@ -5,6 +5,6 @@ import com.vium.trade.entity.Trade;
 class NoOpTradeChatNotifier implements TradeChatNotifier {
 
 	@Override
-	public void notify(Trade trade, TradeSystemEvent event) {
+	public void notify(Trade trade, TradeSystemEvent event, Long actorId) {
 	}
 }

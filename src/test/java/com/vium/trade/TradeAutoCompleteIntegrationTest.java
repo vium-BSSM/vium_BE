@@ -70,7 +70,7 @@ class TradeAutoCompleteIntegrationTest extends TradeIntegrationSupport {
 		assertThat(auto.notifySoonTrades()).isEqualTo(1);
 		assertThat(auto.notifySoonTrades()).isZero();
 		assertThat(processor.notifySoon(soon)).isFalse();
-		verify(notifier).notify(any(), eq(TradeSystemEvent.TRADE_AUTO_COMPLETE_SOON));
+		verify(notifier).notify(any(), eq(TradeSystemEvent.TRADE_AUTO_COMPLETE_SOON), any());
 		assertThat(jdbc.queryForObject("select auto_complete_notified_at from trades where id=?", LocalDateTime.class, soon)).isEqualTo(LOCAL_NOW);
 	}
 
@@ -78,10 +78,10 @@ class TradeAutoCompleteIntegrationTest extends TradeIntegrationSupport {
 	void failedReminderCanBeRetried() {
 		long id = accepted(createPost(SELLER, PostType.SHARE), BUYER);
 		jdbc.update("update trades set auto_resolve_at=? where id=?", LOCAL_NOW.plusHours(1), id);
-		doThrow(new IllegalStateException("failed")).when(notifier).notify(any(), eq(TradeSystemEvent.TRADE_AUTO_COMPLETE_SOON));
+		doThrow(new IllegalStateException("failed")).when(notifier).notify(any(), eq(TradeSystemEvent.TRADE_AUTO_COMPLETE_SOON), any());
 		assertThat(auto.notifySoonTrades()).isZero();
 		assertThat(jdbc.queryForObject("select auto_complete_notified_at from trades where id=?", LocalDateTime.class, id)).isNull();
-		doNothing().when(notifier).notify(any(), eq(TradeSystemEvent.TRADE_AUTO_COMPLETE_SOON));
+		doNothing().when(notifier).notify(any(), eq(TradeSystemEvent.TRADE_AUTO_COMPLETE_SOON), any());
 		assertThat(auto.notifySoonTrades()).isEqualTo(1);
 	}
 

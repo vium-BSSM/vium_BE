@@ -290,7 +290,7 @@ class ChatMessagePushIntegrationTest {
 		insertToken(BUYER_ID, "buyer-token");
 		Trade trade = Trade.request(POST_ID, BUYER_ID, SELLER_ID, 1000, LocalDateTime.now());
 
-		chatTradeNotifier.notify(trade, TradeSystemEvent.TRADE_REQUESTED);
+		chatTradeNotifier.notify(trade, TradeSystemEvent.TRADE_REQUESTED, BUYER_ID);
 
 		verify(fcmPushClient, after(300).never()).send(any(), any(), any(), any());
 	}

@@ -23,7 +23,7 @@ public class TradePostExpiryHandler implements PostExpiryHandler {
 		tradeRepository.findByPostIdAndStatusForUpdate(postId, TradeStatus.REQUESTED).ifPresent(trade -> {
 			trade.cancel(null, null, LocalDateTime.now(clock));
 			if (trade.getPrice() > 0) creditService.refund(trade.getBuyerId(), trade.getId(), trade.getPrice());
-			notifiers.forEach(notifier -> notifier.notify(trade, TradeSystemEvent.TRADE_CANCELED));
+			notifiers.forEach(notifier -> notifier.notify(trade, TradeSystemEvent.TRADE_CANCELED, null));
 		});
 	}
 }

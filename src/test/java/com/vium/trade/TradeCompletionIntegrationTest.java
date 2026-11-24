@@ -86,7 +86,7 @@ class TradeCompletionIntegrationTest extends TradeIntegrationSupport {
 		var post = createPost(SELLER, PostType.SALE);
 		long id = accepted(post, BUYER);
 		if (failNotification) {
-			doThrow(new IllegalStateException("failed")).when(notifier).notify(any(), eq(TradeSystemEvent.TRADE_COMPLETED));
+			doThrow(new IllegalStateException("failed")).when(notifier).notify(any(), eq(TradeSystemEvent.TRADE_COMPLETED), any());
 		} else {
 			doThrow(new IllegalStateException("failed")).when(inventory).registerFromTrade(eq(BUYER), any(), any(LocalDate.class));
 		}

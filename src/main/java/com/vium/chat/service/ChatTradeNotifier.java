@@ -12,7 +12,7 @@ import com.vium.trade.service.TradeChatNotifier;
 import com.vium.trade.service.TradeSystemEvent;
 import java.time.Clock;
 import java.time.LocalDateTime;
-import java.util.Map;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
@@ -25,14 +25,6 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ChatTradeNotifier implements TradeChatNotifier {
 
-	private static final Map<TradeSystemEvent, String> MESSAGES = Map.of(
-		TradeSystemEvent.TRADE_REQUESTED, "거래 요청이 도착했어요.",
-		TradeSystemEvent.TRADE_ACCEPTED, "거래가 수락되었어요.",
-		TradeSystemEvent.TRADE_REJECTED, "거래가 거절되었어요.",
-		TradeSystemEvent.TRADE_CANCELED, "거래가 취소되었어요.",
-		TradeSystemEvent.TRADE_COMPLETED, "거래가 완료되었어요.",
-		TradeSystemEvent.TRADE_AUTO_COMPLETE_SOON, "24시간 뒤 거래가 자동으로 완료돼요.");
-
 	private final ChatRoomRepository chatRoomRepository;
 	private final ChatParticipantRepository chatParticipantRepository;
 	private final ChatMessageRepository chatMessageRepository;
@@ -40,18 +32,25 @@ public class ChatTradeNotifier implements TradeChatNotifier {
 	private final ApplicationEventPublisher eventPublisher;
 
 	@Override
-	public void notify(Trade trade, TradeSystemEvent event) {
+	public void notify(Trade trade, TradeSystemEvent event, Long actorId) {
 		LocalDateTime now = LocalDateTime.now(clock);
 		ChatRoom room = chatRoomRepository.findByPostIdAndBuyerId(trade.getPostId(), trade.getBuyerId())
 			.orElseGet(() -> createRoom(trade, now));
 
 		ChatMessage message = chatMessageRepository.save(
-			ChatMessage.system(room.getId(), MESSAGES.get(event), event.name(), now));
+			ChatMessage.system(room.getId(), event.message(), event.name(), now));
 		room.touchLastMessage(now);
 		rejoin(room.getId(), trade.getBuyerId());
 		rejoin(room.getId(), trade.getSellerId());
 		eventPublisher.publishEvent(new ChatMessageSseEvent(room.getId(), trade.getBuyerId(), message.getId()));
 		eventPublisher.publishEvent(new ChatMessageSseEvent(room.getId(), trade.getSellerId(), message.getId()));
+		for (Long recipientId : recipientsOf(trade, actorId)) {
+			eventPublisher.publishEvent(new TradeStatusPushEvent(room.getId(), recipientId, event));
+		}
+	}
+
+	private List<Long> recipientsOf(Trade trade, Long actorId) {
+		return actorId == null ? List.of(trade.getBuyerId(), trade.getSellerId()) : List.of(trade.partnerOf(actorId));
 	}
 
 	private ChatRoom createRoom(Trade trade, LocalDateTime now) {
