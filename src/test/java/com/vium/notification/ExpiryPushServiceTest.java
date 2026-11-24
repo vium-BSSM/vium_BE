@@ -18,7 +18,9 @@ import com.vium.notification.repository.NotificationRepository;
 import com.vium.notification.repository.UserPushTokenRepository;
 import com.vium.notification.service.ExpiryPushService;
 import com.vium.notification.service.FcmPushClient;
+import com.vium.notification.service.PushDispatchService;
 import com.vium.notification.service.PushResult;
+import com.vium.notification.service.PushTokenService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -35,6 +37,7 @@ class ExpiryPushServiceTest {
 	private final ExpiryPushQueryRepository expiryPushQueryRepository = mock(ExpiryPushQueryRepository.class);
 	private final UserPushTokenRepository userPushTokenRepository = mock(UserPushTokenRepository.class);
 	private final NotificationRepository notificationRepository = mock(NotificationRepository.class);
+	private final PushTokenService pushTokenService = mock(PushTokenService.class);
 	private final FcmPushClient fcmPushClient = mock(FcmPushClient.class);
 	private final Clock clock = Clock.fixed(Instant.parse("2026-11-16T00:00:00Z"), ZoneOffset.UTC);
 
@@ -45,8 +48,10 @@ class ExpiryPushServiceTest {
 
 	@BeforeEach
 	void setUp() {
+		PushDispatchService pushDispatchService =
+			new PushDispatchService(userPushTokenRepository, pushTokenService, fcmPushClient);
 		service = new ExpiryPushService(
-			expiryPushQueryRepository, userPushTokenRepository, notificationRepository, fcmPushClient, clock, self);
+			expiryPushQueryRepository, notificationRepository, pushDispatchService, clock, self);
 		when(self.getObject()).thenReturn(service);
 	}
 
@@ -128,7 +133,7 @@ class ExpiryPushServiceTest {
 
 		service.sendDailyExpiryPush();
 
-		verify(userPushTokenRepository).deleteByToken("stale-token");
+		verify(pushTokenService).deleteByToken("stale-token");
 	}
 
 	@Test
