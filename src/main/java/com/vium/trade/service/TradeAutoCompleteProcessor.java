@@ -24,7 +24,7 @@ public class TradeAutoCompleteProcessor {
 		if (trade.getStatus() != TradeStatus.ACCEPTED || trade.getAutoResolveAt().isAfter(LocalDateTime.now(clock))) {
 			return false;
 		}
-		completionService.complete(trade, locked.post());
+		completionService.complete(trade, locked.post(), null);
 		return true;
 	}
 
@@ -37,7 +37,7 @@ public class TradeAutoCompleteProcessor {
 			return false;
 		}
 		trade.markAutoCompleteNotified(now);
-		notifiers.forEach(notifier -> notifier.notify(trade, TradeSystemEvent.TRADE_AUTO_COMPLETE_SOON));
+		notifiers.forEach(notifier -> notifier.notify(trade, TradeSystemEvent.TRADE_AUTO_COMPLETE_SOON, null));
 		return true;
 	}
 }

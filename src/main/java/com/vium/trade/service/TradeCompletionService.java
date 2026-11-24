@@ -33,7 +33,7 @@ public class TradeCompletionService {
 	private final Clock clock;
 
 	@Transactional(propagation = Propagation.MANDATORY)
-	public TradeCompleteResult complete(Trade trade, Post post) {
+	public TradeCompleteResult complete(Trade trade, Post post, Long actorId) {
 		trade.requireStatus(TradeStatus.ACCEPTED);
 		LocalDateTime now = LocalDateTime.now(clock);
 		var source = inventoryService.closeAsSharedForTrade(trade.getSellerId(), post.getInventoryItemId());
@@ -51,7 +51,7 @@ public class TradeCompletionService {
 		if (trade.getPrice() > 0) creditService.payIncome(trade.getSellerId(), trade.getId(), trade.getPrice());
 		trade.complete(buyerItemId, now);
 		postStateService.markCompleted(post.getId());
-		notifiers.forEach(notifier -> notifier.notify(trade, TradeSystemEvent.TRADE_COMPLETED));
+		notifiers.forEach(notifier -> notifier.notify(trade, TradeSystemEvent.TRADE_COMPLETED, actorId));
 		return TradeCompleteResult.from(trade, post.getStatus());
 	}
 }
