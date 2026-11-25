@@ -4549,7 +4549,7 @@
       "get": {
         "summary": "알림 이력 조회",
         "deprecated": false,
-        "description": "내 알림 이력을 scheduledAt 내림차순, 같은 시각이면 notificationId 내림차순으로 조회한다. 현재 저장되는 알림 유형은 expiry와 consume_check다. 채팅·거래 푸시는 알림 목록에 저장되지 않는다.",
+        "description": "내 알림 이력을 scheduledAt 내림차순, 같은 시각이면 notificationId 내림차순으로 조회한다. 현재 저장되는 알림 유형은 expiry, consume_check, shopping_reminder다. 채팅·거래 푸시는 알림 목록에 저장되지 않는다.",
         "tags": [
           "notification"
         ],
@@ -5432,7 +5432,8 @@
                   },
                   "shoppingReminderEnabled": {
                     "type": "boolean",
-                    "example": true
+                    "example": true,
+                    "description": "true면 매주 토요일 10:00 KST에 장보기 전 냉장고 확인 푸시를 보낸다. pushEnabled=false면 보내지 않는다."
                   },
                   "pushEnabled": {
                     "type": "boolean",
@@ -10686,7 +10687,7 @@
     "/api/me/push-tokens": {
       "put": {
         "summary": "푸시 토큰 등록",
-        "description": "앱 실행·로그인 시 기기의 FCM 토큰을 등록한다(멱등). 같은 토큰이 다른 사용자에게 등록돼 있으면 현재 사용자로 옮긴다(기기에서 계정을 바꾼 경우). 사용자당 여러 기기를 허용한다. 회원 탈퇴 시 토큰을 모두 삭제하고, FCM이 무효 토큰으로 응답하면 서버가 삭제한다.\n\nFCM data의 모든 값은 문자열이다. users.push_enabled=false이면 푸시를 보내지 않는다. 발송 시각은 서버 설정 기본값이며, 정기 푸시 배치가 활성화된 경우 적용한다.\n\n| type | data | 보내는 시점 | 알림 목록 저장 |\n|---|---|---|---|\n| expiry | {type} | 매일 09:00 KST, 사용자 설정 일수 기준으로 소비기한 임박 재료가 있을 때 | 저장 |\n| consume_check | {type} | 매일 20:00 KST, 소비기한 당일인 소진 확인 대상 재료가 있을 때 | 저장 |\n| chat | {type, chatRoomId} | 상대가 메시지를 보냈을 때 | 저장 안 함 |\n| trade | {type, chatRoomId} | 거래 상태가 바뀌었을 때 | 저장 안 함 |",
+        "description": "앱 실행·로그인 시 기기의 FCM 토큰을 등록한다(멱등). 같은 토큰이 다른 사용자에게 등록돼 있으면 현재 사용자로 옮긴다(기기에서 계정을 바꾼 경우). 사용자당 여러 기기를 허용한다. 회원 탈퇴 시 토큰을 모두 삭제하고, FCM이 무효 토큰으로 응답하면 서버가 삭제한다.\n\nFCM data의 모든 값은 문자열이다. users.push_enabled=false이면 푸시를 보내지 않는다. 발송 시각은 서버 설정 기본값이며, 정기 푸시 배치가 활성화된 경우 적용한다.\n\n| type | data | 보내는 시점 | 알림 목록 저장 |\n|---|---|---|---|\n| expiry | {type} | 매일 09:00 KST, 사용자 설정 일수 기준으로 소비기한 임박 재료가 있을 때 | 저장 |\n| consume_check | {type} | 매일 20:00 KST, 소비기한 당일인 소진 확인 대상 재료가 있을 때 | 저장 |\n| shopping_reminder | {type} | 매주 토요일 10:00 KST, users.shopping_reminder_enabled=true인 사용자에게 | 저장 |\n| chat | {type, chatRoomId} | 상대가 메시지를 보냈을 때 | 저장 안 함 |\n| trade | {type, chatRoomId} | 거래 상태가 바뀌었을 때 | 저장 안 함 |",
         "operationId": "registerPushToken",
         "tags": [
           "notification"
@@ -12954,7 +12955,7 @@
           },
           "type": {
             "type": "string",
-            "description": "현재 알림 목록에 저장되는 유형은 expiry와 consume_check다."
+            "description": "현재 알림 목록에 저장되는 유형은 expiry, consume_check, shopping_reminder다. shopping_reminder는 특정 재료를 가리키지 않는다."
           },
           "title": {
             "type": "string"

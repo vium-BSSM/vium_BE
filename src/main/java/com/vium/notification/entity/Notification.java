@@ -64,6 +64,11 @@ public class Notification {
 		return create(userId, "consume_check", inventoryItemId, title, body, scheduledAt, createdAt);
 	}
 
+	public static Notification shoppingReminder(Long userId, String title, String body,
+			LocalDateTime scheduledAt, LocalDateTime createdAt) {
+		return create(userId, "shopping_reminder", null, title, body, scheduledAt, createdAt);
+	}
+
 	private static Notification create(Long userId, String type, Long inventoryItemId, String title, String body,
 			LocalDateTime scheduledAt, LocalDateTime createdAt) {
 		Notification notification = new Notification();
