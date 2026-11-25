@@ -4,11 +4,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import com.vium.notification.config.FcmProperties;
 import com.vium.notification.service.ConsumeCheckPushService;
 import com.vium.notification.service.FcmPushClient;
 import com.vium.notification.service.PushResult;
+import com.vium.notification.sse.SseConnectionRegistry;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -43,8 +47,15 @@ class ConsumeCheckPushServiceIntegrationTest {
 	@MockitoBean
 	private FcmPushClient fcmPushClient;
 
+	@MockitoBean
+	private FcmProperties fcmProperties;
+
+	@MockitoBean
+	private SseConnectionRegistry sseConnections;
+
 	@BeforeEach
 	void setUp() {
+		when(fcmProperties.enabled()).thenReturn(true);
 		jdbc.update("delete from notifications");
 		jdbc.update("delete from consumption_events");
 		jdbc.update("delete from posts");
@@ -74,7 +85,31 @@ class ConsumeCheckPushServiceIntegrationTest {
 	}
 
 	@Test
-	void sendsOnlyForActiveUnconfirmedPositiveQuantityItemsExpiringTodayAndEligibleUsers() {
+	void createsAndCompletesNotificationWithoutFcmOrTokensAndDoesNotDuplicateIt() {
+		when(fcmProperties.enabled()).thenReturn(false);
+		jdbc.update("delete from user_push_tokens where user_id = 1");
+		insertItem(10, 1, 1, 1, TODAY, null);
+
+		assertThat(consumeCheckPushService.sendDailyConsumeCheckPush()).isEqualTo(1);
+		assertThat(rows()).singleElement().satisfies(row -> assertThat(row.sentAt()).isNotNull());
+		assertThat(consumeCheckPushService.sendDailyConsumeCheckPush()).isZero();
+		assertThat(rows()).hasSize(1);
+		verifyNoInteractions(fcmPushClient);
+		verify(sseConnections).broadcast(1L, "notification", Map.of("type", "consume_check"));
+	}
+
+	@Test
+	void createsAndCompletesNotificationForUserWithPushDisabled() {
+		insertItem(16, 2, 1, 1, TODAY, null);
+
+		assertThat(consumeCheckPushService.sendDailyConsumeCheckPush()).isEqualTo(1);
+		assertThat(rows()).singleElement().satisfies(row -> assertThat(row.sentAt()).isNotNull());
+		verifyNoInteractions(fcmPushClient);
+		verify(sseConnections).broadcast(2L, "notification", Map.of("type", "consume_check"));
+	}
+
+	@Test
+	void createsRowsForAllEligibleItemsAndOnlyPushesToUsersWithPushEnabledAndTokens() {
 		insertItem(10, 1, 1, 1, TODAY, null);
 		insertItem(11, 1, 1, 1, TODAY.minusDays(1), null);
 		insertItem(12, 1, 1, 1, TODAY.plusDays(1), null);
@@ -87,13 +122,12 @@ class ConsumeCheckPushServiceIntegrationTest {
 		insertItem(19, 1, 1, 1, null, null);
 		when(fcmPushClient.send(any(), any(), any(), any())).thenReturn(PushResult.SUCCESS);
 
-		assertThat(consumeCheckPushService.sendDailyConsumeCheckPush()).isEqualTo(1);
+		assertThat(consumeCheckPushService.sendDailyConsumeCheckPush()).isEqualTo(3);
 
-		assertThat(rows()).singleElement().satisfies(row -> {
-			assertThat(row.inventoryItemId()).isEqualTo(10L);
-			assertThat(row.sentAt()).isNotNull();
-		});
+		assertThat(rows()).extracting(NotificationRow::inventoryItemId).containsExactly(10L, 16L, 18L);
+		assertThat(rows()).allSatisfy(row -> assertThat(row.sentAt()).isNotNull());
 		verify(fcmPushClient).send("token-1", "소진 확인", "우유, 다 드셨어요?", Map.of("type", "consume_check"));
+		verifyNoMoreInteractions(fcmPushClient);
 	}
 
 	@Test
@@ -151,6 +185,7 @@ class ConsumeCheckPushServiceIntegrationTest {
 			assertThat(row.sentAt()).isNotNull();
 		});
 		verify(fcmPushClient, times(2)).send(any(), any(), any(), any());
+		verify(sseConnections).broadcast(1L, "notification", Map.of("type", "consume_check"));
 	}
 
 	private void setToday(LocalDate day) {
