@@ -194,8 +194,13 @@ class ConsumptionCheckApiIntegrationTest {
 	}
 
 	@Test
-	void existingConsumedActionRecordsOneEventAndRemovesItemFromTheList() throws Exception {
+	void existingConsumedActionRecordsOneEventRemovesItemAndMarksConsumeCheckRead() throws Exception {
 		insertItem(11, 1, 1, TODAY);
+		jdbc.update("""
+			insert into notifications (user_id, inventory_item_id, type, title, scheduled_at, created_at)
+			values (1, 11, 'consume_check', '소진 확인', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+			       (1, 11, 'expiry', '임박 알림', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			""");
 		list().andExpect(jsonPath("$.data.items[*].inventoryItemId", contains(11)));
 
 		mockMvc.perform(patch("/api/me/ingredients/11/status").header("Authorization", auth(1))
@@ -207,6 +212,8 @@ class ConsumptionCheckApiIntegrationTest {
 		list().andExpect(status().isOk()).andExpect(jsonPath("$.data.items").isEmpty());
 		assertThat(jdbc.queryForList("select event_type from consumption_events where inventory_item_id = 11",
 			String.class)).containsExactly("consumed");
+		assertThat(readAt("consume_check")).isEqualTo(LocalDateTime.ofInstant(NOW, SEOUL));
+		assertThat(readAt("expiry")).isNull();
 	}
 
 	@Test

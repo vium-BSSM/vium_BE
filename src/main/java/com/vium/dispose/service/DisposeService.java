@@ -13,6 +13,7 @@ import com.vium.global.exception.NotFoundException;
 import com.vium.inventory.dto.InventoryItemSnapshot;
 import com.vium.inventory.dto.InventoryState;
 import com.vium.inventory.service.InventoryService;
+import com.vium.notification.service.NotificationService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
@@ -31,6 +32,7 @@ public class DisposeService {
 	private final ConsumptionEventRepository consumptionEventRepository;
 	private final ItemStatusRepository itemStatusRepository;
 	private final EventSourceRepository eventSourceRepository;
+	private final NotificationService notificationService;
 	private final Clock clock;
 
 	private static final String STATUS_CONSUMED = "consumed";
@@ -76,6 +78,7 @@ public class DisposeService {
 		BigDecimal consumedQty = request.quantity().subtract(disposedQty);
 		BigDecimal disposedAmount = resolveWasteAmount(snapshot, disposedQty, request.wasteAmount());
 		saveSplitEvents(inventoryItemId, userId, snapshot, eventSourceId, occurredAt, disposedQty, disposedAmount, consumedQty);
+		notificationService.markConsumeCheckRead(userId, inventoryItemId);
 
 		// 응답: wasteQuantity/wasteAmount는 저장된 폐기 이벤트의 값(요청값이 아님). consumed면 둘 다 null
 		BigDecimal responseWasteQuantity = STATUS_DISPOSED.equals(effectiveStatus) ? wasteQty : null;
