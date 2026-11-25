@@ -11,6 +11,7 @@ import com.vium.image.service.ImageService;
 import com.vium.ingredient.service.ExpiryEstimationService;
 import com.vium.ingredient.service.IngredientCatalogService;
 import com.vium.inventory.dto.ActiveIngredientState;
+import com.vium.inventory.dto.ConsumptionCheckCandidate;
 import com.vium.inventory.dto.IngredientDetailResponse;
 import com.vium.inventory.dto.IngredientListResponse;
 import com.vium.inventory.dto.IngredientRegisterRequest;
@@ -25,6 +26,7 @@ import com.vium.inventory.repository.InventoryItemRepository;
 import com.vium.inventory.repository.InventoryQueryRepository;
 import com.vium.user.service.UserSettingsService;
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collection;
@@ -50,6 +52,7 @@ public class InventoryService {
 	private final UserSettingsService userSettingsService;
 	private final ImageService imageService;
 	private final List<InventoryLockChecker> lockCheckers;
+	private final Clock clock;
 
 	@Transactional
 	public IngredientUpdateResponse update(Long userId, Long inventoryItemId, IngredientUpdateRequest request) {
@@ -204,6 +207,26 @@ public class InventoryService {
 	@Transactional(readOnly = true)
 	public List<IngredientListResponse.Item> findExpiringIngredients(Long userId, LocalDate expiresThrough) {
 		return inventoryQueryRepository.findActiveIngredients(userId, expiresThrough);
+	}
+
+	@Transactional(readOnly = true)
+	public List<ConsumptionCheckCandidate> findConsumptionCheckCandidates(Long userId, LocalDate today) {
+		return inventoryQueryRepository.findConsumptionCheckCandidates(userId, today);
+	}
+
+	@Transactional
+	public LocalDate confirmKeep(Long userId, Long inventoryItemId) {
+		InventoryItem item = inventoryItemRepository.findByIdAndUserIdForUpdate(inventoryItemId, userId)
+			.orElseThrow(() -> new NotFoundException("Inventory item not found"));
+		Short activeStatusId = itemStatusRepository.findByCode(ACTIVE_STATUS_CODE)
+			.orElseThrow(() -> new BusinessException(ErrorCode.INTERNAL_ERROR, "item_statuses 시드 데이터가 없습니다"))
+			.getId();
+		LocalDate expiresOn = item.getExpiresOn();
+		if (!activeStatusId.equals(item.getStatusId()) || expiresOn == null || expiresOn.isAfter(LocalDate.now(clock))) {
+			throw new BusinessException(ErrorCode.INVALID_REQUEST, "보유 중이고 소비기한이 오늘 또는 과거인 재료만 잔여를 확인할 수 있습니다");
+		}
+		item.confirmKeep();
+		return item.getKeepConfirmedExpiresOn();
 	}
 
 	@Transactional(readOnly = true)
