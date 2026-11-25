@@ -52,7 +52,7 @@
     },
     {
       "name": "chat",
-      "description": "게시물 단위 1:1 채팅. 실시간 수신 방식(STOMP over WebSocket / SSE)은 미정이며 확정 후 이 태그에 추가한다. 거래 요청·수락·거절·취소·완료 시 서버가 SYSTEM 메시지를 자동으로 남긴다."
+      "description": "게시물 단위 1:1 채팅. 실시간 채팅 이벤트는 GET /api/me/events(SSE)의 chat-message 이벤트로 받는다. 이벤트는 갱신 신호(chatRoomId, messageId)만 담으므로 메시지 내용은 메시지 내역 API로 조회한다. 거래 요청·수락·거절·취소·완료 시 서버가 SYSTEM 메시지를 자동으로 남긴다."
     },
     {
       "name": "safety",
@@ -1024,7 +1024,7 @@
                     "type": "string",
                     "maxLength": 120,
                     "nullable": true,
-                    "description": "사용자 지정 재료명(공백 제거 후 저장). ingredientCatalogId와 둘 중 하나는 필수."
+                    "description": "앞뒤 공백만 제거해 저장(내부 공백 유지). 비어 있으면 카탈로그 이름을 사용. ingredientCatalogId와 둘 중 하나는 필수."
                   },
                   "quantity": {
                     "type": "number",
@@ -1067,7 +1067,7 @@
                 }
               },
               "example": {
-                "ingredientCatalogId": 5,
+                "ingredientCatalogId": 211,
                 "customName": null,
                 "quantity": 1000,
                 "unitId": 4,
@@ -1175,7 +1175,7 @@
                   "success": true,
                   "data": {
                     "inventoryItemId": 10,
-                    "ingredientCatalogId": 5,
+                    "ingredientCatalogId": 211,
                     "customName": "우유",
                     "initialQuantity": 1000,
                     "remainingQuantity": 1000,
@@ -2098,7 +2098,7 @@
       "patch": {
         "summary": "소진/폐기 처리",
         "deprecated": false,
-        "description": "[MVP] 재료를 소진(consumed) 또는 폐기(disposed)로 처리한다. 예/아니오 알림 등에서 호출되어 상태를 갱신한다. status가 consumed/disposed로 변경되면 서버는 consumption_events에 이벤트 1건을 자동 기록한다(event_type, quantity, amount, occurred_at). disposed면 wasteQuantity/wasteAmount가 함께 기록된다.",
+        "description": "재료를 소진(consumed) 또는 폐기(disposed) 처리하며, 처리량(quantity) 전체를 재고에서 차감한다. consumption_events에는 폐기분과 소진분 중 0보다 큰 쪽을 각각 1건씩, 최대 2건 기록한다. 폐기 요청의 wasteQuantity는 처리량 중 폐기분이며, 생략하면 처리량 전부를 폐기한다. 폐기량이 0이면 소진으로 처리한다. 폐기 이벤트에는 폐기량과 폐기 금액(wasteQuantity, wasteAmount)을 반영한다.\n\n소진 확인에서 ‘예’만 이 API에 {status:\"consumed\", quantity: remainingQuantity}를 보낸다. ‘아니오’는 POST /api/me/notifications/consumption-check/{ingredientId}/keep을 호출한다.\n\n소비기한이 지난 재고의 자동 폐기는 서버 배치가 처리하며 별도 HTTP API는 없다. 사용자 설정 autoDisposeEnabled가 false이거나 현재 소비기한에 대해 잔여를 확인한 재고는 자동 폐기에서 제외한다.",
         "tags": [
           "dispose",
           "ingredient"
@@ -2705,7 +2705,7 @@
                   "data": null,
                   "error": {
                     "code": "INVALID_REQUEST",
-                    "message": "eventType must be 'consumed' or 'disposed'"
+                    "message": "eventType must be 'consumed', 'disposed' or 'shared'"
                   }
                 }
               }
@@ -4121,19 +4121,70 @@
       "get": {
         "summary": "소비기한 팝업 알림",
         "deprecated": false,
-        "description": "",
+        "description": "서울 날짜 기준으로 active 재고 중 소비기한이 오늘 + 사용자 expiryAlertDays 이하인 재료를 조회한다. 소비기한 오름차순, 같은 날짜면 inventoryItemId 오름차순으로 정렬한다. daysLeft는 오늘부터 소비기한까지의 일수이며, 오늘은 0이고 지난 날짜는 음수다. expiry-popup과 expiry-widget은 같은 응답을 반환한다.",
         "tags": [
           "notification"
         ],
         "parameters": [],
         "responses": {
           "200": {
-            "description": "",
+            "description": "성공",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "properties": {}
+                  "required": [
+                    "success",
+                    "data",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "items"
+                      ],
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "inventoryItemId",
+                              "name",
+                              "daysLeft"
+                            ],
+                            "properties": {
+                              "inventoryItemId": {
+                                "type": "integer",
+                                "format": "int64"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "daysLeft": {
+                                "type": "integer",
+                                "format": "int32"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "error": {
+                      "type": "object",
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
+                    }
+                  }
                 },
                 "example": {
                   "success": true,
@@ -4149,8 +4200,7 @@
                   "error": null
                 }
               }
-            },
-            "headers": {}
+            }
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
@@ -4161,26 +4211,77 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
       }
     },
     "/api/me/notifications/expiry-widget": {
       "get": {
         "summary": "소비기한 위젯 알림",
         "deprecated": false,
-        "description": "",
+        "description": "서울 날짜 기준으로 active 재고 중 소비기한이 오늘 + 사용자 expiryAlertDays 이하인 재료를 조회한다. 소비기한 오름차순, 같은 날짜면 inventoryItemId 오름차순으로 정렬한다. daysLeft는 오늘부터 소비기한까지의 일수이며, 오늘은 0이고 지난 날짜는 음수다. expiry-popup과 expiry-widget은 같은 응답을 반환한다.",
         "tags": [
           "notification"
         ],
         "parameters": [],
         "responses": {
           "200": {
-            "description": "",
+            "description": "성공",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "properties": {}
+                  "required": [
+                    "success",
+                    "data",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "items"
+                      ],
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "inventoryItemId",
+                              "name",
+                              "daysLeft"
+                            ],
+                            "properties": {
+                              "inventoryItemId": {
+                                "type": "integer",
+                                "format": "int64"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "daysLeft": {
+                                "type": "integer",
+                                "format": "int32"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "error": {
+                      "type": "object",
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
+                    }
+                  }
                 },
                 "example": {
                   "success": true,
@@ -4196,8 +4297,7 @@
                   "error": null
                 }
               }
-            },
-            "headers": {}
+            }
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
@@ -4208,14 +4308,14 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
       }
     },
     "/api/me/notifications/consumption-check": {
       "get": {
         "summary": "소진 여부 확인 알림",
         "deprecated": false,
-        "description": "[MVP] '이거 다 드셨어요?'에 예/아니오만 눌러 소진 또는 잔여로 처리한다. 폐기 기록의 부담을 최소화하는 장치. 예=소진 시 재료 소진 처리, 아니오=잔여 시 재고 유지. 소진/폐기 처리(PATCH /api/v1/me/ingredients/{ingredientId}/status) API와 연동.",
+        "description": "서울 날짜 기준으로 active 상태이고 잔량이 0보다 크며 소비기한이 오늘 이하인 내 재고를 조회한다. 현재 소비기한에 대해 잔여를 확인한 재고와 미삭제 OPEN 또는 RESERVED 게시물에 올라간 재고는 제외한다. 소비기한 오름차순, 같은 날짜면 inventoryItemId 오름차순으로 정렬한다. 대상이 없으면 items는 빈 배열이다.\n\n소진 확인에서 ‘예’는 PATCH /api/me/ingredients/{ingredientId}/status에 {status:\"consumed\", quantity: remainingQuantity}를 보낸다. ‘아니오’는 POST /api/me/notifications/consumption-check/{ingredientId}/keep을 호출한다.",
         "tags": [
           "notification",
           "dispose"
@@ -4223,16 +4323,90 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": "",
+            "description": "성공",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "properties": {}
+                  "required": [
+                    "success",
+                    "data",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "items"
+                      ],
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "inventoryItemId",
+                              "name",
+                              "remainingQuantity",
+                              "unit",
+                              "expiresOn"
+                            ],
+                            "properties": {
+                              "inventoryItemId": {
+                                "type": "integer",
+                                "format": "int64"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "remainingQuantity": {
+                                "type": "number"
+                              },
+                              "unit": {
+                                "type": "string",
+                                "description": "재료 목록과 같은 단위 표시명."
+                              },
+                              "expiresOn": {
+                                "type": "string",
+                                "format": "date"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "error": {
+                      "type": "object",
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "items": [
+                      {
+                        "inventoryItemId": 12,
+                        "name": "우유",
+                        "remainingQuantity": 0.5,
+                        "unit": "L",
+                        "expiresOn": "2026-11-25"
+                      }
+                    ]
+                  },
+                  "error": null
                 }
               }
-            },
-            "headers": {}
+            }
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
@@ -4243,14 +4417,139 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
+      }
+    },
+    "/api/me/notifications/consumption-check/{ingredientId}/keep": {
+      "post": {
+        "summary": "소진 확인에서 재고 유지",
+        "description": "소진 확인에서 ‘아니오’로 답한다. 현재 소비기한에 대해 잔여를 확인하여 자동 폐기 대상에서 제외한다. 소비기한을 다른 날짜로 수정하면 해당 확인의 효력이 끝나며, 자동 폐기 조건을 만족하면 다시 대상이 된다. 같은 요청을 반복해도 결과가 같다. 해당 재고의 consume_check 알림이 있으면 읽음 처리한다.",
+        "operationId": "confirmConsumptionCheckKeep",
+        "tags": [
+          "notification",
+          "dispose"
+        ],
+        "parameters": [
+          {
+            "name": "ingredientId",
+            "in": "path",
+            "required": true,
+            "description": "재고 ID",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "inventoryItemId",
+                        "keepConfirmedExpiresOn"
+                      ],
+                      "properties": {
+                        "inventoryItemId": {
+                          "type": "integer",
+                          "format": "int64"
+                        },
+                        "keepConfirmedExpiresOn": {
+                          "type": "string",
+                          "format": "date"
+                        }
+                      }
+                    },
+                    "error": {
+                      "type": "object",
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "inventoryItemId": 12,
+                    "keepConfirmedExpiresOn": "2026-11-25"
+                  },
+                  "error": null
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "INVALID_REQUEST: active가 아니거나 소비기한이 없거나 서울 날짜 기준 미래인 재고",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "INVALID_REQUEST",
+                    "message": "보유 중이고 소비기한이 오늘 또는 과거인 재료만 잔여를 확인할 수 있습니다"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NOT_FOUND: 재고가 없거나 본인 소유가 아님",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "NOT_FOUND",
+                    "message": "Inventory item not found"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "x-apidog-status": "released"
       }
     },
     "/api/me/notifications": {
       "get": {
         "summary": "알림 이력 조회",
         "deprecated": false,
-        "description": "notifications 테이블의 id, sent_at, read_at 등을 활용해 알림 이력을 조회한다.",
+        "description": "내 알림 이력을 scheduledAt 내림차순, 같은 시각이면 notificationId 내림차순으로 조회한다. 현재 저장되는 알림 유형은 expiry와 consume_check다. 채팅·거래 푸시는 알림 목록에 저장되지 않는다.",
         "tags": [
           "notification"
         ],
@@ -4280,9 +4579,9 @@
                     "notifications": [
                       {
                         "notificationId": 10,
-                        "type": "expiry_popup",
-                        "title": "유통기한 임박",
-                        "body": "우유의 소비기한이 2일 남았습니다.",
+                        "type": "expiry",
+                        "title": "소비기한 임박 알림",
+                        "body": "우유의 소비기한이 임박했어요",
                         "scheduledAt": "2026-09-01T09:00:00",
                         "sentAt": "2026-09-01T09:00:05",
                         "readAt": null
@@ -4304,14 +4603,14 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
       }
     },
     "/api/me/notifications/{notificationId}/read": {
       "patch": {
         "summary": "알림 읽음 처리",
         "deprecated": false,
-        "description": "알림을 읽음 처리하여 notifications.read_at을 갱신한다.",
+        "description": "내 알림을 읽음 처리한다. 이미 읽은 알림이면 기존 readAt을 유지하므로 반복 호출해도 결과가 같다.",
         "tags": [
           "notification"
         ],
@@ -4321,9 +4620,10 @@
             "in": "path",
             "description": "",
             "required": true,
-            "example": "",
+            "example": 10,
             "schema": {
-              "type": "integer"
+              "type": "integer",
+              "format": "int64"
             }
           }
         ],
@@ -4374,7 +4674,60 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
+      }
+    },
+    "/api/me/events": {
+      "get": {
+        "summary": "사용자 실시간 이벤트 스트림",
+        "description": "Authorization: Bearer 헤더로 인증하는 사용자별 SSE 스트림이다. 쿼리 파라미터로 보낸 토큰은 받지 않는다.\n\n| event | data | 보내는 시점 |\n|---|---|---|\n| ping | 문자열 \"ping\" | 연결 직후와 이후 heartbeat마다 |\n| chat-message | {\"chatRoomId\": long, \"messageId\": long} | 상대방의 메시지가 커밋된 뒤 수신자에게 전송. 거래 SYSTEM 메시지는 구매자와 판매자 모두에게 전송 |\n\nchat-message에는 메시지 내용이 들어가지 않는다. 수신하면 메시지 내역 API를 다시 조회한다.\n\n- heartbeat 주기 기본값은 25초(sse.heartbeat-interval-seconds)다.\n- 사용자당 연결 수 기본값은 3개(sse.max-connections-per-user)다. 초과 시 가장 오래된 연결을 종료한다.\n- 연결 수명 기본값은 1800초(sse.max-connection-age-seconds)다. 수명을 넘긴 연결은 서버가 heartbeat 검사 시 정상 종료하므로 클라이언트는 다시 연결해야 한다.\n- 서버는 단일 인스턴스를 전제로 연결을 메모리에 저장한다. 연결이 끊긴 동안의 이벤트는 재전송하지 않고 Last-Event-ID는 지원하지 않는다. 재연결 후 목록이나 메시지 내역을 다시 조회한다.",
+        "operationId": "streamUserEvents",
+        "tags": [
+          "notification",
+          "chat"
+        ],
+        "responses": {
+          "200": {
+            "description": "사용자 이벤트 스트림",
+            "headers": {
+              "Cache-Control": {
+                "description": "캐시 재검증을 요구한다.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "no-cache"
+                  ]
+                }
+              },
+              "X-Accel-Buffering": {
+                "description": "프록시 응답 버퍼링을 끈다.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "no"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "event:ping\ndata:ping\n\nevent:chat-message\ndata:{\"chatRoomId\":12,\"messageId\":34}\n\n"
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "x-apidog-status": "released"
       }
     },
     "/api/me/shopping-helper": {
@@ -10333,7 +10686,7 @@
     "/api/me/push-tokens": {
       "put": {
         "summary": "푸시 토큰 등록",
-        "description": "앱 실행·로그인 시 기기의 FCM 토큰을 등록한다(멱등). 같은 토큰이 다른 사용자에게 등록돼 있으면 현재 사용자로 옮긴다(기기에서 계정을 바꾼 경우). 사용자당 여러 기기를 허용한다. 회원 탈퇴 시 토큰을 모두 삭제하고, FCM이 무효 토큰으로 응답하면 서버가 삭제한다.",
+        "description": "앱 실행·로그인 시 기기의 FCM 토큰을 등록한다(멱등). 같은 토큰이 다른 사용자에게 등록돼 있으면 현재 사용자로 옮긴다(기기에서 계정을 바꾼 경우). 사용자당 여러 기기를 허용한다. 회원 탈퇴 시 토큰을 모두 삭제하고, FCM이 무효 토큰으로 응답하면 서버가 삭제한다.\n\nFCM data의 모든 값은 문자열이다. users.push_enabled=false이면 푸시를 보내지 않는다. 발송 시각은 서버 설정 기본값이며, 정기 푸시 배치가 활성화된 경우 적용한다.\n\n| type | data | 보내는 시점 | 알림 목록 저장 |\n|---|---|---|---|\n| expiry | {type} | 매일 09:00 KST, 사용자 설정 일수 기준으로 소비기한 임박 재료가 있을 때 | 저장 |\n| consume_check | {type} | 매일 20:00 KST, 소비기한 당일인 소진 확인 대상 재료가 있을 때 | 저장 |\n| chat | {type, chatRoomId} | 상대가 메시지를 보냈을 때 | 저장 안 함 |\n| trade | {type, chatRoomId} | 거래 상태가 바뀌었을 때 | 저장 안 함 |",
         "operationId": "registerPushToken",
         "tags": [
           "notification"
@@ -10354,7 +10707,7 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 512,
-                    "description": "FCM 등록 토큰"
+                    "description": "FCM 등록 토큰. 공백만 있으면 400을 반환한다."
                   },
                   "platform": {
                     "type": "string",
@@ -10454,7 +10807,7 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
       }
     },
     "/api/me/push-tokens/unregister": {
@@ -10480,7 +10833,7 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 512,
-                    "description": "FCM 등록 토큰"
+                    "description": "FCM 등록 토큰. 공백만 있으면 400을 반환한다."
                   }
                 }
               },
@@ -10538,7 +10891,7 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
       }
     },
     "/api/me/dashboard": {
@@ -12601,7 +12954,7 @@
           },
           "type": {
             "type": "string",
-            "description": "notifications.type 값. expiry / consume_check / shopping_reminder 등"
+            "description": "현재 알림 목록에 저장되는 유형은 expiry와 consume_check다."
           },
           "title": {
             "type": "string"
@@ -12612,20 +12965,17 @@
           },
           "scheduledAt": {
             "type": "string",
-            "format": "date-time",
-            "description": "서버 로컬 타임스탬프(오프셋 없음). notifications.scheduled_at 그대로 반환"
+            "description": "발송 예정 시각. 서버 로컬 시각을 오프셋 없는 문자열로 반환한다."
           },
           "sentAt": {
             "type": "string",
-            "format": "date-time",
             "nullable": true,
-            "description": "미발송이면 null"
+            "description": "실제 발송 시각을 오프셋 없는 문자열로 반환한다. 발송 전이거나 전송에 실패해 재시도를 기다리는 중이면 null이다."
           },
           "readAt": {
             "type": "string",
-            "format": "date-time",
             "nullable": true,
-            "description": "읽지 않았으면 null"
+            "description": "읽은 시각을 오프셋 없는 문자열로 반환한다. 읽지 않았으면 null이다."
           }
         }
       },
@@ -12681,7 +13031,7 @@
           },
           "readAt": {
             "type": "string",
-            "format": "date-time"
+            "description": "읽은 시각을 오프셋 없는 서버 로컬 시각 문자열로 반환한다."
           }
         }
       },
