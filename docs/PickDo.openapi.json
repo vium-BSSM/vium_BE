@@ -5387,30 +5387,151 @@
       "get": {
         "summary": "다음 구매량 제안",
         "deprecated": false,
-        "description": "[MVP] 낭비 이력을 바탕으로 '이번엔 절반만 사세요' 등 다음 장보기 구매량을 제안한다. 품목별 최근 낭비 비율(폐기량/구매량)을 분석하여 추천 구매 수량 또는 구매 조정 메시지를 반환한다.",
+        "description": "서울 기준 지난달 전체를 조회한다. 장보기 도우미의 후보인 소진·폐기 이력 또는 기간 내 구매한 보유 재고가 없을 때만 지난달을 포함한 최근 3개월로 넓힌다. 기간을 정한 뒤 소진 또는 폐기 이벤트가 있는 품목만 반환한다. 지난달 후보가 이벤트 없는 구매 재고뿐이면 앞선 달에 이벤트가 있어도 기간을 넓히지 않는다. 품목은 카탈로그 ID, 이름, 단위 ID로 구분한다.\n\n낭비 비율은 폐기량 ÷ (소진량 + 폐기량)이며 소수 둘째 자리까지 반올림한다. 추천 수량은 max(0, 소진량 − 현재 보유량) × 소진량 ÷ (소진량 + 폐기량)이다. 장보기 도우미와 같이 소수 셋째 자리까지 반올림한 뒤 낱개 단위(개·팩·봉·병·캔·통)는 정수로 올림한다.\n\n추천 수량이 0이고 보유량이 양수면 HAVE_ENOUGH, 그 외 낭비 비율이 0.5 이상이면 REDUCE_HALF, 0.2 이상이면 REDUCE_SOME, 나머지는 KEEP을 해당 안내 문구와 함께 반환한다. 낭비 비율 내림차순, 이름 오름차순, 단위 ID 오름차순으로 정렬한다. 대상 품목이 없으면 200 응답의 available은 false, 기간 필드는 null, items는 빈 배열이다.",
         "tags": [
           "logic"
         ],
         "parameters": [],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {}
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "200": {
-            "description": "",
+            "description": "다음 구매량 제안",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "properties": {}
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "available": {
+                          "type": "boolean"
+                        },
+                        "basedOnPeriodStart": {
+                          "type": "string",
+                          "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$",
+                          "nullable": true
+                        },
+                        "basedOnPeriodEnd": {
+                          "type": "string",
+                          "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$",
+                          "nullable": true
+                        },
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "ingredientCatalogId": {
+                                "type": "integer",
+                                "format": "int64",
+                                "nullable": true
+                              },
+                              "ingredientName": {
+                                "type": "string"
+                              },
+                              "unitId": {
+                                "type": "integer"
+                              },
+                              "unit": {
+                                "type": "string"
+                              },
+                              "consumedQuantity": {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              "disposedQuantity": {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              "currentQuantity": {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              "wasteRatio": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 1
+                              },
+                              "suggestedQuantity": {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              "adjustment": {
+                                "type": "string",
+                                "enum": [
+                                  "HAVE_ENOUGH",
+                                  "REDUCE_HALF",
+                                  "REDUCE_SOME",
+                                  "KEEP"
+                                ]
+                              },
+                              "message": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "ingredientCatalogId",
+                              "ingredientName",
+                              "unitId",
+                              "unit",
+                              "consumedQuantity",
+                              "disposedQuantity",
+                              "currentQuantity",
+                              "wasteRatio",
+                              "suggestedQuantity",
+                              "adjustment",
+                              "message"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "available",
+                        "basedOnPeriodStart",
+                        "basedOnPeriodEnd",
+                        "items"
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "error"
+                  ]
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "available": true,
+                    "basedOnPeriodStart": "2026-10",
+                    "basedOnPeriodEnd": "2026-10",
+                    "items": [
+                      {
+                        "ingredientCatalogId": null,
+                        "ingredientName": "계란",
+                        "unitId": 1,
+                        "unit": "개",
+                        "consumedQuantity": 5,
+                        "disposedQuantity": 2,
+                        "currentQuantity": 0,
+                        "wasteRatio": 0.29,
+                        "suggestedQuantity": 4,
+                        "adjustment": "REDUCE_SOME",
+                        "message": "지난번엔 조금 남았어요. 이번엔 조금 덜 사 보세요"
+                      }
+                    ]
+                  },
+                  "error": null
                 }
               }
             },
@@ -5425,7 +5546,7 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
       }
     },
     "/api/me/settings": {
