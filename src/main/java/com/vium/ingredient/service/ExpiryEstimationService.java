@@ -6,6 +6,7 @@ import com.vium.global.exception.InvalidRequestException;
 import com.vium.global.exception.NotFoundException;
 import com.vium.ingredient.dto.ExpiryEstimateResponse;
 import com.vium.ingredient.repository.ExpiryEstimationRuleRepository;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -22,6 +23,7 @@ public class ExpiryEstimationService {
 	private final ExpiryEstimationRuleRepository expiryEstimationRuleRepository;
 	private final IngredientCatalogService catalog;
 	private final StorageMethodRepository storageMethods;
+	private final Clock clock;
 
 	public Optional<LocalDate> estimateExpiresOn(Long ingredientCatalogId, Short storageMethodId, LocalDate purchasedOn) {
 		return estimate(ingredientCatalogId, storageMethodId, purchasedOn).map(ExpiryEstimate::expiresOn);
@@ -41,11 +43,16 @@ public class ExpiryEstimationService {
 	}
 
 	@Transactional(readOnly = true)
-	public ExpiryEstimateResponse preview(Long ingredientCatalogId, Short storageMethodId, LocalDate purchasedOn) {
-		if (!catalog.existsById(ingredientCatalogId)) {
-			throw new NotFoundException("존재하지 않는 ingredientCatalogId 입니다");
+	public ExpiryEstimateResponse preview(Long ingredientCatalogId, Short storageMethodId, LocalDate requestedPurchasedOn) {
+		LocalDate today = LocalDate.now(clock);
+		LocalDate purchasedOn = requestedPurchasedOn == null ? today : requestedPurchasedOn;
+		if (purchasedOn.isAfter(today)) {
+			throw new InvalidRequestException("purchasedOn은 미래일 수 없습니다");
 		}
 		String ingredientName = catalog.getNameById(ingredientCatalogId);
+		if (ingredientName == null) {
+			throw new NotFoundException("존재하지 않는 ingredientCatalogId 입니다");
+		}
 
 		StorageMethod storage = null;
 		ExpiryEstimate result;

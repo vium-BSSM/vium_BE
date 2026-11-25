@@ -11,6 +11,7 @@ import com.vium.global.code.StorageMethodRepository;
 import com.vium.ingredient.entity.ExpiryEstimationRule;
 import com.vium.ingredient.repository.ExpiryEstimationRuleRepository;
 import com.vium.ingredient.service.ExpiryEstimationService.ExpiryEstimate;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -25,7 +26,7 @@ class ExpiryEstimationServiceTest {
 
 	private final ExpiryEstimationRuleRepository rules = mock(ExpiryEstimationRuleRepository.class);
 	private final ExpiryEstimationService service = new ExpiryEstimationService(rules,
-		mock(IngredientCatalogService.class), mock(StorageMethodRepository.class));
+		mock(IngredientCatalogService.class), mock(StorageMethodRepository.class), Clock.systemUTC());
 
 	@Test
 	void usesOnlyTheRequestedStorageMethodAndSelectsFirstApplicableRule() {
