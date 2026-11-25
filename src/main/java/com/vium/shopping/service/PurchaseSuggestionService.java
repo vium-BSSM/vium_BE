@@ -50,6 +50,9 @@ public class PurchaseSuggestionService {
 		if (item.suggestedQuantity().signum() == 0 && item.currentInventory().signum() > 0) {
 			return Adjustment.HAVE_ENOUGH;
 		}
+		if (item.suggestedQuantity().signum() == 0) {
+			return Adjustment.SKIP;
+		}
 		if (wasteRatio.compareTo(HALF) >= 0) {
 			return Adjustment.REDUCE_HALF;
 		}

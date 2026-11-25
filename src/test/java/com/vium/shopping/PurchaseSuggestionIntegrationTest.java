@@ -126,13 +126,19 @@ class PurchaseSuggestionIntegrationTest {
 		history(101, "절반", 1, 0, "5", "5");
 		history(102, "조금", 1, 0, "8", "2");
 		history(103, "유지", 1, 0, "9", "1");
+		stock(104, USER, "건너뛰기", 1, 0, null);
+		event(104, USER, "disposed", "9", MONTH_START);
 
 		suggestions()
 			.andExpect(jsonPath("$.data.items[0].suggestedQuantity").value(0))
-			.andExpect(jsonPath("$.data.items[1].wasteRatio").value(0.5))
-			.andExpect(jsonPath("$.data.items[2].wasteRatio").value(0.2))
-			.andExpect(jsonPath("$.data.items[*].adjustment", contains("HAVE_ENOUGH", "REDUCE_HALF", "REDUCE_SOME", "KEEP")))
+			.andExpect(jsonPath("$.data.items[0].currentQuantity").value(0))
+			.andExpect(jsonPath("$.data.items[1].suggestedQuantity").value(0))
+			.andExpect(jsonPath("$.data.items[2].wasteRatio").value(0.5))
+			.andExpect(jsonPath("$.data.items[3].wasteRatio").value(0.2))
+			.andExpect(jsonPath("$.data.items[*].adjustment",
+				contains("SKIP", "HAVE_ENOUGH", "REDUCE_HALF", "REDUCE_SOME", "KEEP")))
 			.andExpect(jsonPath("$.data.items[*].message", contains(
+				"지난번엔 거의 다 남았어요. 이번엔 건너뛰어도 괜찮아요",
 				"아직 집에 있어요. 이번엔 안 사도 괜찮아요",
 				"지난번엔 절반 넘게 남았어요. 이번엔 절반만 사 보세요",
 				"지난번엔 조금 남았어요. 이번엔 조금 덜 사 보세요",
@@ -151,7 +157,10 @@ class PurchaseSuggestionIntegrationTest {
 			.andExpect(jsonPath("$.data.items[*].unitId", contains(1, 1, 2, 1)))
 			.andExpect(jsonPath("$.data.items[0].consumedQuantity").value(0))
 			.andExpect(jsonPath("$.data.items[0].wasteRatio").value(1))
-			.andExpect(jsonPath("$.data.items[0].suggestedQuantity").value(0));
+			.andExpect(jsonPath("$.data.items[0].suggestedQuantity").value(0))
+			.andExpect(jsonPath("$.data.items[0].adjustment").value("SKIP"))
+			.andExpect(jsonPath("$.data.items[0].message")
+				.value("지난번엔 거의 다 남았어요. 이번엔 건너뛰어도 괜찮아요"));
 	}
 
 	@Test
