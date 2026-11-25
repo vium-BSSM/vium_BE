@@ -11,7 +11,6 @@ import com.vium.image.service.ImageService;
 import com.vium.ingredient.service.ExpiryEstimationService;
 import com.vium.ingredient.service.IngredientCatalogService;
 import com.vium.inventory.dto.ActiveIngredientState;
-import com.vium.inventory.dto.AutoDisposeCandidate;
 import com.vium.inventory.dto.IngredientDetailResponse;
 import com.vium.inventory.dto.IngredientListResponse;
 import com.vium.inventory.dto.IngredientRegisterRequest;
@@ -171,20 +170,9 @@ public class InventoryService {
 			item.getInitialQuantity(), item.getAmount());
 	}
 
-	@Transactional(readOnly = true)
-	public List<AutoDisposeCandidate> findAutoDisposeCandidates(Short activeStatusId, LocalDate expiresBefore) {
-		return inventoryItemRepository
-			.findAllByStatusIdAndExpiresOnBeforeAndRemainingQuantityGreaterThan(
-				activeStatusId, expiresBefore, BigDecimal.ZERO)
-			.stream()
-			.map(item -> new AutoDisposeCandidate(item.getId(), item.getUserId(), item.getRemainingQuantity(),
-				item.getInitialQuantity(), item.getAmount(), item.getExpiresOn()))
-			.toList();
-	}
-
 	/**
 	 * 조건부 폐기 처리: status가 여전히 activeStatusId이고 remainingQuantity가 expectedRemainingQuantity와
-	 * 일치할 때만 disposedStatusId로 변경하고 remainingQuantity를 0으로 설정한다.
+	 * 일치하며 현재 소비기한에 대한 잔여 확인이 없을 때 disposedStatusId로 변경하고 remainingQuantity를 0으로 설정한다.
 	 * 동시 처리로 인한 경쟁 상황에서 중복 폐기를 방지하기 위한 조건부 UPDATE.
 	 *
 	 * @return 실제로 변경되었으면 true, 다른 프로세스가 이미 변경했으면 false

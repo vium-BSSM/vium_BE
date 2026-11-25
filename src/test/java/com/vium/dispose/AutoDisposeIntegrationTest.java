@@ -19,8 +19,10 @@ import org.springframework.context.annotation.Import;
 import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.config.ScheduledTaskHolder;
+import org.springframework.test.context.jdbc.Sql;
 
 @SpringBootTest(properties = "spring.datasource.url=jdbc:h2:mem:auto-dispose-test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1")
+@Sql(scripts = "/db/inventory-query-support.sql", executionPhase = Sql.ExecutionPhase.BEFORE_TEST_CLASS)
 class AutoDisposeIntegrationTest {
 
 	@Autowired
@@ -48,11 +50,16 @@ class AutoDisposeIntegrationTest {
 	void setUp() {
 		jdbcTemplate.update("delete from \"consumption_events\"");
 		jdbcTemplate.update("delete from \"inventory_items\"");
+		jdbcTemplate.update("delete from \"users\"");
 		jdbcTemplate.update("delete from \"item_statuses\"");
 		jdbcTemplate.update("delete from \"event_sources\"");
 
 		jdbcTemplate.update("insert into \"item_statuses\" (\"id\", \"code\", \"name\") values (1, 'active', '보유'), (2, 'consumed', '소진'), (3, 'disposed', '폐기'), (4, 'shared', '공유중')");
 		jdbcTemplate.update("insert into \"event_sources\" (\"id\", \"code\", \"name\") values (1, 'manual', '수동'), (2, 'auto_estimated', '자동추정')");
+		jdbcTemplate.update("""
+			insert into "users" (id, email, display_name, created_at, updated_at)
+			values (42, 'auto-dispose@example.com', '자동 폐기 테스트', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			""");
 	}
 
 	@Test
