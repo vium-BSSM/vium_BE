@@ -29,6 +29,7 @@ public class SafetyQueryRepository {
 			from user_blocks ub
 			join users u on u.id = ub.blocked_id
 			where ub.blocker_id = ?
+			  and u.deleted_at is null
 			order by ub.created_at desc
 			""", (rs, rowNum) -> new BlockedUserRow(rs.getLong("user_id"), rs.getString("display_name"),
 				rs.getObject("blocked_at", LocalDateTime.class)), blockerId);

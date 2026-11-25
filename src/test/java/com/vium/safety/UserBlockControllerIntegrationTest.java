@@ -1,5 +1,6 @@
 package com.vium.safety;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -70,6 +71,33 @@ class UserBlockControllerIntegrationTest {
 		mockMvc.perform(get("/api/me/blocks").header("Authorization", bearer))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.data.blockedUsers.length()").value(0));
+	}
+
+	@Test
+	void listsOnlyActiveUsersAfterABlockedUserWithdraws() throws Exception {
+		long activeTargetId = 45L;
+		jdbcTemplate.update("""
+			insert into users (id, email, display_name, created_at, updated_at)
+			values (?, 'active-target@example.com', 'Active Target', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			""", activeTargetId);
+
+		mockMvc.perform(put("/api/me/blocks/{userId}", TARGET_ID).header("Authorization", bearer))
+			.andExpect(status().isOk());
+		mockMvc.perform(put("/api/me/blocks/{userId}", activeTargetId).header("Authorization", bearer))
+			.andExpect(status().isOk());
+		mockMvc.perform(get("/api/me/blocks").header("Authorization", bearer))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.blockedUsers.length()").value(2));
+
+		jdbcTemplate.update("update users set deleted_at = CURRENT_TIMESTAMP where id = ?", TARGET_ID);
+
+		mockMvc.perform(get("/api/me/blocks").header("Authorization", bearer))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.blockedUsers.length()").value(1))
+			.andExpect(jsonPath("$.data.blockedUsers[0].userId").value(45));
+		assertThat(jdbcTemplate.queryForObject(
+			"select count(*) from user_blocks where blocker_id = ? and blocked_id = ?",
+			Integer.class, SELF_ID, TARGET_ID)).isEqualTo(1);
 	}
 
 	@Test
