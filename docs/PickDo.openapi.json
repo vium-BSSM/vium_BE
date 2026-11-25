@@ -604,7 +604,7 @@
       "post": {
         "summary": "소셜 로그인 연동",
         "deprecated": false,
-        "description": "외부 인증 제공자(카카오, 구글 등) 로그인 결과로 받은 사용자 식별값으로 로그인하거나 신규 계정을 연동 생성한다.",
+        "description": "미구현(제공사 미정). 외부 인증 제공자(카카오, 구글 등) 로그인 결과로 받은 사용자 식별값으로 로그인하거나 신규 계정을 연동 생성한다.",
         "tags": [
           "user"
         ],
@@ -1757,7 +1757,7 @@
       },
       "delete": {
         "summary": "식재료 삭제",
-        "description": "잘못 등록한 재고를 삭제한다. 소진·폐기가 아니므로 consumption_events를 남기지 않고 낭비 통계에도 잡히지 않는다.\n\n- 삭제할 수 있는 재고: 본인 소유의 active 재고이며 소진·폐기 이벤트가 없고, 게시물(삭제된 게시물 포함)에 올라간 적이 없고, 거래로 받은 재고가 아님\n- 이력이 있는 재고는 409 INVENTORY_HAS_HISTORY. 남은 양을 정리하려면 소진/폐기 처리를 쓴다\n- 게시 중인 재고는 409 INVENTORY_LOCKED\n- 이 재고를 가리키는 알림(notifications)도 함께 삭제한다. 구매 내역(purchase_items)은 그대로 둔다",
+        "description": "잘못 등록한 재고를 삭제한다. 소진·폐기가 아니므로 consumption_events를 남기지 않고 낭비 통계에도 잡히지 않는다.\n\n- 삭제할 수 있는 재고: 본인 소유의 active 재고이며 소진·폐기 이벤트가 없고, 게시물(삭제된 게시물 포함)에 올라간 적이 없고, 거래로 받은 재고가 아님\n- 본인 소유의 active 재고인지 먼저 확인한다. 재고가 없거나 타인 소유 또는 active가 아니면 404 NOT_FOUND다.\n- 다음으로 게시 잠금을 확인한다. 게시 중인 재고는 409 INVENTORY_LOCKED다.\n- 잠금 검사 후 이력을 확인한다. 이력이 있는 재고는 409 INVENTORY_HAS_HISTORY다. 남은 양을 정리하려면 소진·폐기 처리를 쓴다.\n- 이 재고를 가리키는 알림(notifications)도 함께 삭제한다. 구매 내역(purchase_items)은 그대로 둔다",
         "operationId": "deleteIngredient",
         "tags": [
           "ingredient"
@@ -1793,7 +1793,7 @@
             "$ref": "#/components/responses/Unauthorized"
           },
           "404": {
-            "description": "NOT_FOUND: 식재료 없음 또는 본인 소유 아님",
+            "description": "NOT_FOUND: 재고가 없거나, 본인 소유가 아니거나, active 상태가 아님",
             "content": {
               "application/json": {
                 "schema": {
@@ -1855,7 +1855,7 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
       }
     },
     "/api/ingredients/estimate-expiry": {
@@ -5554,7 +5554,7 @@
       "get": {
         "summary": "사용자 설정 조회",
         "deprecated": false,
-        "description": "user_settings 값을 조회한다. 자동폐기/유통기한 알림/장보기 알림/푸시 알림 여부 등 서비스 동작 설정.",
+        "description": "현재 사용자의 소비기한 알림, 자동 폐기, 장보기 알림, 푸시 알림 설정을 조회한다.",
         "tags": [
           "settings"
         ],
@@ -5566,7 +5566,51 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "properties": {}
+                  "required": [
+                    "success",
+                    "data",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "expiryAlertDays",
+                        "autoDisposeEnabled",
+                        "shoppingReminderEnabled",
+                        "pushEnabled"
+                      ],
+                      "properties": {
+                        "expiryAlertDays": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 14
+                        },
+                        "autoDisposeEnabled": {
+                          "type": "boolean"
+                        },
+                        "shoppingReminderEnabled": {
+                          "type": "boolean"
+                        },
+                        "pushEnabled": {
+                          "type": "boolean"
+                        }
+                      }
+                    },
+                    "error": {
+                      "type": "object",
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
+                    }
+                  }
                 },
                 "example": {
                   "success": true,
@@ -5591,12 +5635,12 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
       },
       "patch": {
         "summary": "사용자 설정 수정",
         "deprecated": false,
-        "description": "user_settings 값을 수정한다.",
+        "description": "현재 사용자의 설정을 부분 수정하고 전체 설정을 반환한다. 생략하거나 null인 필드는 유지한다. 변경할 값이 하나도 없거나 expiryAlertDays가 1~14 범위를 벗어나면 400을 반환한다.",
         "tags": [
           "settings"
         ],
@@ -5609,20 +5653,26 @@
                 "properties": {
                   "expiryAlertDays": {
                     "type": "integer",
-                    "example": 3
+                    "example": 3,
+                    "minimum": 1,
+                    "maximum": 14,
+                    "nullable": true
                   },
                   "autoDisposeEnabled": {
                     "type": "boolean",
-                    "example": true
+                    "example": true,
+                    "nullable": true
                   },
                   "shoppingReminderEnabled": {
                     "type": "boolean",
                     "example": true,
-                    "description": "true면 매주 토요일 10:00 KST에 장보기 전 냉장고 확인 푸시를 보낸다. pushEnabled=false면 보내지 않는다."
+                    "description": "true면 매주 토요일 10:00 KST에 장보기 전 냉장고 확인 푸시를 보낸다. pushEnabled=false면 보내지 않는다.",
+                    "nullable": true
                   },
                   "pushEnabled": {
                     "type": "boolean",
-                    "example": true
+                    "example": true,
+                    "nullable": true
                   }
                 }
               }
@@ -5637,7 +5687,51 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "properties": {}
+                  "required": [
+                    "success",
+                    "data",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "expiryAlertDays",
+                        "autoDisposeEnabled",
+                        "shoppingReminderEnabled",
+                        "pushEnabled"
+                      ],
+                      "properties": {
+                        "expiryAlertDays": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 14
+                        },
+                        "autoDisposeEnabled": {
+                          "type": "boolean"
+                        },
+                        "shoppingReminderEnabled": {
+                          "type": "boolean"
+                        },
+                        "pushEnabled": {
+                          "type": "boolean"
+                        }
+                      }
+                    },
+                    "error": {
+                      "type": "object",
+                      "nullable": true,
+                      "enum": [
+                        null
+                      ]
+                    }
+                  }
                 },
                 "example": {
                   "success": true,
@@ -5655,6 +5749,40 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "400": {
+            "description": "변경할 값이 없거나 요청이 올바르지 않음 (INVALID_REQUEST)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "examples": {
+                  "NO_FIELDS": {
+                    "summary": "INVALID_REQUEST",
+                    "value": {
+                      "success": false,
+                      "data": null,
+                      "error": {
+                        "code": "INVALID_REQUEST",
+                        "message": "수정할 필드가 없습니다"
+                      }
+                    }
+                  },
+                  "INVALID_EXPIRY_ALERT_DAYS": {
+                    "summary": "INVALID_REQUEST",
+                    "value": {
+                      "success": false,
+                      "data": null,
+                      "error": {
+                        "code": "INVALID_REQUEST",
+                        "message": "expiryAlertDays는 1~14 범위여야 합니다"
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "security": [
@@ -5662,7 +5790,7 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
       }
     },
     "/api/me/images": {
@@ -5978,7 +6106,7 @@
     "/api/posts": {
       "get": {
         "summary": "게시물 조회",
-        "description": "내 위치(요청마다 보내는 latitude·longitude, 서버에 저장하지 않음) 반경 안의 나눔·판매 게시물을 무한 스크롤로 조회한다. 거리 계산은 PostGIS로 하고, 키워드 검색은 FE에서 필터링한다.\n\n- OPEN·RESERVED 게시물만 반환한다(COMPLETED·EXPIRED 제외).\n- 내가 차단했거나 나를 차단한 유저의 게시물은 제외한다.\n- ingredientCatalogId를 주면 해당 재료 게시물만 반환한다. 레시피의 부족 재료로 주변 게시물을 찾을 때 사용한다.",
+        "description": "내 위치(요청마다 보내는 latitude·longitude, 서버에 저장하지 않음) 반경 안의 나눔·판매 게시물을 무한 스크롤로 조회한다. 거리는 Haversine 공식으로 계산하고, 키워드 검색은 FE에서 필터링한다.\n\n- OPEN·RESERVED 게시물만 반환한다. 연결된 재고의 소비기한이 서울 기준 오늘보다 빠르거나 날짜가 없으면 제외한다.\n- 내가 차단했거나 나를 차단한 유저의 게시물은 제외한다.\n- ingredientCatalogId를 주면 해당 재료 게시물만 반환한다. 레시피의 부족 재료로 주변 게시물을 찾을 때 사용한다.",
         "tags": [
           "post"
         ],
@@ -5991,9 +6119,7 @@
             "description": "FE GPS 위도",
             "schema": {
               "type": "number",
-              "format": "double",
-              "minimum": -90,
-              "maximum": 90
+              "format": "double"
             }
           },
           {
@@ -6003,9 +6129,7 @@
             "description": "FE GPS 경도",
             "schema": {
               "type": "number",
-              "format": "double",
-              "minimum": -180,
-              "maximum": 180
+              "format": "double"
             }
           },
           {
@@ -6061,7 +6185,7 @@
             "name": "cursor",
             "in": "query",
             "required": false,
-            "description": "이전 응답의 nextCursor. 생략하면 첫 페이지",
+            "description": "이전 응답의 nextCursor. 같은 sort에서 발급한 커서만 유효하다. 생략하면 첫 페이지다.",
             "schema": {
               "type": "string"
             }
@@ -6160,7 +6284,7 @@
             }
           },
           "400": {
-            "description": "잘못된 좌표·distance·sort·size·cursor",
+            "description": "필수 좌표 누락, 파라미터 형식 오류 또는 허용되지 않는 distance·sort·size·cursor",
             "content": {
               "application/json": {
                 "schema": {
@@ -6191,7 +6315,7 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
       }
     },
     "/api/posts/{postId}": {
@@ -6313,7 +6437,7 @@
             "$ref": "#/components/responses/Unauthorized"
           },
           "404": {
-            "description": "게시물이 없거나 삭제됨",
+            "description": "게시물이 없거나 삭제됐거나 작성자와 차단 관계임 (POST_NOT_FOUND)",
             "content": {
               "application/json": {
                 "schema": {
@@ -6341,7 +6465,7 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
       }
     },
     "/api/me/posts": {
@@ -6599,7 +6723,7 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
       }
     },
     "/api/me/posts/{postId}": {
@@ -6721,11 +6845,11 @@
                       "storageMethodName": "냉장",
                       "isOpened": false
                     },
-                    "price": 3,
-                    "distanceMeters": 420,
+                    "price": 2,
+                    "distanceMeters": null,
                     "likeCount": 2,
                     "likedByMe": false,
-                    "isMine": false,
+                    "isMine": true,
                     "activeTradeId": null,
                     "createdAt": "2026-11-12T09:30:00+09:00",
                     "updatedAt": "2026-11-12T09:30:00+09:00"
@@ -6824,7 +6948,7 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
       },
       "delete": {
         "summary": "게시물 삭제",
@@ -6935,7 +7059,7 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
       }
     },
     "/api/me/ingredients/{ingredientId}/post-preview": {
@@ -7075,13 +7199,13 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
       }
     },
     "/api/posts/{postId}/like": {
       "put": {
         "summary": "게시물 좋아요",
-        "description": "게시물에 좋아요를 누른다. 이미 눌렀으면 그대로 성공한다(멱등).",
+        "description": "게시물에 좋아요를 누른다. 이미 눌렀으면 그대로 성공한다(멱등). 게시물 작성자와 차단 관계라면 404 POST_NOT_FOUND를 반환한다.",
         "tags": [
           "post"
         ],
@@ -7154,7 +7278,7 @@
             "$ref": "#/components/responses/Unauthorized"
           },
           "404": {
-            "description": "게시물 없음",
+            "description": "게시물이 없거나 삭제됐거나 작성자와 차단 관계임 (POST_NOT_FOUND)",
             "content": {
               "application/json": {
                 "schema": {
@@ -7182,11 +7306,11 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
       },
       "delete": {
         "summary": "게시물 좋아요 취소",
-        "description": "좋아요를 취소한다. 누르지 않았어도 성공한다(멱등).",
+        "description": "좋아요를 취소한다. 누르지 않았어도 성공한다(멱등). 게시물 작성자와 차단 관계라면 404 POST_NOT_FOUND를 반환한다.",
         "tags": [
           "post"
         ],
@@ -7247,8 +7371,8 @@
                   "success": true,
                   "data": {
                     "postId": 12,
-                    "liked": true,
-                    "likeCount": 3
+                    "liked": false,
+                    "likeCount": 2
                   },
                   "error": null
                 }
@@ -7259,7 +7383,7 @@
             "$ref": "#/components/responses/Unauthorized"
           },
           "404": {
-            "description": "게시물 없음",
+            "description": "게시물이 없거나 삭제됐거나 작성자와 차단 관계임 (POST_NOT_FOUND)",
             "content": {
               "application/json": {
                 "schema": {
@@ -7287,7 +7411,7 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
       }
     },
     "/api/posts/{postId}/trades": {
@@ -7482,13 +7606,13 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
       }
     },
     "/api/me/trades/{tradeId}/accept": {
       "post": {
         "summary": "거래 수락",
-        "description": "판매자가 REQUESTED 거래를 수락한다. 거래는 ACCEPTED, 게시물은 RESERVED가 되고 autoResolveAt(수락 시각 + 72시간)이 정해진다. TRADE_ACCEPTED 시스템 메시지를 남긴다.\n\n판매자만 호출할 수 있다.",
+        "description": "판매자가 REQUESTED 거래를 수락한다. 거래는 ACCEPTED, 게시물은 RESERVED가 되고 autoResolveAt(수락 시각 + 72시간)이 정해진다. TRADE_ACCEPTED 시스템 메시지를 남긴다.\n\n판매자만 호출할 수 있다.\n\n게시물이 이미 EXPIRED이거나 재고 소비기한이 지났으면 거래를 취소하고 SALE의 보류 크레딧을 환불한다. 게시물이 OPEN이면 EXPIRED로 전환한다. 이 변경은 저장되며 응답은 409 POST_EXPIRED다.",
         "tags": [
           "trade"
         ],
@@ -7627,13 +7751,13 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
       }
     },
     "/api/me/trades/{tradeId}/reject": {
       "post": {
         "summary": "거래 거절",
-        "description": "판매자가 REQUESTED 거래를 거절한다. 보류한 크레딧을 환불(TRADE_REFUND)하고 게시물은 OPEN으로 남는다. TRADE_REJECTED 시스템 메시지를 남긴다.\n\n판매자만 호출할 수 있다.",
+        "description": "판매자가 REQUESTED 거래를 거절한다. SALE 거래만 보류한 크레딧을 환불(TRADE_REFUND)한다. 게시물은 OPEN으로 남는다. TRADE_REJECTED 시스템 메시지를 남긴다.\n\n판매자만 호출할 수 있다.",
         "tags": [
           "trade"
         ],
@@ -7761,13 +7885,13 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
       }
     },
     "/api/me/trades/{tradeId}/cancel": {
       "post": {
         "summary": "거래 취소",
-        "description": "구매자 또는 판매자가 REQUESTED·ACCEPTED 거래를 취소한다. 보류한 크레딧을 환불하고 게시물을 OPEN으로 되돌린다(소비기한이 지났으면 EXPIRED). TRADE_CANCELED 시스템 메시지를 남긴다.",
+        "description": "구매자 또는 판매자가 REQUESTED·ACCEPTED 거래를 취소한다. SALE 거래만 보류한 크레딧을 환불한다. RESERVED 게시물은 OPEN으로 되돌리고, OPEN 상태에서 소비기한이 지났으면 EXPIRED로 바꾼다. TRADE_CANCELED 시스템 메시지를 남긴다.",
         "tags": [
           "trade"
         ],
@@ -7896,13 +8020,13 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
       }
     },
     "/api/me/trades/{tradeId}/complete": {
       "post": {
         "summary": "수령 확인 (거래 완료)",
-        "description": "구매자가 ACCEPTED 거래의 재료를 받았음을 확인한다. 아래를 하나의 트랜잭션으로 처리한다.\n\n1. 판매자 재고를 shared 상태로 종료하고 consumption_events에 shared 이벤트를 남긴다(폐기가 아닌 '구한 양'으로 집계). 재고 차감은 소진/폐기와 같은 행 잠금(PESSIMISTIC_WRITE)을 쓴다.\n2. 구매자에게 같은 재료로 새 재고를 만든다. 수량·소비기한·보관 방법은 원본 그대로, remainingQuantity = initialQuantity, amount는 null(크레딧 거래는 구매 지출이 아니므로 리포트에 잡히지 않게 한다).\n3. SALE이면 보류한 크레딧을 판매자에게 지급(TRADE_INCOME)한다. 나눔·판매 모두 판매자에게 절약 보너스(+1)를 지급한다(판매자당 하루 3회, 최근 7일 안에 같은 상대와 완료한 거래가 있으면 제외).\n4. 거래·게시물을 COMPLETED로 바꾸고 재고 잠금을 푼다. TRADE_COMPLETED 시스템 메시지를 남긴다.\n\n구매자만 호출할 수 있다. 이미 완료된 거래를 다시 호출하면 409이며 중복 지급하지 않는다.",
+        "description": "구매자가 ACCEPTED 거래의 재료를 받았음을 확인한다. 아래를 하나의 트랜잭션으로 처리한다.\n\n1. 판매자 재고를 shared 상태로 종료하고 consumption_events에 shared 이벤트를 남긴다(폐기가 아닌 '구한 양'으로 집계). 재고 차감은 소진/폐기와 같은 행 잠금(PESSIMISTIC_WRITE)을 쓴다.\n2. 구매자에게 같은 재료로 새 재고를 만든다. initialQuantity와 remainingQuantity는 모두 판매자의 완료 직전 남은 수량이다. 소비기한과 보관 방법은 원본을 유지하고, purchasedOn은 서울 기준 완료일, amount는 null이다(크레딧 거래는 구매 지출이 아니므로 리포트에 잡히지 않게 한다).\n3. SALE이면 보류한 크레딧을 판매자에게 지급(TRADE_INCOME)한다. 나눔·판매 모두 판매자에게 절약 보너스(+1)를 지급한다(판매자당 하루 3회, 최근 7일 안에 같은 상대와 완료한 거래가 있으면 제외).\n4. 거래·게시물을 COMPLETED로 바꾸고 재고 잠금을 푼다. TRADE_COMPLETED 시스템 메시지를 남긴다.\n\n구매자만 호출할 수 있다. 이미 완료된 거래를 다시 호출하면 409이며 중복 지급하지 않는다.",
         "tags": [
           "trade"
         ],
@@ -8003,7 +8127,7 @@
             }
           },
           "404": {
-            "description": "거래가 없거나 당사자가 아님 (TRADE_NOT_FOUND, 존재 여부 노출 방지)",
+            "description": "거래가 없거나 당사자가 아님 (TRADE_NOT_FOUND, 존재 여부 노출 방지). 판매자 재고를 찾을 수 없는 경우 NOT_FOUND.",
             "content": {
               "application/json": {
                 "schema": {
@@ -8020,13 +8144,24 @@
                         "message": "거래를 찾을 수 없습니다."
                       }
                     }
+                  },
+                  "NOT_FOUND": {
+                    "summary": "NOT_FOUND",
+                    "value": {
+                      "success": false,
+                      "data": null,
+                      "error": {
+                        "code": "NOT_FOUND",
+                        "message": "식재료를 찾을 수 없습니다"
+                      }
+                    }
                   }
                 }
               }
             }
           },
           "409": {
-            "description": "현재 상태에서 할 수 없는 동작",
+            "description": "현재 상태에서 할 수 없는 동작. 판매자 재고가 active가 아니거나 남은 수량이 0 이하이면 INVENTORY_NOT_ACTIVE.",
             "content": {
               "application/json": {
                 "schema": {
@@ -8043,6 +8178,17 @@
                         "message": "현재 거래 상태에서는 처리할 수 없습니다."
                       }
                     }
+                  },
+                  "INVENTORY_NOT_ACTIVE": {
+                    "summary": "INVENTORY_NOT_ACTIVE",
+                    "value": {
+                      "success": false,
+                      "data": null,
+                      "error": {
+                        "code": "INVENTORY_NOT_ACTIVE",
+                        "message": "사용할 수 없는 상태의 재고입니다."
+                      }
+                    }
                   }
                 }
               }
@@ -8054,7 +8200,7 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
       }
     },
     "/api/me/trades": {
@@ -8233,13 +8379,13 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
       }
     },
     "/api/me/trades/{tradeId}/review": {
       "post": {
         "summary": "매너 평가·거래 후기 작성",
-        "description": "COMPLETED 거래의 상대에게 매너 점수(필수)와 후기(선택)를 남긴다. 거래당 1회만 쓸 수 있고 수정·삭제는 없다.",
+        "description": "COMPLETED 거래의 상대에게 매너 점수(필수)와 후기(선택)를 남긴다. 거래당 1회만 쓸 수 있고 수정·삭제는 없다. content를 생략하거나 공백만 보내면 null로 저장한다. 이 평가는 점수 집계에 반영되며 후기 목록에서 제외된다.",
         "tags": [
           "trade"
         ],
@@ -8267,7 +8413,8 @@
                   "content": {
                     "type": "string",
                     "maxLength": 500,
-                    "nullable": true
+                    "nullable": true,
+                    "description": "생략하거나 공백만 보내면 null로 저장한다."
                   }
                 }
               },
@@ -8427,13 +8574,13 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
       }
     },
     "/api/users/{userId}/reviews": {
       "get": {
         "summary": "받은 매너 점수·후기 조회",
-        "description": "유저가 받은 매너 점수 평균과 후기를 최신순으로 조회한다. 내용이 없는 평가는 점수 평균에만 반영되고 reviews에는 나오지 않는다.",
+        "description": "유저가 받은 매너 점수 평균과 후기를 최신순으로 조회한다. 내용이 없는 평가는 점수 평균에만 반영되고 reviews에는 나오지 않는다. 공백만 있는 내용은 저장 시 null로 처리되어 후기 목록에서 제외된다.",
         "tags": [
           "trade"
         ],
@@ -8670,7 +8817,7 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
       }
     },
     "/api/me/credits": {
@@ -8746,7 +8893,7 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
       }
     },
     "/api/me/credits/transactions": {
@@ -8773,7 +8920,8 @@
             "required": false,
             "description": "이전 응답의 nextCursor. 생략하면 첫 페이지",
             "schema": {
-              "type": "string"
+              "type": "integer",
+              "format": "int64"
             }
           },
           {
@@ -8850,9 +8998,10 @@
                           }
                         },
                         "nextCursor": {
-                          "type": "string",
+                          "type": "integer",
                           "nullable": true,
-                          "description": "다음 페이지 커서. 마지막 페이지면 null"
+                          "description": "다음 페이지 커서. 마지막 페이지면 null",
+                          "format": "int64"
                         },
                         "hasNext": {
                           "type": "boolean"
@@ -8928,7 +9077,7 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
       }
     },
     "/api/me/credits/daily-reward": {
@@ -9027,13 +9176,13 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
       }
     },
     "/api/credits/offerwall/callback": {
       "post": {
         "summary": "오퍼월 광고 보상 콜백",
-        "description": "오퍼월 제공사가 광고 시청 완료 후 서버로 보내는 postback. 앱이 호출하지 않는다. 제공사 서명으로 검증하고 providerTransactionId로 중복 지급을 막는다(같은 ID 재전송 시 지급 없이 200). 제공사는 미정이며 서명·필드 이름은 제공사 확정 후 맞춘다.",
+        "description": "미구현(제공사 미정). 오퍼월 제공사가 광고 시청 완료 후 서버로 보내는 postback. 앱이 호출하지 않는다. 제공사 서명으로 검증하고 providerTransactionId로 중복 지급을 막는다(같은 ID 재전송 시 지급 없이 200). 제공사는 미정이며 서명·필드 이름은 제공사 확정 후 맞춘다.",
         "tags": [
           "credit"
         ],
@@ -9185,7 +9334,7 @@
     "/api/me/chat-rooms": {
       "get": {
         "summary": "채팅방 리스트 조회",
-        "description": "내가 참여 중인(나가지 않은) 채팅방을 최근 메시지순으로 조회한다.",
+        "description": "내가 참여 중인 채팅방을 최근 활동 시각 내림차순으로 조회한다. 메시지가 있는 방은 마지막 메시지 시각, 메시지가 없는 방은 생성 시각을 기준으로 한다. 활동 시각이 같으면 채팅방 ID 내림차순으로 정렬한다.",
         "tags": [
           "chat"
         ],
@@ -9299,6 +9448,40 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "400": {
+            "description": "INVALID_REQUEST: size가 1~50 범위를 벗어나거나 size·cursor의 형식이 올바르지 않음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "examples": {
+                  "INVALID_SIZE": {
+                    "summary": "INVALID_REQUEST",
+                    "value": {
+                      "success": false,
+                      "data": null,
+                      "error": {
+                        "code": "INVALID_REQUEST",
+                        "message": "size는 1~50 사이여야 합니다"
+                      }
+                    }
+                  },
+                  "INVALID_CURSOR": {
+                    "summary": "INVALID_REQUEST",
+                    "value": {
+                      "success": false,
+                      "data": null,
+                      "error": {
+                        "code": "INVALID_REQUEST",
+                        "message": "cursor 값이 올바르지 않습니다"
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "security": [
@@ -9306,13 +9489,13 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
       }
     },
     "/api/posts/{postId}/chat-rooms": {
       "post": {
         "summary": "채팅방 생성",
-        "description": "게시물 작성자와의 채팅방을 만든다(구매자 전용). 같은 게시물·같은 구매자의 방이 있으면 그 방을 돌려준다(created=false). 내가 나갔던 방이면 다시 참여한다.",
+        "description": "게시물 작성자와의 채팅방을 만든다(구매자 전용). 같은 게시물·같은 구매자의 방이 있으면 그 방을 돌려준다(created=false). 내가 나갔던 방이면 다시 참여한다. 채팅방 생성 시 게시물의 거래 상태는 검사하지 않는다.",
         "tags": [
           "chat"
         ],
@@ -9454,7 +9637,7 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
       }
     },
     "/api/me/chat-rooms/{chatRoomId}": {
@@ -9544,7 +9727,7 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
       }
     },
     "/api/me/chat-rooms/{chatRoomId}/messages": {
@@ -9692,6 +9875,40 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "INVALID_REQUEST: size가 1~100 범위를 벗어나거나 size·cursor의 형식이 올바르지 않음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "examples": {
+                  "INVALID_SIZE": {
+                    "summary": "INVALID_REQUEST",
+                    "value": {
+                      "success": false,
+                      "data": null,
+                      "error": {
+                        "code": "INVALID_REQUEST",
+                        "message": "size는 1~100 사이여야 합니다"
+                      }
+                    }
+                  },
+                  "INVALID_CURSOR": {
+                    "summary": "INVALID_REQUEST",
+                    "value": {
+                      "success": false,
+                      "data": null,
+                      "error": {
+                        "code": "INVALID_REQUEST",
+                        "message": "cursor 값이 올바르지 않습니다"
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "security": [
@@ -9699,11 +9916,11 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
       },
       "post": {
         "summary": "채팅 보내기",
-        "description": "텍스트 또는 사진 메시지를 보낸다. 사진은 purpose=CHAT으로 먼저 업로드한 내 이미지 ID를 보낸다. 차단 관계가 되면 보낼 수 없다.",
+        "description": "텍스트 또는 사진 메시지를 보낸다. 사진은 purpose=CHAT으로 먼저 업로드한 내 이미지 ID를 보낸다. 차단 관계가 되면 보낼 수 없다. 방을 나간 참여자도 메시지를 보낼 수 있다. 이때 보낸 사람의 채팅방 목록에는 해당 방이 다시 나타나지 않는다.",
         "tags": [
           "chat"
         ],
@@ -9876,13 +10093,13 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
       }
     },
     "/api/me/reports": {
       "post": {
         "summary": "유저·게시물 신고",
-        "description": "부적절한 유저 또는 게시물을 사유와 함께 신고한다. 같은 대상을 중복 신고하면 409다.",
+        "description": "부적절한 유저 또는 게시물을 사유와 함께 신고한다. 같은 대상을 중복 신고하면 409다. 내 게시물이나 자기 자신을 신고하면 400을 반환한다. reason이 ETC면 공백이 아닌 내용이 detail에 필요하다.",
         "tags": [
           "safety"
         ],
@@ -9909,7 +10126,8 @@
                   },
                   "targetId": {
                     "type": "integer",
-                    "format": "int64"
+                    "format": "int64",
+                    "minimum": 1
                   },
                   "reason": {
                     "type": "string",
@@ -9925,7 +10143,7 @@
                     "type": "string",
                     "maxLength": 500,
                     "nullable": true,
-                    "description": "reason=ETC면 필수"
+                    "description": "reason이 ETC면 공백이 아닌 내용이 필요하다."
                   }
                 }
               },
@@ -9988,7 +10206,7 @@
             }
           },
           "400": {
-            "description": "검증 실패 또는 자기 자신 신고",
+            "description": "검증 실패, 자기 자신 신고 또는 내 게시물 신고 (INVALID_REQUEST)",
             "content": {
               "application/json": {
                 "schema": {
@@ -10003,6 +10221,17 @@
                       "error": {
                         "code": "INVALID_REQUEST",
                         "message": "요청이 올바르지 않습니다."
+                      }
+                    }
+                  },
+                  "OWN_POST": {
+                    "summary": "내 게시물 신고",
+                    "value": {
+                      "success": false,
+                      "data": null,
+                      "error": {
+                        "code": "INVALID_REQUEST",
+                        "message": "내 게시물은 신고할 수 없습니다"
                       }
                     }
                   }
@@ -10076,7 +10305,7 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
       }
     },
     "/api/me/blocks": {
@@ -10172,7 +10401,7 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
       }
     },
     "/api/me/blocks/{userId}": {
@@ -10305,7 +10534,7 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
       },
       "delete": {
         "summary": "유저 차단 해제",
@@ -10413,13 +10642,13 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
       }
     },
     "/api/me/ai-waste-reports": {
       "post": {
         "summary": "AI 상세 리포트 생성 (크레딧 차감)",
-        "description": "크레딧을 차감하고 해당 월의 consumption_events로 AI 상세 낭비 리포트를 만든다. 같은 월을 이미 샀으면 차감 없이 기존 리포트를 돌려준다(chargedCredit=0). 생성은 10초 이상 걸릴 수 있으며, 생성에 실패하면 차감하지 않는다.",
+        "description": "해당 월의 consumed·disposed 이벤트로 AI 상세 낭비 리포트를 만든다. 생성에는 10초 이상 걸릴 수 있다. 새 리포트의 크레딧 비용은 서버 설정으로 결정하며, 생성에 실패하면 차감하지 않는다.\n\n1. yearMonth 형식과 미래 월 여부를 검증한다. 잘못된 요청은 400이다.\n2. 같은 달의 기존 리포트가 있으면 추가 차감 없이 반환한다(chargedCredit=0).\n3. 소진·폐기 이벤트가 없으면 422다. shared 이벤트만 있는 달도 포함된다.\n4. 사용 가능한 크레딧이 비용보다 적으면 409다.\n5. AI 생성이 실패하면 한 번 재시도하고, 다시 실패하면 503이다.",
         "tags": [
           "report",
           "credit"
@@ -10568,7 +10797,7 @@
             }
           },
           "422": {
-            "description": "리포트를 만들 이벤트가 없음",
+            "description": "해당 월에 소진·폐기 이벤트가 없음 (shared만 있는 경우 포함)",
             "content": {
               "application/json": {
                 "schema": {
@@ -10591,7 +10820,7 @@
             }
           },
           "503": {
-            "description": "AI 생성 실패",
+            "description": "AI 생성이 한 번 재시도한 뒤에도 실패함",
             "content": {
               "application/json": {
                 "schema": {
@@ -10619,7 +10848,7 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
       },
       "get": {
         "summary": "구매한 AI 리포트 목록",
@@ -10713,7 +10942,7 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
       }
     },
     "/api/me/ai-waste-reports/{aiReportId}": {
@@ -10822,7 +11051,7 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
       }
     },
     "/api/health": {
@@ -11083,7 +11312,7 @@
     "/api/me/dashboard": {
       "get": {
         "summary": "마이페이지 대시보드",
-        "description": "이번 달 낭비 통계, 누적 절약 금액, 절약 스트릭을 한 번에 조회한다. 별도 테이블 없이 consumption_events와 inventory_items를 요청 시점에 집계한다. 날짜 기준은 Asia/Seoul.\n\n- 절약 금액 = consumed 이벤트 amount 합 + shared 이벤트 amount 합(안 버리고 먹거나 나눈 만큼). amount가 없는 이벤트는 0으로 본다\n- 절약 스트릭 = 마지막 disposed 이벤트 다음 날부터 오늘까지 연속 일수. 폐기 기록이 없으면 가입일부터 센다. 자동 폐기도 폐기로 센다\n- 사용자를 탓하지 않는 톤으로 보여 주도록 폐기 수치보다 절약 수치를 앞에 둔다",
+        "description": "이번 달 낭비 통계, 누적 절약 금액, 절약 스트릭을 한 번에 조회한다. 별도 테이블 없이 consumption_events와 inventory_items를 요청 시점에 집계한다. 날짜 기준은 Asia/Seoul.\n\n- 절약 금액 = consumed 이벤트 amount 합 + shared 이벤트 amount 합(안 버리고 먹거나 나눈 만큼). amount가 없는 이벤트는 0으로 본다\n- 절약 스트릭 = 마지막 disposed 이벤트 다음 날부터 오늘까지 연속 일수. 폐기 기록이 없으면 서울 기준 가입 당일을 1일로 센다. 자동 폐기도 폐기로 센다\n- 사용자를 탓하지 않는 톤으로 보여 주도록 폐기 수치보다 절약 수치를 앞에 둔다",
         "operationId": "getDashboard",
         "tags": [
           "logic",
@@ -11137,29 +11366,32 @@
                             },
                             "savedAmount": {
                               "type": "integer",
-                              "description": "이번 달 절약 금액(원)"
+                              "description": "이번 달 절약 금액(원)",
+                              "format": "int64"
                             },
                             "consumedCount": {
                               "type": "integer",
-                              "description": "이번 달 소진으로 끝난 재고 수"
+                              "description": "이번 달 consumed·disposed 이벤트가 있는 재고 중 이번 달 disposed 이벤트가 없는 서로 다른 재고 수. 소진과 폐기가 함께 있으면 wastedCount에만 포함한다. 두 집계는 겹치지 않으며 waste-reports와 같은 정의다."
                             },
                             "sharedCount": {
                               "type": "integer",
-                              "description": "이번 달 나눔·판매로 넘긴 재고 수"
+                              "description": "이번 달 shared 이벤트가 있는 서로 다른 재고 수. 소진·폐기 집계와 별도로 센다."
                             },
                             "wastedAmount": {
                               "type": "integer",
-                              "description": "이번 달 폐기 금액(원)"
+                              "description": "이번 달 폐기 금액(원)",
+                              "format": "int64"
                             },
                             "wastedCount": {
                               "type": "integer",
-                              "description": "이번 달 폐기로 끝난 재고 수"
+                              "description": "이번 달 disposed 이벤트가 있는 서로 다른 재고 수. 부분 폐기도 포함한다."
                             }
                           }
                         },
                         "totalSavedAmount": {
                           "type": "integer",
-                          "description": "가입 후 누적 절약 금액(원)"
+                          "description": "가입 후 누적 절약 금액(원)",
+                          "format": "int64"
                         },
                         "savingStreakDays": {
                           "type": "integer",
@@ -11177,7 +11409,7 @@
                         },
                         "expiringSoonCount": {
                           "type": "integer",
-                          "description": "설정의 expiryAlertDays 이내로 소비기한이 남은 재고 수"
+                          "description": "소비기한이 서울 기준 오늘 + expiryAlertDays 이하인 active 재고 수. 이미 소비기한이 지난 재고도 포함한다."
                         }
                       }
                     },
@@ -11221,7 +11453,7 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
       }
     }
   },
@@ -12720,7 +12952,7 @@
             "type": "string",
             "format": "date-time",
             "nullable": true,
-            "description": "ACCEPTED 거래의 자동 완료 시각(수락 시각 + 72시간). 그 전에 수령 확인·취소가 없으면 자동 완료된다"
+            "description": "ACCEPTED일 때만 자동 완료 예정 시각(수락 시각 + 72시간)을 반환한다. 다른 상태에서는 null이다. 수령 확인·취소 없이 예정 시각에 도달한 거래는 10분 주기 배치가 자동 완료한다."
           },
           "reviewWritten": {
             "type": "boolean",
