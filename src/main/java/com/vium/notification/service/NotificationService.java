@@ -83,9 +83,17 @@ public class NotificationService {
 	@Transactional
 	public ConsumptionCheckKeepResponse confirmKeep(Long userId, Long inventoryItemId) {
 		LocalDate confirmedExpiresOn = inventoryService.confirmKeep(userId, inventoryItemId);
+		markConsumeCheckRead(userId, inventoryItemId);
+		return new ConsumptionCheckKeepResponse(inventoryItemId, confirmedExpiresOn);
+	}
+
+	/**
+	 * 소진 확인 질문에 답한 것으로 본다. '아니오'(keep)와 '예'(dispose 도메인의 상태 변경) 양쪽에서 호출한다.
+	 */
+	@Transactional
+	public void markConsumeCheckRead(Long userId, Long inventoryItemId) {
 		notifications.findByUserIdAndInventoryItemIdAndType(userId, inventoryItemId, "consume_check")
 			.ifPresent(notification -> notification.markRead(LocalDateTime.now(clock)));
-		return new ConsumptionCheckKeepResponse(inventoryItemId, confirmedExpiresOn);
 	}
 
 	private NotificationDto toDto(Notification notification) {
