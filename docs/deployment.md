@@ -32,6 +32,10 @@ RDS URL의 `sslmode=verify-full`은 인증서와 호스트를 검증한다. 인�
 
 `AUTH_SESSION_CLEANUP_ENABLED`는 운영 Compose에서 기본 true이므로 `.env.prod`에 값이 없어도 매일 04:30(Asia/Seoul)에 만료 후 30일이 지난 리프레시 토큰 세션을 1000건씩 삭제한다. 일시 중지하려면 `.env.prod`에 `AUTH_SESSION_CLEANUP_ENABLED=false`를 넣고 컨테이너를 재생성한다. 활성 여부는 기동 로그 `세션 정리 스케줄러 활성화`, 실행 결과는 `세션 정리 배치 완료: 삭제 N건`으로 확인한다. 일정·보존 기간·청크 크기는 `application.yml` 고정값이며 전용 환경변수로 변경할 수 없다.
 
+`FCM_ENABLED`, `PUSH_EXPIRY_ENABLED`, `PUSH_CONSUME_CHECK_ENABLED`는 운영 Compose에서 기본 false다. 서비스 계정 JSON 원문을 `jq -c`로 한 줄로 압축한 뒤 작은따옴표로 감싸 `FCM_CREDENTIALS_JSON`에 넣는다. 작은따옴표는 JSON의 `\n` 이스케이프를 보존한다. 실제 키는 권한 600인 운영 `.env.prod`에만 두고 저장소나 대화에 올리지 않는다. CD 전환 후에는 `/opt/vium/shared/.env.prod`(권한 600)를 수정하고 현재 릴리스의 컨테이너를 재생성해 반영한다([CD 안내](cd.md)).
+
+먼저 `FCM_ENABLED=true`와 `FCM_CREDENTIALS_JSON`을 설정하고 컨테이너를 재생성한다. `/actuator/health`가 `UP`인지 확인한 뒤 `PUSH_EXPIRY_ENABLED=true`와 `PUSH_CONSUME_CHECK_ENABLED=true`를 설정하고 다시 재생성한다. FCM을 켠 상태에서 키가 비어 있거나, FCM이 꺼진 상태에서 두 푸시 배치 중 하나라도 켜면 앱 기동이 실패한다. 배치 활성 여부는 기동 로그 `소비기한 임박 푸시 스케줄러 활성화`, `소진 확인 푸시 스케줄러 활성화`로 확인한다. 운영 Compose는 푸시 cron·timezone과 `FCM_TIMEOUT_SECONDS`를 전달하지 않으므로 `application.yml` 기본값인 임박 푸시 09:00 KST, 소진 확인 푸시 20:00 KST, FCM 전송 타임아웃 10초를 사용한다.
+
 `IMAGE_STORAGE_ENABLED=true`로 설정하면 S3 이미지 업로드를 사용한다. 활성화 전 `vium-ec2-role`에 두 운영 버킷의 `images/*`에 한정한 PutObject·DeleteObject와 private 버킷의 GetObject 권한을 부여하고, 아래 Nginx 업로드 제한을 적용해야 한다. Docker bridge 컨테이너에서 인스턴스 역할 자격 증명을 받을 수 있도록 EC2 IMDSv2의 `HttpPutResponseHopLimit`은 2로 설정하고 `HttpTokens=required`를 유지한다. 자격 증명은 인스턴스 역할을 사용하며 `.env.prod`에 AWS 액세스 키를 넣지 않는다.
 
 `AWS_REGION`, `S3_PRIVATE_BUCKET`, `S3_PUBLIC_BUCKET`, `IMAGE_PUBLIC_BASE_URL`을 실제 운영 값과 대조한다. 활성화 시 버킷 이름 형식이 잘못되거나 두 버킷이 같거나 공개 URL이 경로 없는 HTTPS 형식이 아니면 앱 기동이 실패한다. CD 전환 후에는 `/opt/vium/shared/.env.prod`(권한 600)를 수정하고 현재 릴리스의 컨테이너를 재생성해 반영한다([CD 안내](cd.md)).
