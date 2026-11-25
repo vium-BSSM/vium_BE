@@ -132,6 +132,7 @@ CREATE TABLE "inventory_items" (
   "amount" numeric(12,2),
   "purchased_on" date,
   "expires_on" date,
+  "keep_confirmed_expires_on" date,
   "created_at" timestamp NOT NULL,
   "updated_at" timestamp NOT NULL,
   CONSTRAINT "chk_inventory_items_identity" CHECK ("ingredient_catalog_id" IS NOT NULL OR "custom_name" IS NOT NULL)
@@ -263,6 +264,10 @@ CREATE INDEX ON "consumption_events" ("user_id", "event_type", "occurred_at");
 CREATE INDEX ON "notifications" ("user_id", "scheduled_at");
 
 CREATE INDEX ON "notifications" ("inventory_item_id");
+
+CREATE UNIQUE INDEX ON "notifications" ("user_id", "inventory_item_id") WHERE "type" = 'expiry';
+
+CREATE UNIQUE INDEX ON "notifications" ("user_id", "inventory_item_id") WHERE "type" = 'consume_check';
 
 CREATE INDEX ON "shopping_list_items" ("user_id");
 

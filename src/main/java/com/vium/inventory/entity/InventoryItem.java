@@ -66,6 +66,9 @@ public class InventoryItem {
 	@Column(name = "expires_on")
 	private LocalDate expiresOn;
 
+	@Column(name = "keep_confirmed_expires_on")
+	private LocalDate keepConfirmedExpiresOn;
+
 	@Column(name = "created_at", nullable = false)
 	private LocalDateTime createdAt;
 
@@ -106,6 +109,10 @@ public class InventoryItem {
 	public void updateStatus(BigDecimal quantity, Short newStatusId) {
 		this.remainingQuantity = this.remainingQuantity.subtract(quantity);
 		this.statusId = newStatusId;
+	}
+
+	public void confirmKeep() {
+		this.keepConfirmedExpiresOn = this.expiresOn;
 	}
 
 	public void updateDetails(String customName, BigDecimal quantity, Short unitId, Short storageMethodId,
