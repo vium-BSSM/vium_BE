@@ -6437,7 +6437,7 @@
             "$ref": "#/components/responses/Unauthorized"
           },
           "404": {
-            "description": "게시물이 없거나 삭제됨",
+            "description": "게시물이 없거나 삭제됐거나 작성자와 차단 관계임 (POST_NOT_FOUND)",
             "content": {
               "application/json": {
                 "schema": {
@@ -7205,7 +7205,7 @@
     "/api/posts/{postId}/like": {
       "put": {
         "summary": "게시물 좋아요",
-        "description": "게시물에 좋아요를 누른다. 이미 눌렀으면 그대로 성공한다(멱등).",
+        "description": "게시물에 좋아요를 누른다. 이미 눌렀으면 그대로 성공한다(멱등). 게시물 작성자와 차단 관계라면 404 POST_NOT_FOUND를 반환한다.",
         "tags": [
           "post"
         ],
@@ -7278,7 +7278,7 @@
             "$ref": "#/components/responses/Unauthorized"
           },
           "404": {
-            "description": "게시물 없음",
+            "description": "게시물이 없거나 삭제됐거나 작성자와 차단 관계임 (POST_NOT_FOUND)",
             "content": {
               "application/json": {
                 "schema": {
@@ -7310,7 +7310,7 @@
       },
       "delete": {
         "summary": "게시물 좋아요 취소",
-        "description": "좋아요를 취소한다. 누르지 않았어도 성공한다(멱등).",
+        "description": "좋아요를 취소한다. 누르지 않았어도 성공한다(멱등). 게시물 작성자와 차단 관계라면 404 POST_NOT_FOUND를 반환한다.",
         "tags": [
           "post"
         ],
@@ -7383,7 +7383,7 @@
             "$ref": "#/components/responses/Unauthorized"
           },
           "404": {
-            "description": "게시물 없음",
+            "description": "게시물이 없거나 삭제됐거나 작성자와 차단 관계임 (POST_NOT_FOUND)",
             "content": {
               "application/json": {
                 "schema": {
@@ -7757,7 +7757,7 @@
     "/api/me/trades/{tradeId}/reject": {
       "post": {
         "summary": "거래 거절",
-        "description": "판매자가 REQUESTED 거래를 거절한다. 보류한 크레딧을 환불(TRADE_REFUND)하고 게시물은 OPEN으로 남는다. TRADE_REJECTED 시스템 메시지를 남긴다.\n\n판매자만 호출할 수 있다.",
+        "description": "판매자가 REQUESTED 거래를 거절한다. SALE 거래만 보류한 크레딧을 환불(TRADE_REFUND)한다. 게시물은 OPEN으로 남는다. TRADE_REJECTED 시스템 메시지를 남긴다.\n\n판매자만 호출할 수 있다.",
         "tags": [
           "trade"
         ],
@@ -7891,7 +7891,7 @@
     "/api/me/trades/{tradeId}/cancel": {
       "post": {
         "summary": "거래 취소",
-        "description": "구매자 또는 판매자가 REQUESTED·ACCEPTED 거래를 취소한다. 보류한 크레딧을 환불하고 게시물을 OPEN으로 되돌린다(소비기한이 지났으면 EXPIRED). TRADE_CANCELED 시스템 메시지를 남긴다.",
+        "description": "구매자 또는 판매자가 REQUESTED·ACCEPTED 거래를 취소한다. SALE 거래만 보류한 크레딧을 환불한다. RESERVED 게시물은 OPEN으로 되돌리고, OPEN 상태에서 소비기한이 지났으면 EXPIRED로 바꾼다. TRADE_CANCELED 시스템 메시지를 남긴다.",
         "tags": [
           "trade"
         ],
@@ -8385,7 +8385,7 @@
     "/api/me/trades/{tradeId}/review": {
       "post": {
         "summary": "매너 평가·거래 후기 작성",
-        "description": "COMPLETED 거래의 상대에게 매너 점수(필수)와 후기(선택)를 남긴다. 거래당 1회만 쓸 수 있고 수정·삭제는 없다.",
+        "description": "COMPLETED 거래의 상대에게 매너 점수(필수)와 후기(선택)를 남긴다. 거래당 1회만 쓸 수 있고 수정·삭제는 없다. content를 생략하거나 공백만 보내면 null로 저장한다. 이 평가는 점수 집계에 반영되며 후기 목록에서 제외된다.",
         "tags": [
           "trade"
         ],
@@ -8413,7 +8413,8 @@
                   "content": {
                     "type": "string",
                     "maxLength": 500,
-                    "nullable": true
+                    "nullable": true,
+                    "description": "생략하거나 공백만 보내면 null로 저장한다."
                   }
                 }
               },
@@ -8579,7 +8580,7 @@
     "/api/users/{userId}/reviews": {
       "get": {
         "summary": "받은 매너 점수·후기 조회",
-        "description": "유저가 받은 매너 점수 평균과 후기를 최신순으로 조회한다. 내용이 없는 평가는 점수 평균에만 반영되고 reviews에는 나오지 않는다.",
+        "description": "유저가 받은 매너 점수 평균과 후기를 최신순으로 조회한다. 내용이 없는 평가는 점수 평균에만 반영되고 reviews에는 나오지 않는다. 공백만 있는 내용은 저장 시 null로 처리되어 후기 목록에서 제외된다.",
         "tags": [
           "trade"
         ],
@@ -9333,7 +9334,7 @@
     "/api/me/chat-rooms": {
       "get": {
         "summary": "채팅방 리스트 조회",
-        "description": "내가 참여 중인(나가지 않은) 채팅방을 최근 메시지순으로 조회한다.",
+        "description": "내가 참여 중인 채팅방을 최근 활동 시각 내림차순으로 조회한다. 메시지가 있는 방은 마지막 메시지 시각, 메시지가 없는 방은 생성 시각을 기준으로 한다. 활동 시각이 같으면 채팅방 ID 내림차순으로 정렬한다.",
         "tags": [
           "chat"
         ],
@@ -9447,6 +9448,40 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "400": {
+            "description": "INVALID_REQUEST: size가 1~50 범위를 벗어나거나 size·cursor의 형식이 올바르지 않음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "examples": {
+                  "INVALID_SIZE": {
+                    "summary": "INVALID_REQUEST",
+                    "value": {
+                      "success": false,
+                      "data": null,
+                      "error": {
+                        "code": "INVALID_REQUEST",
+                        "message": "size는 1~50 사이여야 합니다"
+                      }
+                    }
+                  },
+                  "INVALID_CURSOR": {
+                    "summary": "INVALID_REQUEST",
+                    "value": {
+                      "success": false,
+                      "data": null,
+                      "error": {
+                        "code": "INVALID_REQUEST",
+                        "message": "cursor 값이 올바르지 않습니다"
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "security": [
@@ -9460,7 +9495,7 @@
     "/api/posts/{postId}/chat-rooms": {
       "post": {
         "summary": "채팅방 생성",
-        "description": "게시물 작성자와의 채팅방을 만든다(구매자 전용). 같은 게시물·같은 구매자의 방이 있으면 그 방을 돌려준다(created=false). 내가 나갔던 방이면 다시 참여한다.",
+        "description": "게시물 작성자와의 채팅방을 만든다(구매자 전용). 같은 게시물·같은 구매자의 방이 있으면 그 방을 돌려준다(created=false). 내가 나갔던 방이면 다시 참여한다. 채팅방 생성 시 게시물의 거래 상태는 검사하지 않는다.",
         "tags": [
           "chat"
         ],
@@ -9840,6 +9875,40 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "INVALID_REQUEST: size가 1~100 범위를 벗어나거나 size·cursor의 형식이 올바르지 않음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                },
+                "examples": {
+                  "INVALID_SIZE": {
+                    "summary": "INVALID_REQUEST",
+                    "value": {
+                      "success": false,
+                      "data": null,
+                      "error": {
+                        "code": "INVALID_REQUEST",
+                        "message": "size는 1~100 사이여야 합니다"
+                      }
+                    }
+                  },
+                  "INVALID_CURSOR": {
+                    "summary": "INVALID_REQUEST",
+                    "value": {
+                      "success": false,
+                      "data": null,
+                      "error": {
+                        "code": "INVALID_REQUEST",
+                        "message": "cursor 값이 올바르지 않습니다"
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "security": [
@@ -9851,7 +9920,7 @@
       },
       "post": {
         "summary": "채팅 보내기",
-        "description": "텍스트 또는 사진 메시지를 보낸다. 사진은 purpose=CHAT으로 먼저 업로드한 내 이미지 ID를 보낸다. 차단 관계가 되면 보낼 수 없다.",
+        "description": "텍스트 또는 사진 메시지를 보낸다. 사진은 purpose=CHAT으로 먼저 업로드한 내 이미지 ID를 보낸다. 차단 관계가 되면 보낼 수 없다. 방을 나간 참여자도 메시지를 보낼 수 있다. 이때 보낸 사람의 채팅방 목록에는 해당 방이 다시 나타나지 않는다.",
         "tags": [
           "chat"
         ],
@@ -10030,7 +10099,7 @@
     "/api/me/reports": {
       "post": {
         "summary": "유저·게시물 신고",
-        "description": "부적절한 유저 또는 게시물을 사유와 함께 신고한다. 같은 대상을 중복 신고하면 409다.",
+        "description": "부적절한 유저 또는 게시물을 사유와 함께 신고한다. 같은 대상을 중복 신고하면 409다. 내 게시물이나 자기 자신을 신고하면 400을 반환한다. reason이 ETC면 공백이 아닌 내용이 detail에 필요하다.",
         "tags": [
           "safety"
         ],
@@ -10057,7 +10126,8 @@
                   },
                   "targetId": {
                     "type": "integer",
-                    "format": "int64"
+                    "format": "int64",
+                    "minimum": 1
                   },
                   "reason": {
                     "type": "string",
@@ -10073,7 +10143,7 @@
                     "type": "string",
                     "maxLength": 500,
                     "nullable": true,
-                    "description": "reason=ETC면 필수"
+                    "description": "reason이 ETC면 공백이 아닌 내용이 필요하다."
                   }
                 }
               },
@@ -10136,7 +10206,7 @@
             }
           },
           "400": {
-            "description": "검증 실패 또는 자기 자신 신고",
+            "description": "검증 실패, 자기 자신 신고 또는 내 게시물 신고 (INVALID_REQUEST)",
             "content": {
               "application/json": {
                 "schema": {
@@ -10151,6 +10221,17 @@
                       "error": {
                         "code": "INVALID_REQUEST",
                         "message": "요청이 올바르지 않습니다."
+                      }
+                    }
+                  },
+                  "OWN_POST": {
+                    "summary": "내 게시물 신고",
+                    "value": {
+                      "success": false,
+                      "data": null,
+                      "error": {
+                        "code": "INVALID_REQUEST",
+                        "message": "내 게시물은 신고할 수 없습니다"
                       }
                     }
                   }
@@ -12871,7 +12952,7 @@
             "type": "string",
             "format": "date-time",
             "nullable": true,
-            "description": "ACCEPTED 거래의 자동 완료 시각(수락 시각 + 72시간). 그 전에 수령 확인·취소가 없으면 자동 완료된다"
+            "description": "ACCEPTED일 때만 자동 완료 예정 시각(수락 시각 + 72시간)을 반환한다. 다른 상태에서는 null이다. 수령 확인·취소 없이 예정 시각에 도달한 거래는 10분 주기 배치가 자동 완료한다."
           },
           "reviewWritten": {
             "type": "boolean",
