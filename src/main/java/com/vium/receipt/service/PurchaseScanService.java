@@ -36,7 +36,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class PurchaseScanService {
 	private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
-	private static final List<Short> STORAGE_ORDER = List.of((short) 1, (short) 3, (short) 2);
 	private final ImageService images;
 	private final IngredientCatalogService catalog;
 	private final ExpiryEstimationService expiry;
@@ -69,18 +68,9 @@ public class PurchaseScanService {
 		for (var item : normalized.items()) {
 			var matched = match(item.rawName(), names);
 			Long catalogId = matched == null ? null : matched.id();
-			Short storageId = 1;
-			LocalDate expiresOn = null;
-			if (catalogId != null) {
-				for (Short candidate : STORAGE_ORDER) {
-					var date = expiry.estimateExpiresOn(catalogId, candidate, normalized.purchasedAt().toLocalDate());
-					if (date.isPresent()) {
-						storageId = candidate;
-						expiresOn = date.get();
-						break;
-					}
-				}
-			}
+			var estimate = expiry.estimateWithDefaultStorage(catalogId, normalized.purchasedAt().toLocalDate()).orElse(null);
+			Short storageId = estimate == null ? (short) 1 : estimate.storageMethodId();
+			LocalDate expiresOn = estimate == null ? null : estimate.expiresOn();
 			var saved = purchaseItems.save(PurchaseItem.builder().purchaseId(purchase.getId())
 				.ingredientCatalogId(catalogId).rawName(item.rawName()).quantity(item.quantity())
 				.unitId(item.unitId()).storageMethodId(storageId).unitPrice(item.unitPrice())

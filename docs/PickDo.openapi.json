@@ -1862,36 +1862,49 @@
       "get": {
         "summary": "유통기한(소비기한) 자동 추정",
         "deprecated": false,
-        "description": "[MVP] 품목별 평균 보관 기간으로 소비기한을 자동 설정하고, 사용자가 수정할 수 있다. 재료명(또는 카테고리)을 조회하면 평균 보관일수 기반 예상 소비기한을 반환한다. '식재료 수동 등록' 시 기본값으로 활용.",
+        "description": "카탈로그 재료의 구매일에 유효한 보관 규칙으로 소비기한을 미리 계산한다. 구매일을 생략하면 서울 기준 오늘을 사용하며 미래 날짜는 허용하지 않는다. 보관 방법을 지정하면 해당 방법만 조회한다. 생략하면 냉장(1), 실온(3), 냉동(2) 순으로 유효한 규칙이 있는 첫 보관 방법을 선택한다.\n\n유효한 규칙이 없으면 200으로 응답하고 shelfLifeDays와 estimatedExpiryDate는 null이다. 보관 방법을 지정했다면 요청한 ID와 이름을 반환하고, 생략했다면 보관 방법 ID와 이름도 null이다.\n\n재료 등록과 같은 추정 규칙을 사용하므로 재료 카탈로그 ID, 보관 방법 ID, 구매일이 같으면 예상 소비기한도 같다. 등록 시 응답의 보관 방법 ID와 구매일을 그대로 전달하거나 estimatedExpiryDate를 expiresOn으로 전달한다.",
         "tags": [
           "ingredient",
           "logic"
         ],
         "parameters": [
           {
-            "name": "ingredientName",
+            "name": "ingredientCatalogId",
             "in": "query",
-            "description": "재료명 (ingredient_catalog.name 매칭 기준)",
-            "required": false,
-            "example": "",
+            "description": "재료 카탈로그 ID.",
+            "required": true,
+            "example": 5,
             "schema": {
-              "type": "string"
+              "type": "integer",
+              "format": "int64"
             }
           },
           {
             "name": "storageMethodId",
             "in": "query",
-            "description": "보관 방법 ID(storage_methods FK)",
-            "required": true,
-            "example": "",
+            "description": "보관 방법 ID. 생략하면 냉장, 실온, 냉동 순으로 추정한다.",
+            "required": false,
+            "example": 1,
             "schema": {
-              "type": "integer"
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "purchasedOn",
+            "in": "query",
+            "description": "구매일. 생략하면 서울 기준 오늘을 사용한다.",
+            "required": false,
+            "example": "2026-11-25",
+            "schema": {
+              "type": "string",
+              "format": "date"
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "",
+            "description": "추정 결과. 적용할 규칙이 없는 경우도 성공으로 반환한다.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1905,28 +1918,41 @@
                       "properties": {
                         "ingredientCatalogId": {
                           "type": "integer",
-                          "nullable": true
+                          "format": "int64"
                         },
                         "ingredientName": {
                           "type": "string"
                         },
                         "storageMethodId": {
-                          "type": "integer"
-                        },
-                        "shelfLifeDays": {
-                          "type": "integer"
-                        },
-                        "estimatedExpiryDate": {
-                          "type": "string"
+                          "type": "integer",
+                          "format": "int32",
+                          "nullable": true
                         },
                         "storageMethodName": {
-                          "type": "string"
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "purchasedOn": {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        "shelfLifeDays": {
+                          "type": "integer",
+                          "format": "int32",
+                          "nullable": true
+                        },
+                        "estimatedExpiryDate": {
+                          "type": "string",
+                          "format": "date",
+                          "nullable": true
                         }
                       },
                       "required": [
                         "ingredientCatalogId",
                         "ingredientName",
                         "storageMethodId",
+                        "storageMethodName",
+                        "purchasedOn",
                         "shelfLifeDays",
                         "estimatedExpiryDate"
                       ]
@@ -1948,12 +1974,13 @@
                 "example": {
                   "success": true,
                   "data": {
-                    "ingredientCatalogId": 12,
-                    "ingredientName": "우유",
+                    "ingredientCatalogId": 5,
+                    "ingredientName": "대파",
                     "storageMethodId": 1,
                     "storageMethodName": "냉장",
+                    "purchasedOn": "2026-11-25",
                     "shelfLifeDays": 7,
-                    "estimatedExpiryDate": "2026-09-03"
+                    "estimatedExpiryDate": "2026-12-02"
                   },
                   "error": null
                 }
@@ -1961,8 +1988,44 @@
             },
             "headers": {}
           },
+          "400": {
+            "description": "INVALID_REQUEST: 필수 파라미터 누락, 잘못된 형식, 존재하지 않는 보관 방법 ID 또는 미래 구매일",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "INVALID_REQUEST",
+                    "message": "purchasedOn은 미래일 수 없습니다"
+                  }
+                }
+              }
+            }
+          },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "description": "NOT_FOUND: 존재하지 않는 재료 카탈로그 ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "success": false,
+                  "data": null,
+                  "error": {
+                    "code": "NOT_FOUND",
+                    "message": "존재하지 않는 ingredientCatalogId 입니다"
+                  }
+                }
+              }
+            }
           }
         },
         "security": [
@@ -1970,7 +2033,7 @@
             "bearer": []
           }
         ],
-        "x-apidog-status": "designing"
+        "x-apidog-status": "released"
       }
     },
     "/api/ingredient-catalogs": {
