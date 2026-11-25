@@ -26,7 +26,7 @@ class TradeAcceptIntegrationTest extends TradeIntegrationSupport {
 		assertThat(jdbc.queryForObject("select accepted_at from trades where id=?", LocalDateTime.class, id)).isEqualTo(LOCAL_NOW);
 		assertThat(jdbc.queryForObject("select auto_resolve_at from trades where id=?", LocalDateTime.class, id)).isEqualTo(LOCAL_NOW.plusHours(72));
 		assertThat(credits.getAvailableBalance(BUYER)).isEqualTo(97);
-		verify(notifier).notify(any(), eq(TradeSystemEvent.TRADE_ACCEPTED));
+		verify(notifier).notify(any(), eq(TradeSystemEvent.TRADE_ACCEPTED), any());
 		mvc.perform(post(endpoint(id, "accept")).header("Authorization", bearer(SELLER)))
 			.andExpect(status().isConflict()).andExpect(jsonPath("$.error.code").value("INVALID_TRADE_STATUS"));
 	}
@@ -54,7 +54,7 @@ class TradeAcceptIntegrationTest extends TradeIntegrationSupport {
 		assertThat(credits.getAvailableBalance(BUYER)).isEqualTo(100);
 		assertThat(credits.getHeldBalance(BUYER)).isZero();
 		assertThat(jdbc.queryForObject("select canceled_by_id from trades where id=?", Long.class, id)).isNull();
-		verify(notifier).notify(any(), eq(TradeSystemEvent.TRADE_CANCELED));
+		verify(notifier).notify(any(), eq(TradeSystemEvent.TRADE_CANCELED), any());
 	}
 
 	@Test
@@ -72,7 +72,7 @@ class TradeAcceptIntegrationTest extends TradeIntegrationSupport {
 	void notificationFailureRollsBackAccept() throws Exception {
 		var post = createPost(SELLER, PostType.SALE);
 		long id = request(post, BUYER);
-		doThrow(new IllegalStateException("failed")).when(notifier).notify(any(), eq(TradeSystemEvent.TRADE_ACCEPTED));
+		doThrow(new IllegalStateException("failed")).when(notifier).notify(any(), eq(TradeSystemEvent.TRADE_ACCEPTED), any());
 		mvc.perform(post(endpoint(id, "accept")).header("Authorization", bearer(SELLER))).andExpect(status().isInternalServerError());
 		assertThat(tradeStatus(id)).isEqualTo("REQUESTED");
 		assertThat(postStatus(post)).isEqualTo("OPEN");
@@ -84,6 +84,6 @@ class TradeAcceptIntegrationTest extends TradeIntegrationSupport {
 		java.util.concurrent.Callable<String> accept = () -> String.valueOf(mvc.perform(
 			post(endpoint(id, "accept")).header("Authorization", bearer(SELLER))).andReturn().getResponse().getStatus());
 		assertThat(race(accept, accept)).containsExactlyInAnyOrder("200", "409");
-		verify(notifier).notify(any(), eq(TradeSystemEvent.TRADE_ACCEPTED));
+		verify(notifier).notify(any(), eq(TradeSystemEvent.TRADE_ACCEPTED), any());
 	}
 }

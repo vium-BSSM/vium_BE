@@ -2,6 +2,7 @@ package com.vium.inventory.repository;
 
 import com.vium.image.config.ImageStorageProperties;
 import com.vium.inventory.dto.ActiveIngredientState;
+import com.vium.inventory.dto.ConsumptionCheckCandidate;
 import com.vium.inventory.dto.IngredientDetailResponse;
 import com.vium.inventory.dto.IngredientListResponse;
 import java.math.RoundingMode;
@@ -64,6 +65,30 @@ public class InventoryQueryRepository {
 		), parameters);
 	}
 
+	public List<ConsumptionCheckCandidate> findConsumptionCheckCandidates(Long userId, LocalDate today) {
+		String sql = """
+			select i.id, coalesce(c.name, i.custom_name) as name,
+			       i.remaining_quantity, u.name as unit, i.expires_on
+			from inventory_items i
+			join item_statuses s on s.id = i.status_id
+			join units u on u.id = i.unit_id
+			left join ingredient_catalog c on c.id = i.ingredient_catalog_id
+			where i.user_id = ? and s.code = 'active'
+			  and i.remaining_quantity > 0 and i.expires_on <= ?
+			  and i.keep_confirmed_expires_on is distinct from i.expires_on
+			  and not exists (
+			      select 1 from posts p
+			      where p.inventory_item_id = i.id and p.deleted_at is null
+			        and p.status in ('OPEN', 'RESERVED')
+			  )
+			order by i.expires_on asc, i.id asc
+			""";
+		return jdbcTemplate.query(sql, (rs, rowNum) -> new ConsumptionCheckCandidate(
+			rs.getLong("id"), rs.getString("name"), rs.getBigDecimal("remaining_quantity"),
+			rs.getString("unit"), rs.getObject("expires_on", LocalDate.class)
+		), userId, today);
+	}
+
 	/**
 	 * 도메인 간 재고 참조용 내부 상태 조회. API 응답(IngredientListResponse)과 분리해
 	 * 다른 도메인(장보기 도우미 등)이 응답 필드 변경에 영향받지 않게 한다.
@@ -71,9 +96,10 @@ public class InventoryQueryRepository {
 	public List<ActiveIngredientState> findActiveInventoryStates(Long userId) {
 		String sql = """
 			select i.ingredient_catalog_id, coalesce(c.name, i.custom_name) as name,
-			       i.unit_id, i.remaining_quantity
+			       i.unit_id, u.name as unit_name, i.remaining_quantity, i.purchased_on
 			from inventory_items i
 			join item_statuses s on s.id = i.status_id
+			join units u on u.id = i.unit_id
 			left join ingredient_catalog c on c.id = i.ingredient_catalog_id
 			where i.user_id = ? and s.code = ?
 			""";
@@ -81,7 +107,9 @@ public class InventoryQueryRepository {
 			rs.getObject("ingredient_catalog_id", Long.class),
 			rs.getString("name"),
 			rs.getShort("unit_id"),
-			rs.getBigDecimal("remaining_quantity")
+			rs.getString("unit_name"),
+			rs.getBigDecimal("remaining_quantity"),
+			rs.getObject("purchased_on", LocalDate.class)
 		), userId, "active");
 	}
 

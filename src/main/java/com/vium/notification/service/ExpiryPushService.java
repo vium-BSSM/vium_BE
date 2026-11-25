@@ -2,10 +2,8 @@ package com.vium.notification.service;
 
 import com.vium.notification.dto.ExpiryPushCandidate;
 import com.vium.notification.entity.Notification;
-import com.vium.notification.entity.UserPushToken;
 import com.vium.notification.repository.ExpiryPushQueryRepository;
 import com.vium.notification.repository.NotificationRepository;
-import com.vium.notification.repository.UserPushTokenRepository;
 import com.vium.user.service.UserSettingsService;
 import java.time.Clock;
 import java.time.LocalDate;
@@ -27,9 +25,10 @@ import org.springframework.transaction.annotation.Transactional;
  * 이미 성공 발송된(sent_at NOT NULL) 재고는 ExpiryPushQueryRepository가 아예 후보에서 제외하고,
  * sent_at이 NULL인 기존 행(이전 전송 실패)은 existingNotificationId로 돌려줘 같은 행으로 재시도한다.
  * 새 행 생성(createOne)만 재고별 독립 트랜잭션으로 처리한다 — 재시도는 INSERT가 없어 유니크 위반 자체가
- * 나지 않는다. createOne/deleteInvalidToken/markSent를 self(프록시)로 호출하는 이유는 PushTokenService와
- * 같다: 같은 트랜잭션에서 유니크 위반이 나면 PostgreSQL이 그 트랜잭션 전체를 중단 상태로 만들어
- * 같은 사용자의 다른 재고 저장까지 막으므로, 재고 1건마다 독립된 트랜잭션이어야 한다.
+ * 나지 않는다. createOne/markSent를 self(프록시)로 호출하는 이유는 PushTokenService와 같다: 같은
+ * 트랜잭션에서 유니크 위반이 나면 PostgreSQL이 그 트랜잭션 전체를 중단 상태로 만들어 같은 사용자의
+ * 다른 재고 저장까지 막으므로, 재고 1건마다 독립된 트랜잭션이어야 한다. 토큰 순회 전송과 무효 토큰
+ * 삭제는 PushDispatchService에 위임한다.
  * 저장/재시도 확정 -> FCM 전송(트랜잭션 밖) -> 성공분만 sent_at 갱신 순서로 처리한다.
  */
 @Service
@@ -40,9 +39,8 @@ public class ExpiryPushService {
 	private static final String PUSH_TITLE = "소비기한 임박 알림";
 
 	private final ExpiryPushQueryRepository expiryPushQueryRepository;
-	private final UserPushTokenRepository userPushTokenRepository;
 	private final NotificationRepository notificationRepository;
-	private final FcmPushClient fcmPushClient;
+	private final PushDispatchService pushDispatchService;
 	private final Clock clock;
 	private final ObjectProvider<ExpiryPushService> self;
 
@@ -90,15 +88,7 @@ public class ExpiryPushService {
 		}
 
 		String body = "소비기한이 임박한 재료가 " + targetIds.size() + "개 있어요";
-		boolean anySuccess = false;
-		for (UserPushToken token : userPushTokenRepository.findAllByUserId(userId)) {
-			PushResult result = fcmPushClient.send(token.getToken(), PUSH_TITLE, body, Map.of("type", "expiry"));
-			if (result == PushResult.SUCCESS) {
-				anySuccess = true;
-			} else if (result == PushResult.INVALID_TOKEN) {
-				self.getObject().deleteInvalidToken(token.getToken());
-			}
-		}
+		boolean anySuccess = pushDispatchService.sendToUser(userId, PUSH_TITLE, body, Map.of("type", "expiry"));
 
 		if (anySuccess) {
 			self.getObject().markSent(targetIds, now);
@@ -111,11 +101,6 @@ public class ExpiryPushService {
 		Notification notification = Notification.expiry(userId, item.inventoryItemId(),
 			PUSH_TITLE, item.ingredientName() + "의 소비기한이 임박했어요", now, now);
 		return notificationRepository.saveAndFlush(notification);
-	}
-
-	@Transactional
-	public void deleteInvalidToken(String token) {
-		userPushTokenRepository.deleteByToken(token);
 	}
 
 	@Transactional

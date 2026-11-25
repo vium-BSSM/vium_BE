@@ -56,9 +56,24 @@ public class Notification {
 
 	public static Notification expiry(Long userId, Long inventoryItemId, String title, String body,
 			LocalDateTime scheduledAt, LocalDateTime createdAt) {
+		return create(userId, "expiry", inventoryItemId, title, body, scheduledAt, createdAt);
+	}
+
+	public static Notification consumeCheck(Long userId, Long inventoryItemId, String title, String body,
+			LocalDateTime scheduledAt, LocalDateTime createdAt) {
+		return create(userId, "consume_check", inventoryItemId, title, body, scheduledAt, createdAt);
+	}
+
+	public static Notification shoppingReminder(Long userId, String title, String body,
+			LocalDateTime scheduledAt, LocalDateTime createdAt) {
+		return create(userId, "shopping_reminder", null, title, body, scheduledAt, createdAt);
+	}
+
+	private static Notification create(Long userId, String type, Long inventoryItemId, String title, String body,
+			LocalDateTime scheduledAt, LocalDateTime createdAt) {
 		Notification notification = new Notification();
 		notification.userId = userId;
-		notification.type = "expiry";
+		notification.type = type;
 		notification.inventoryItemId = inventoryItemId;
 		notification.title = title;
 		notification.body = body;

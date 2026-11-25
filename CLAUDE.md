@@ -27,8 +27,8 @@
 
 ## 2. 기술 스택
 
-- 언어/프레임워크: **Spring Boot 3.x (Java 17+)**
-- 빌드: Gradle (Kotlin DSL 또는 Groovy)
+- 언어/프레임워크: **Spring Boot 4.1.x (Java 21)**
+- 빌드: Gradle (Kotlin DSL 또는 Groovy, 버전은 wrapper 기준)
 - DB: **PostgreSQL**
 - 접근: Spring Data JPA (+ 필요 시 QueryDSL 또는 native query for 집계)
 - 마이그레이션: Flyway (스키마 버전 관리)
@@ -209,7 +209,20 @@ com.vium
 - `auth`는 로그인·토큰 발급·세션 저장을, `global.security`는 요청 인증 검증과 현재 사용자 접근을 담당한다.
 - 로그인은 `AuthService → UserLoginService`로 자격 증명을 검증하고 `UserIdentity` DTO를 받는다. `AuthService`의 트랜잭션에서 세션을 저장하며, 저장 실패 시 토큰을 응답하지 않는다.
 
-### 7.5 리팩토링 범위와 검증
+### 7.5 비동기·스케줄러 규칙
+
+- 도메인 전용 `Executor` 타입 빈(`chatPushExecutor` 등)을 추가하면 Spring Boot가 기본으로 만들어 주던 `applicationTaskExecutor` 빈을 더 이상 자동 생성하지 않는다. MVC 비동기 처리(SseEmitter 등)가 이 이름의 빈을 찾으므로, 전용 executor를 추가할 때는 `applicationTaskExecutor` 빈을 같은 이름으로 직접 복원한다(근거: `ChatPushExecutorConfig`).
+- `TaskScheduler` 또는 `ScheduledExecutorService` 타입 빈을 Spring 빈으로 등록하지 않는다. 등록하면 기존 `@Scheduled` 배치들이 공유하던 `taskScheduler`(pool.size=1) 빈이 사라진다. 별도 주기 작업이 필요하면(`SseHeartbeatScheduler` 등) 순수 Java `ScheduledExecutorService`를 빈으로 등록하지 않고 직접 생성·관리한다.
+- 트랜잭션 커밋 이후 처리가 필요한 푸시·SSE 전송은 `@TransactionalEventListener(phase = AFTER_COMMIT)` + 전용 executor를 지정한 `@Async("executor 이름")` 조합을 쓴다. 리스너 내부 예외는 전부 삼키고 WARN 로그만 남긴다.
+- SSE 연결 레지스트리(`SseConnectionRegistry`)는 인메모리로만 연결을 관리하며 단일 인스턴스를 전제로 한다. 서버 인스턴스를 늘리면 각 인스턴스가 서로 다른 연결 상태를 가지므로, 다른 인스턴스에 연결된 사용자에게는 이벤트가 전달되지 않는다. 확장 시 별도 설계(예: 공유 저장소·pub/sub)가 필요하다.
+- 로컬에서 CI와 같은 결과를 보려면 `TZ=UTC ./gradlew --no-daemon test`로 실행한다. 날짜·시간이 걸린 테스트는 `Asia/Seoul`을 코드에서 명시한다.
+- 같은 트랜잭션 안에서 UNIQUE 제약 위반이 나면 PostgreSQL이 그 트랜잭션 전체를 중단 상태로 만들어 이후 조회까지 막는다. 이런 경우 `ObjectProvider<Self>`로 자기 자신을 주입해 각 시도를 독립된 `@Transactional` 메서드 호출로 분리한다(예: `PushTokenService`, `ExpiryPushService`).
+- cron 기반 배치 스케줄러(`SessionCleanupScheduler`, `AutoDisposeScheduler`, `TradeAutoCompleteScheduler`, `PostExpiryScheduler`, `ExpiryPushScheduler`, `ConsumeCheckPushScheduler`, `RecipeImageBackfillScheduler`)는 `@ConditionalOnProperty`로 활성화 플래그가 꺼져 있으면(기본값) 빈 자체가 생성되지 않으며, 활성화되면 `@PostConstruct`에서 cron·zone을 로그로 남기는 패턴을 따른다. `fixedDelay` 기반 주기 작업(`UserActivityMetrics`, `ImageCleanup`)은 이 패턴의 대상이 아니다.
+- 사용자별 푸시 전송(여러 기기 토큰 순회, 무효 토큰 삭제)은 `PushDispatchService`를 거친다. `UserPushTokenRepository`나 FCM 클라이언트를 도메인 서비스에서 직접 호출하지 않는다.
+- `ExpiryPushScheduler`와 `ConsumeCheckPushScheduler`는 각 활성화 설정(`push.expiry.enabled`, `push.consume-check.enabled`)이 켜져 있고 FCM 전송이 꺼져 있으면(`fcm.enabled=false`) 기동 시 `IllegalStateException`을 던진다. 실제 전송 없이 `sent_at`만 채워지는 상태를 막기 위해서다.
+- 로그와 푸시 data에는 메시지 내용·푸시 토큰·이메일을 남기지 않는다.
+
+### 7.6 리팩토링 범위와 검증
 
 - 구조 변경만으로 기존 API 경로·요청/응답·DB 테이블/컬럼을 변경하지 않는다. Java 도메인 이름과 DB 테이블 이름은 같을 필요가 없다. `dispose`에서도 `consumption_events`를 그대로 사용한다.
 - 이미 적용된 Flyway 마이그레이션은 수정하지 않는다. 실제 스키마 변경이 필요할 때는 별도 마이그레이션을 추가한다.
@@ -272,7 +285,7 @@ com.vium
 - confirm 시 `purchaseSourceId`를 보내지 않으면 null로 저장되므로, 앱은 확인 화면의 구매처를 항상 함께 보낸다.
 - 온라인 주문은 상품명과 가격 사이 배송 배지를 건너뛰고, 가격 줄에 함께 있는 배송 배지·수량도 처리한다. 배송비·쿠폰·적립 금액은 품목 가격에서 제외한다.
 - 현재 취소 표시는 직전 상품을 제외한다. 상품 위에 상태가 표시되는 실제 앱 사례는 아직 반영하지 않았으며 실제 인식 결과로 규칙을 조정해야 한다.
-- 파서 픽스처는 수작업 예시다. 전체 검증 명령은 `TZ=UTC ./gradlew clean test`이며 API·동시성 테스트는 H2 기반이다. PR CI의 `PostgreSQL migration check`가 PostgreSQL 16 빈 DB에 Flyway 적용과 prod 기동을 검증한다. 리뷰에서 실제 PostgreSQL 16에 V1~V8 Flyway 적용, 운영과 같은 `ddl-auto: validate` 설정으로 앱 기동, scan→confirm→조회→삭제 및 동시 확정 API 직접 호출까지 확인 완료했다. 남은 검증은 실제 앱 OCR 결과를 통한 파서 정확도 확인이다.
+- 파서 픽스처는 수작업 예시다. 전체 검증 명령은 `TZ=UTC ./gradlew clean test`이며 API·동시성 테스트는 H2 기반이다. PR CI의 `PostgreSQL migration check`가 PostgreSQL 16 빈 DB에 Flyway 적용과 prod 기동을 검증한다. 리뷰에서 실제 PostgreSQL 16에 V1~V8 Flyway 적용, 운영과 같은 `ddl-auto: validate` 설정으로 앱 기동, scan→confirm→조회→삭제 및 동시 확정 API 직접 호출까지 확인 완료했다. 이후 마이그레이션이 추가되므로 새 마이그레이션 추가 시 같은 검증을 반복한다. 남은 검증은 실제 앱 OCR 결과를 통한 파서 정확도 확인이다.
 
 ## 12. 재료 카탈로그·소비기한 시드 (#87)
 

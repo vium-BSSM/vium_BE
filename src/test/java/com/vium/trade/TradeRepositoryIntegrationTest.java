@@ -79,6 +79,6 @@ class TradeRepositoryIntegrationTest {
 	void defaultChatNotifierIsNoOpAndDoesNotThrow() {
 		Trade trade = tradeRepository.save(Trade.request(3L, 12L, 22L, 1000, NOW));
 
-		tradeChatNotifier.notify(trade, TradeSystemEvent.TRADE_REQUESTED);
+		tradeChatNotifier.notify(trade, TradeSystemEvent.TRADE_REQUESTED, null);
 	}
 }

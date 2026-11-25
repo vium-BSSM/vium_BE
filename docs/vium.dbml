@@ -207,6 +207,7 @@ Table inventory_items {
   amount numeric(12,2) [note: '낭비 금액 집계용 취득가']
   purchased_on date
   expires_on date [note: '자동 추정값, 사용자가 수정 가능']
+  keep_confirmed_expires_on date
   created_at timestamp [not null]
   updated_at timestamp [not null]
 
@@ -289,6 +290,8 @@ Table notifications {
   indexes {
     inventory_item_id
     (user_id, scheduled_at)
+    (user_id, inventory_item_id) [note: 'V17: type = expiry 부분 유니크']
+    (user_id, inventory_item_id) [note: 'V18: type = consume_check 부분 유니크']
   }
 }
 

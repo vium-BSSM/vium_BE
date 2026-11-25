@@ -4,11 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.vium.dispose.entity.ConsumptionEvent;
+import com.vium.dispose.repository.AutoDisposeQueryRepository;
 import com.vium.dispose.repository.ConsumptionEventRepository;
 import com.vium.dispose.service.AutoDisposeService;
 import com.vium.inventory.service.InventoryService;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,12 +22,19 @@ import org.springframework.context.annotation.Import;
 import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.config.ScheduledTaskHolder;
+import org.springframework.test.context.jdbc.Sql;
 
 @SpringBootTest(properties = "spring.datasource.url=jdbc:h2:mem:auto-dispose-test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1")
+@Sql(scripts = "/db/inventory-query-support.sql", executionPhase = Sql.ExecutionPhase.BEFORE_TEST_CLASS)
 class AutoDisposeIntegrationTest {
+
+	private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
 
 	@Autowired
 	private AutoDisposeService autoDisposeService;
+
+	@Autowired
+	private AutoDisposeQueryRepository autoDisposeQueryRepository;
 
 	@Autowired
 	private InventoryService inventoryService;
@@ -48,11 +58,16 @@ class AutoDisposeIntegrationTest {
 	void setUp() {
 		jdbcTemplate.update("delete from \"consumption_events\"");
 		jdbcTemplate.update("delete from \"inventory_items\"");
+		jdbcTemplate.update("delete from \"users\"");
 		jdbcTemplate.update("delete from \"item_statuses\"");
 		jdbcTemplate.update("delete from \"event_sources\"");
 
 		jdbcTemplate.update("insert into \"item_statuses\" (\"id\", \"code\", \"name\") values (1, 'active', '보유'), (2, 'consumed', '소진'), (3, 'disposed', '폐기'), (4, 'shared', '공유중')");
 		jdbcTemplate.update("insert into \"event_sources\" (\"id\", \"code\", \"name\") values (1, 'manual', '수동'), (2, 'auto_estimated', '자동추정')");
+		jdbcTemplate.update("""
+			insert into "users" (id, email, display_name, created_at, updated_at)
+			values (42, 'auto-dispose@example.com', '자동 폐기 테스트', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			""");
 	}
 
 	@Test
@@ -203,5 +218,68 @@ class AutoDisposeIntegrationTest {
 		assertThatThrownBy(() -> applicationContext.getBean(
 			com.vium.dispose.service.AutoDisposeScheduler.class))
 			.isInstanceOf(org.springframework.beans.factory.NoSuchBeanDefinitionException.class);
+	}
+
+	@Test
+	void preservesExpiredItemsWhenUserDisablesAutoDispose() {
+		insertExpiredItem(306, LocalDate.now(SEOUL).minusDays(1));
+		jdbcTemplate.update("update users set auto_dispose_enabled = false where id = 42");
+
+		assertThat(autoDisposeService.disposeExpiredItems()).isZero();
+		assertThat(statusId(306)).isEqualTo(1);
+		assertThat(consumptionEventRepository.count()).isZero();
+	}
+
+	@Test
+	void preservesExpiredItemsWithKeepConfirmedForTheirCurrentExpirationDate() {
+		LocalDate expiration = LocalDate.now(SEOUL).minusDays(1);
+		insertExpiredItem(306, expiration);
+		inventoryService.confirmKeep(42L, 306L);
+
+		assertThat(autoDisposeService.disposeExpiredItems()).isZero();
+		assertThat(statusId(306)).isEqualTo(1);
+		assertThat(consumptionEventRepository.count()).isZero();
+	}
+
+	@Test
+	void disposesItemAfterItsConfirmedExpirationDateChanges() {
+		LocalDate expiration = LocalDate.now(SEOUL).minusDays(2);
+		insertExpiredItem(306, expiration);
+		inventoryService.confirmKeep(42L, 306L);
+		jdbcTemplate.update("update inventory_items set expires_on = ? where id = 306", expiration.plusDays(1));
+
+		assertThat(autoDisposeService.disposeExpiredItems()).isEqualTo(1);
+		assertThat(statusId(306)).isEqualTo(3);
+		assertThat(consumptionEventRepository.findAll()).singleElement()
+			.satisfies(event -> assertThat(event.getOccurredAt()).isEqualTo(expiration.plusDays(2).atStartOfDay()));
+	}
+
+	@Test
+	void conditionalUpdateSkipsItemKeptAfterCandidateSelection() {
+		LocalDate today = LocalDate.now(SEOUL);
+		insertExpiredItem(306, today.minusDays(1));
+		var candidates = autoDisposeQueryRepository.findCandidates((short) 1, today);
+		assertThat(candidates).hasSize(1);
+		var candidate = candidates.getFirst();
+
+		inventoryService.confirmKeep(42L, candidate.inventoryItemId());
+
+		assertThat(inventoryService.disposeIfUnchanged(candidate.inventoryItemId(), (short) 1, (short) 3,
+			candidate.remainingQuantity(), LocalDateTime.now(SEOUL))).isFalse();
+		assertThat(statusId(306)).isEqualTo(1);
+		assertThat(consumptionEventRepository.count()).isZero();
+	}
+
+	private void insertExpiredItem(long id, LocalDate expiresOn) {
+		jdbcTemplate.update("""
+			insert into inventory_items
+			(id, user_id, custom_name, status_id, unit_id, initial_quantity, remaining_quantity,
+			 expires_on, created_at, updated_at)
+			values (?, 42, '오이', 1, 1, 5, 5, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			""", id, expiresOn);
+	}
+
+	private Integer statusId(long itemId) {
+		return jdbcTemplate.queryForObject("select status_id from inventory_items where id = ?", Integer.class, itemId);
 	}
 }

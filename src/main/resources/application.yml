@@ -157,6 +157,14 @@ push:
     enabled: ${PUSH_EXPIRY_ENABLED:false}
     cron: ${PUSH_EXPIRY_CRON:0 0 9 * * *}
     time-zone: ${PUSH_EXPIRY_TIMEZONE:Asia/Seoul}
+  consume-check:
+    enabled: ${PUSH_CONSUME_CHECK_ENABLED:false}
+    cron: ${PUSH_CONSUME_CHECK_CRON:0 0 20 * * *}
+    time-zone: ${PUSH_CONSUME_CHECK_TIMEZONE:Asia/Seoul}
+  shopping-reminder:
+    enabled: ${PUSH_SHOPPING_REMINDER_ENABLED:false}
+    cron: ${PUSH_SHOPPING_REMINDER_CRON:0 0 10 * * SAT}
+    time-zone: ${PUSH_SHOPPING_REMINDER_TIMEZONE:Asia/Seoul}
   chat:
     executor:
       core-size: 2

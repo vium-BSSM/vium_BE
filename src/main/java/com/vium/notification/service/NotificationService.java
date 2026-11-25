@@ -3,6 +3,8 @@ package com.vium.notification.service;
 import com.vium.global.exception.BusinessException;
 import com.vium.global.exception.ErrorCode;
 import com.vium.inventory.service.InventoryService;
+import com.vium.notification.dto.ConsumptionCheckKeepResponse;
+import com.vium.notification.dto.ConsumptionCheckResponse;
 import com.vium.notification.dto.ExpiryNotificationResponse;
 import com.vium.notification.dto.NotificationDto;
 import com.vium.notification.dto.NotificationListResponse;
@@ -67,6 +69,31 @@ public class NotificationService {
 				item.inventoryItemId(), item.name(), (int) ChronoUnit.DAYS.between(today, item.expiresOn())))
 			.toList();
 		return new ExpiryNotificationResponse(items);
+	}
+
+	@Transactional(readOnly = true)
+	public ConsumptionCheckResponse consumptionCheck(Long userId) {
+		var items = inventoryService.findConsumptionCheckCandidates(userId, LocalDate.now(clock)).stream()
+			.map(item -> new ConsumptionCheckResponse.Item(
+				item.inventoryItemId(), item.name(), item.remainingQuantity(), item.unit(), item.expiresOn()))
+			.toList();
+		return new ConsumptionCheckResponse(items);
+	}
+
+	@Transactional
+	public ConsumptionCheckKeepResponse confirmKeep(Long userId, Long inventoryItemId) {
+		LocalDate confirmedExpiresOn = inventoryService.confirmKeep(userId, inventoryItemId);
+		markConsumeCheckRead(userId, inventoryItemId);
+		return new ConsumptionCheckKeepResponse(inventoryItemId, confirmedExpiresOn);
+	}
+
+	/**
+	 * 소진 확인 질문에 답한 것으로 본다. '아니오'(keep)와 '예'(dispose 도메인의 상태 변경) 양쪽에서 호출한다.
+	 */
+	@Transactional
+	public void markConsumeCheckRead(Long userId, Long inventoryItemId) {
+		notifications.findByUserIdAndInventoryItemIdAndType(userId, inventoryItemId, "consume_check")
+			.ifPresent(notification -> notification.markRead(LocalDateTime.now(clock)));
 	}
 
 	private NotificationDto toDto(Notification notification) {

@@ -122,7 +122,7 @@ class TradeRequestIntegrationTest {
 		assertThat(jdbc.queryForObject("select amount from credit_transactions where type='TRADE_HOLD'", Integer.class))
 			.isEqualTo(-3);
 		assertThat(postStatus(post)).isEqualTo("OPEN");
-		verify(notifier).notify(any(), eq(TradeSystemEvent.TRADE_REQUESTED));
+		verify(notifier).notify(any(), eq(TradeSystemEvent.TRADE_REQUESTED), any());
 	}
 
 	@Test
@@ -237,7 +237,7 @@ class TradeRequestIntegrationTest {
 	@Test
 	void notificationFailureRollsBackTradeAndHold() throws Exception {
 		Post post = createPost(PostType.SALE, PostStatus.OPEN, TODAY);
-		doThrow(new IllegalStateException("notification failed")).when(notifier).notify(any(), any());
+		doThrow(new IllegalStateException("notification failed")).when(notifier).notify(any(), any(), any());
 		mvc.perform(post(path(post)).header("Authorization", bearer(BUYER))).andExpect(status().isInternalServerError());
 		assertThat(count("trades")).isZero();
 		assertThat(credits.getAvailableBalance(BUYER)).isEqualTo(10);
@@ -271,6 +271,6 @@ class TradeRequestIntegrationTest {
 		assertThat(credits.getHeldBalance(BUYER)).isZero();
 		assertThat(credits.getAvailableBalance(BUYER)).isEqualTo(10);
 		assertThat(jdbc.queryForObject("select count(*) from credit_transactions where type='TRADE_REFUND'", Long.class)).isEqualTo(1);
-		verify(notifier).notify(any(), eq(TradeSystemEvent.TRADE_CANCELED));
+		verify(notifier).notify(any(), eq(TradeSystemEvent.TRADE_CANCELED), any());
 	}
 }

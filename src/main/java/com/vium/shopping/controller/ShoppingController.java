@@ -4,9 +4,11 @@ import com.vium.global.common.ApiResponse;
 import com.vium.global.security.CurrentUserProvider;
 import com.vium.shopping.dto.request.ShoppingListItemCreateRequest;
 import com.vium.shopping.dto.request.ShoppingListItemUpdateRequest;
+import com.vium.shopping.dto.response.PurchaseSuggestionResponse;
 import com.vium.shopping.dto.response.ShoppingHelperResponse;
 import com.vium.shopping.dto.response.ShoppingListItemResponse;
 import com.vium.shopping.dto.response.ShoppingListResponse;
+import com.vium.shopping.service.PurchaseSuggestionService;
 import com.vium.shopping.service.ShoppingHelperService;
 import com.vium.shopping.service.ShoppingListService;
 import jakarta.validation.Valid;
@@ -29,6 +31,7 @@ public class ShoppingController {
 
 	private final ShoppingListService shoppingListService;
 	private final ShoppingHelperService shoppingHelperService;
+	private final PurchaseSuggestionService purchaseSuggestionService;
 	private final CurrentUserProvider currentUserProvider;
 	@PostMapping("/shopping-list-items")
 	@ResponseStatus(HttpStatus.CREATED)
@@ -68,5 +71,10 @@ public class ShoppingController {
 		Long userId = currentUserProvider.getCurrentUserId();
 		ShoppingHelperResponse response = shoppingHelperService.getShoppingHelper(userId);
 		return ApiResponse.ok(response);
+	}
+
+	@GetMapping("/purchase-suggestions")
+	public ApiResponse<PurchaseSuggestionResponse> getPurchaseSuggestions() {
+		return ApiResponse.ok(purchaseSuggestionService.getPurchaseSuggestions(currentUserProvider.getCurrentUserId()));
 	}
 }
