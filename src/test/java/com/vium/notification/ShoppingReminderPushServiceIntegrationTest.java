@@ -4,11 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.vium.notification.config.FcmProperties;
 import com.vium.notification.service.FcmPushClient;
 import com.vium.notification.service.PushResult;
 import com.vium.notification.service.ShoppingReminderPushService;
+import com.vium.notification.sse.SseConnectionRegistry;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -44,8 +47,15 @@ class ShoppingReminderPushServiceIntegrationTest {
 	@MockitoBean
 	private FcmPushClient fcmPushClient;
 
+	@MockitoBean
+	private FcmProperties fcmProperties;
+
+	@MockitoBean
+	private SseConnectionRegistry sseConnections;
+
 	@BeforeEach
 	void setUp() {
+		when(fcmProperties.enabled()).thenReturn(true);
 		jdbc.update("delete from notifications");
 		jdbc.update("delete from consumption_events");
 		jdbc.update("delete from posts");
@@ -80,20 +90,44 @@ class ShoppingReminderPushServiceIntegrationTest {
 	}
 
 	@Test
-	void sendsOnlyToOptedInUsersWithTokensAndCountsActiveItems() {
+	void createsAndCompletesNotificationWithoutFcmOrTokensAndDoesNotDuplicateIt() {
+		jdbc.update("update users set shopping_reminder_enabled = false where id <> 1");
+		when(fcmProperties.enabled()).thenReturn(false);
+		jdbc.update("delete from user_push_tokens where user_id = 1");
+
+		assertThat(shoppingReminderPushService.sendShoppingReminderPush()).isEqualTo(1);
+		assertThat(rows()).singleElement().satisfies(row -> assertThat(row.sentAt()).isNotNull());
+		assertThat(shoppingReminderPushService.sendShoppingReminderPush()).isZero();
+		assertThat(rows()).hasSize(1);
+		verifyNoInteractions(fcmPushClient);
+		verify(sseConnections).broadcast(1L, "notification", Map.of("type", "shopping_reminder"));
+	}
+
+	@Test
+	void createsAndCompletesNotificationForUserWithPushDisabled() {
+		jdbc.update("update users set shopping_reminder_enabled = false where id <> 3");
+
+		assertThat(shoppingReminderPushService.sendShoppingReminderPush()).isEqualTo(1);
+		assertThat(rows()).singleElement().satisfies(row -> assertThat(row.sentAt()).isNotNull());
+		verifyNoInteractions(fcmPushClient);
+		verify(sseConnections).broadcast(3L, "notification", DATA);
+	}
+
+	@Test
+	void createsRowsForOptedInUsersAndOnlyPushesToEligibleTokens() {
 		insertItem(10, 1, 1);
 		insertItem(11, 1, 1);
 		insertItem(12, 1, 2);
 		insertItem(13, 2, 1);
 		when(fcmPushClient.send(any(), any(), any(), any())).thenReturn(PushResult.SUCCESS);
 
-		assertThat(shoppingReminderPushService.sendShoppingReminderPush()).isEqualTo(2);
+		assertThat(shoppingReminderPushService.sendShoppingReminderPush()).isEqualTo(4);
 
 		verify(fcmPushClient).send("token-1", "장보기 전 냉장고 확인",
 			"냉장고에 재료 2개가 있어요. 장보러 가기 전에 확인해 보세요", DATA);
 		verify(fcmPushClient).send("token-6", "장보기 전 냉장고 확인", "장보러 가기 전에 냉장고를 확인해 보세요", DATA);
 		verify(fcmPushClient, times(2)).send(any(), any(), any(), any());
-		assertThat(rows()).extracting(NotificationRow::userId).containsExactly(1L, 6L);
+		assertThat(rows()).extracting(NotificationRow::userId).containsExactly(1L, 3L, 5L, 6L);
 		assertThat(rows()).allSatisfy(row -> {
 			assertThat(row.scheduledAt()).isEqualTo(SATURDAY.atStartOfDay());
 			assertThat(row.sentAt()).isNotNull();
@@ -102,7 +136,7 @@ class ShoppingReminderPushServiceIntegrationTest {
 
 	@Test
 	void sendsOncePerDayAndAgainOnTheNextRun() {
-		jdbc.update("update users set shopping_reminder_enabled = false where id = 6");
+		jdbc.update("update users set shopping_reminder_enabled = false where id <> 1");
 		when(fcmPushClient.send(any(), any(), any(), any())).thenReturn(PushResult.SUCCESS);
 
 		assertThat(shoppingReminderPushService.sendShoppingReminderPush()).isEqualTo(1);
@@ -117,7 +151,7 @@ class ShoppingReminderPushServiceIntegrationTest {
 
 	@Test
 	void retriesTheSameUnsentRowOnTheSameDay() {
-		jdbc.update("update users set shopping_reminder_enabled = false where id = 6");
+		jdbc.update("update users set shopping_reminder_enabled = false where id <> 1");
 		when(fcmPushClient.send(any(), any(), any(), any())).thenReturn(PushResult.FAILED, PushResult.SUCCESS);
 
 		assertThat(shoppingReminderPushService.sendShoppingReminderPush()).isZero();
@@ -129,6 +163,7 @@ class ShoppingReminderPushServiceIntegrationTest {
 			assertThat(row.id()).isEqualTo(first.id());
 			assertThat(row.sentAt()).isNotNull();
 		});
+		verify(sseConnections).broadcast(1L, "notification", Map.of("type", "shopping_reminder"));
 	}
 
 	private void setToday(LocalDate day) {

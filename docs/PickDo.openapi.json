@@ -4612,7 +4612,7 @@
       "get": {
         "summary": "알림 이력 조회",
         "deprecated": false,
-        "description": "내 알림 이력을 scheduledAt 내림차순, 같은 시각이면 notificationId 내림차순으로 조회한다. 현재 저장되는 알림 유형은 expiry, consume_check, shopping_reminder다. 채팅·거래 푸시는 알림 목록에 저장되지 않는다.",
+        "description": "내 알림 이력을 scheduledAt 내림차순, 같은 시각이면 notificationId 내림차순으로 조회한다. 현재 저장되는 알림 유형은 expiry, consume_check, shopping_reminder다. 채팅·거래 푸시는 알림 목록에 저장되지 않는다. 활성화된 알림 배치는 FCM 설정, 사용자 푸시 설정 및 토큰 보유 여부와 상관없이 대상 사용자에게 앱 내 알림을 만든다. sentAt은 푸시 전송 성공 또는 생략으로 전달 처리가 완료된 시각이다. 전송에 실패해 재시도를 기다리면 null이다.",
         "tags": [
           "notification"
         ],
@@ -4743,7 +4743,7 @@
     "/api/me/events": {
       "get": {
         "summary": "사용자 실시간 이벤트 스트림",
-        "description": "Authorization: Bearer 헤더로 인증하는 사용자별 SSE 스트림이다. 쿼리 파라미터로 보낸 토큰은 받지 않는다.\n\n| event | data | 보내는 시점 |\n|---|---|---|\n| ping | 문자열 \"ping\" | 연결 직후와 이후 heartbeat마다 |\n| chat-message | {\"chatRoomId\": long, \"messageId\": long} | 상대방의 메시지가 커밋된 뒤 수신자에게 전송. 거래 SYSTEM 메시지는 구매자와 판매자 모두에게 전송 |\n\nchat-message에는 메시지 내용이 들어가지 않는다. 수신하면 메시지 내역 API를 다시 조회한다.\n\n- heartbeat 주기 기본값은 25초(sse.heartbeat-interval-seconds)다.\n- 사용자당 연결 수 기본값은 3개(sse.max-connections-per-user)다. 초과 시 가장 오래된 연결을 종료한다.\n- 연결 수명 기본값은 1800초(sse.max-connection-age-seconds)다. 수명을 넘긴 연결은 서버가 heartbeat 검사 시 정상 종료하므로 클라이언트는 다시 연결해야 한다.\n- 서버는 단일 인스턴스를 전제로 연결을 메모리에 저장한다. 연결이 끊긴 동안의 이벤트는 재전송하지 않고 Last-Event-ID는 지원하지 않는다. 재연결 후 목록이나 메시지 내역을 다시 조회한다.",
+        "description": "Authorization: Bearer 헤더로 인증하는 사용자별 SSE 스트림이다. 쿼리 파라미터로 보낸 토큰은 받지 않는다.\n\n| event | data | 보내는 시점 |\n|---|---|---|\n| ping | 문자열 \"ping\" | 연결 직후와 이후 heartbeat마다 |\n| chat-message | {\"chatRoomId\": long, \"messageId\": long} | 상대방의 메시지가 커밋된 뒤 수신자에게 전송. 거래 SYSTEM 메시지는 구매자와 판매자 모두에게 전송 |\n| notification | {\"type\": string} | 알림 배치가 해당 사용자에게 새 알림 행을 하나 이상 저장해 커밋한 뒤 한 번 전송 |\n\nchat-message에는 메시지 내용이 들어가지 않는다. 수신하면 메시지 내역 API를 다시 조회한다. notification의 type은 expiry, consume_check, shopping_reminder 중 하나다. 제목·본문·재료명은 들어가지 않는다. notification을 받으면 GET /api/me/notifications를 다시 조회한다. 기존 행을 재시도할 때는 notification 이벤트를 다시 보내지 않는다.\n\n- heartbeat 주기 기본값은 25초(sse.heartbeat-interval-seconds)다.\n- 사용자당 연결 수 기본값은 3개(sse.max-connections-per-user)다. 초과 시 가장 오래된 연결을 종료한다.\n- 연결 수명 기본값은 1800초(sse.max-connection-age-seconds)다. 수명을 넘긴 연결은 서버가 heartbeat 검사 시 정상 종료하므로 클라이언트는 다시 연결해야 한다.\n- 서버는 단일 인스턴스를 전제로 연결을 메모리에 저장한다. 연결이 끊긴 동안의 이벤트는 재전송하지 않고 Last-Event-ID는 지원하지 않는다. 재연결 후 목록이나 메시지 내역을 다시 조회한다.",
         "operationId": "streamUserEvents",
         "tags": [
           "notification",
@@ -4777,7 +4777,7 @@
                 "schema": {
                   "type": "string"
                 },
-                "example": "event:ping\ndata:ping\n\nevent:chat-message\ndata:{\"chatRoomId\":12,\"messageId\":34}\n\n"
+                "example": "event:ping\ndata:ping\n\nevent:chat-message\ndata:{\"chatRoomId\":12,\"messageId\":34}\n\nevent:notification\ndata:{\"type\":\"expiry\"}\n\n"
               }
             }
           },
@@ -13388,7 +13388,7 @@
           "sentAt": {
             "type": "string",
             "nullable": true,
-            "description": "실제 발송 시각을 오프셋 없는 문자열로 반환한다. 발송 전이거나 전송에 실패해 재시도를 기다리는 중이면 null이다."
+            "description": "푸시 전송 성공 또는 생략으로 전달 처리가 완료된 서버 로컬 시각을 오프셋 없는 문자열로 반환한다. 아직 처리 전이거나 전송에 실패해 재시도를 기다리는 중이면 null이다."
           },
           "readAt": {
             "type": "string",

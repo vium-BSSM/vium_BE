@@ -1,7 +1,9 @@
 package com.vium.notification.service;
 
+import com.vium.notification.config.FcmProperties;
 import com.vium.notification.entity.UserPushToken;
 import com.vium.notification.repository.UserPushTokenRepository;
+import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -17,10 +19,26 @@ public class PushDispatchService {
 	private final UserPushTokenRepository userPushTokenRepository;
 	private final PushTokenService pushTokenService;
 	private final FcmPushClient fcmPushClient;
+	private final FcmProperties fcmProperties;
 
 	public boolean sendToUser(Long userId, String title, String body, Map<String, String> data) {
+		return sendToTokens(userPushTokenRepository.findAllByUserId(userId), title, body, data);
+	}
+
+	public PushDeliveryResult deliverToUser(Long userId, String title, String body, Map<String, String> data) {
+		if (!fcmProperties.enabled()) {
+			return PushDeliveryResult.SKIPPED;
+		}
+		List<UserPushToken> tokens = userPushTokenRepository.findAllByUserId(userId);
+		if (tokens.isEmpty()) {
+			return PushDeliveryResult.SKIPPED;
+		}
+		return sendToTokens(tokens, title, body, data) ? PushDeliveryResult.SENT : PushDeliveryResult.FAILED;
+	}
+
+	private boolean sendToTokens(List<UserPushToken> tokens, String title, String body, Map<String, String> data) {
 		boolean anySuccess = false;
-		for (UserPushToken token : userPushTokenRepository.findAllByUserId(userId)) {
+		for (UserPushToken token : tokens) {
 			PushResult result = fcmPushClient.send(token.getToken(), title, body, data);
 			if (result == PushResult.SUCCESS) {
 				anySuccess = true;

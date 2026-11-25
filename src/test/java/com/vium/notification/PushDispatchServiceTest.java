@@ -8,12 +8,15 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.vium.notification.config.FcmProperties;
 import com.vium.notification.entity.PushPlatform;
 import com.vium.notification.entity.UserPushToken;
 import com.vium.notification.repository.UserPushTokenRepository;
 import com.vium.notification.service.FcmPushClient;
+import com.vium.notification.service.PushDeliveryResult;
 import com.vium.notification.service.PushDispatchService;
 import com.vium.notification.service.PushResult;
 import com.vium.notification.service.PushTokenService;
@@ -29,7 +32,7 @@ class PushDispatchServiceTest {
 	private final FcmPushClient fcmPushClient = mock(FcmPushClient.class);
 
 	private final PushDispatchService service =
-		new PushDispatchService(userPushTokenRepository, pushTokenService, fcmPushClient);
+		new PushDispatchService(userPushTokenRepository, pushTokenService, fcmPushClient, new FcmProperties(true, "", 10));
 
 	private static final Long USER_ID = 1L;
 	private static final Map<String, String> DATA = Map.of("type", "expiry");
@@ -90,5 +93,42 @@ class PushDispatchServiceTest {
 
 		assertThat(result).isFalse();
 		verify(fcmPushClient, never()).send(any(), any(), any(), any());
+	}
+
+	@Test
+	void batchSkipsWithoutLookingUpTokensWhenFcmIsDisabled() {
+		var disabled = new PushDispatchService(
+			userPushTokenRepository, pushTokenService, fcmPushClient, new FcmProperties(false, "", 10));
+
+		assertThat(disabled.deliverToUser(USER_ID, "제목", "본문", DATA)).isEqualTo(PushDeliveryResult.SKIPPED);
+		verifyNoInteractions(userPushTokenRepository, pushTokenService, fcmPushClient);
+	}
+
+	@Test
+	void batchSkipsWhenFcmIsEnabledButNoTokensExist() {
+		when(userPushTokenRepository.findAllByUserId(USER_ID)).thenReturn(List.of());
+
+		assertThat(service.deliverToUser(USER_ID, "제목", "본문", DATA)).isEqualTo(PushDeliveryResult.SKIPPED);
+		verify(userPushTokenRepository).findAllByUserId(USER_ID);
+		verifyNoInteractions(fcmPushClient);
+	}
+
+	@Test
+	void batchReturnsSentWhenAtLeastOneTokenSucceeds() {
+		when(userPushTokenRepository.findAllByUserId(USER_ID)).thenReturn(List.of(token("t1"), token("t2")));
+		when(fcmPushClient.send("t1", "제목", "본문", DATA)).thenReturn(PushResult.FAILED);
+		when(fcmPushClient.send("t2", "제목", "본문", DATA)).thenReturn(PushResult.SUCCESS);
+
+		assertThat(service.deliverToUser(USER_ID, "제목", "본문", DATA)).isEqualTo(PushDeliveryResult.SENT);
+	}
+
+	@Test
+	void batchReturnsFailedWhenEveryTokenFailsAndRemovesInvalidTokens() {
+		when(userPushTokenRepository.findAllByUserId(USER_ID)).thenReturn(List.of(token("t1"), token("t2")));
+		when(fcmPushClient.send("t1", "제목", "본문", DATA)).thenReturn(PushResult.FAILED);
+		when(fcmPushClient.send("t2", "제목", "본문", DATA)).thenReturn(PushResult.INVALID_TOKEN);
+
+		assertThat(service.deliverToUser(USER_ID, "제목", "본문", DATA)).isEqualTo(PushDeliveryResult.FAILED);
+		verify(pushTokenService).deleteByToken("t2");
 	}
 }

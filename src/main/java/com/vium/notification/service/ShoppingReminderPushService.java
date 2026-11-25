@@ -7,7 +7,6 @@ import com.vium.notification.repository.ShoppingReminderPushQueryRepository;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
@@ -18,7 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 장보기 리마인더는 사용자당 발송일 하루 한 건이다(notifications 유니크: user_id+scheduled_at,
  * type='shopping_reminder'). 행 생성은 사용자별 독립 트랜잭션(self 프록시)으로 처리하고,
- * 저장/재시도 확정 -> FCM 전송(트랜잭션 밖) -> 성공분만 sent_at 갱신 순서는 다른 푸시 배치와 같다.
+ * 새 행을 SSE로 알리고 FCM 전송이 성공하거나 생략되면 sent_at을 기록한다.
  */
 @Service
 @RequiredArgsConstructor
@@ -29,23 +28,23 @@ public class ShoppingReminderPushService {
 
 	private final ShoppingReminderPushQueryRepository queryRepository;
 	private final NotificationRepository notificationRepository;
-	private final PushDispatchService pushDispatchService;
+	private final BatchNotificationDelivery delivery;
 	private final Clock clock;
 	private final ObjectProvider<ShoppingReminderPushService> self;
 
 	public int sendShoppingReminderPush() {
 		LocalDateTime scheduledAt = LocalDate.now(clock).atStartOfDay();
-		int sentUserCount = 0;
+		int processedUserCount = 0;
 		for (ShoppingReminderPushCandidate candidate : queryRepository.findCandidates(scheduledAt)) {
 			try {
 				if (processUser(candidate, scheduledAt)) {
-					sentUserCount++;
+					processedUserCount++;
 				}
 			} catch (Exception e) {
 				log.error("장보기 리마인더 푸시 처리 실패: userId={}", candidate.userId(), e);
 			}
 		}
-		return sentUserCount;
+		return processedUserCount;
 	}
 
 	private boolean processUser(ShoppingReminderPushCandidate candidate, LocalDateTime scheduledAt) {
@@ -53,7 +52,8 @@ public class ShoppingReminderPushService {
 		String body = body(candidate.activeItemCount());
 
 		Long notificationId = candidate.existingNotificationId();
-		if (notificationId == null) {
+		boolean created = notificationId == null;
+		if (created) {
 			try {
 				notificationId = self.getObject().createOne(candidate.userId(), body, scheduledAt, now).getId();
 			} catch (DataIntegrityViolationException e) {
@@ -62,12 +62,12 @@ public class ShoppingReminderPushService {
 			}
 		}
 
-		boolean anySuccess = pushDispatchService.sendToUser(candidate.userId(), PUSH_TITLE, body,
-			Map.of("type", "shopping_reminder"));
-		if (anySuccess) {
-			self.getObject().markSent(notificationId, now);
+		boolean completed = delivery.complete(candidate.userId(), created, candidate.pushEnabled(),
+			"shopping_reminder", PUSH_TITLE, body);
+		if (completed) {
+			self.getObject().markSent(notificationId, LocalDateTime.now(clock));
 		}
-		return anySuccess;
+		return completed;
 	}
 
 	static String body(long activeItemCount) {

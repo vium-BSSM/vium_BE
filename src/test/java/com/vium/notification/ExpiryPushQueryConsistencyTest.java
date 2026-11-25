@@ -1,6 +1,7 @@
 package com.vium.notification;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 import com.vium.inventory.service.InventoryService;
 import com.vium.notification.dto.ExpiryPushCandidate;
@@ -139,7 +140,7 @@ class ExpiryPushQueryConsistencyTest {
 	}
 
 	@Test
-	void excludesUsersWithPushDisabledOrWithoutAnyToken() {
+	void includesUsersWithPushDisabledOrWithoutAnyToken() {
 		jdbc.update("""
 			insert into "users" (id, email, display_name, expiry_alert_days, push_enabled, created_at, updated_at)
 			values (4, 'u4@example.com', '사용자4(푸시꺼짐)', 2, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
@@ -149,12 +150,13 @@ class ExpiryPushQueryConsistencyTest {
 			insert into "user_push_tokens" (user_id, token, platform, created_at, updated_at)
 			values (4, 'token-4', 'ANDROID', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 			""");
-		insertItem(401, 4, 1, TODAY); // push_enabled=false -> 제외
-		insertItem(501, 5, 1, TODAY); // 토큰 없음 -> 제외
+		insertItem(401, 4, 1, TODAY);
+		insertItem(501, 5, 1, TODAY);
 
 		var candidates = expiryPushQueryRepository.findCandidates(TODAY, TODAY.plusDays(14));
 
-		assertThat(candidates).extracting(ExpiryPushCandidate::userId).doesNotContain(4L, 5L);
+		assertThat(candidates).extracting(ExpiryPushCandidate::userId, ExpiryPushCandidate::pushEnabled)
+			.contains(tuple(4L, false), tuple(5L, true));
 	}
 
 	@Test

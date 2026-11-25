@@ -71,6 +71,6 @@ class ExpiryPushSchedulerEnabledTest {
 	@AfterAll
 	static void logsConfiguredScheduleOnce(CapturedOutput output) {
 		assertThat(output.getOut())
-			.containsOnlyOnce("소비기한 임박 푸시 스케줄러 활성화: cron=0 0 9 * * *, zone=Asia/Seoul");
+			.containsOnlyOnce("소비기한 임박 푸시 스케줄러 활성화: cron=0 0 9 * * *, zone=Asia/Seoul, fcm=true");
 	}
 }
