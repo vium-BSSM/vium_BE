@@ -7,12 +7,16 @@ import com.vium.notification.config.FcmProperties;
 import com.vium.notification.service.ConsumeCheckPushScheduler;
 import com.vium.notification.service.ConsumeCheckPushService;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.config.CronTask;
 import org.springframework.scheduling.config.ScheduledTaskHolder;
 
+@ExtendWith(OutputCaptureExtension.class)
 class ConsumeCheckPushSchedulerEnabledTest {
 
 	private final ApplicationContextRunner runner = new ApplicationContextRunner()
@@ -28,15 +32,13 @@ class ConsumeCheckPushSchedulerEnabledTest {
 	}
 
 	@Test
-	void failsFastWhenFcmIsDisabled() {
+	void startsWhenFcmIsDisabled(CapturedOutput output) {
 		runner.withBean(FcmProperties.class, () -> new FcmProperties(false, "", 10))
 			.withPropertyValues("push.consume-check.enabled=true")
 			.run(context -> {
-				assertThat(context).hasFailed();
-				assertThat(context.getStartupFailure())
-					.hasRootCauseInstanceOf(IllegalStateException.class)
-					.hasRootCauseMessage("push.consume-check.enabled=true 이지만 fcm.enabled=true가 아닙니다. "
-						+ "실제 전송 없이 sent_at만 채워지는 것을 막기 위해 두 설정을 함께 켜야 합니다.");
+				assertThat(context).hasNotFailed();
+				assertThat(context).hasSingleBean(ConsumeCheckPushScheduler.class);
+				assertThat(output.getOut()).contains("소진 확인 푸시 스케줄러 활성화: cron=0 0 20 * * *, zone=Asia/Seoul, fcm=false");
 			});
 	}
 

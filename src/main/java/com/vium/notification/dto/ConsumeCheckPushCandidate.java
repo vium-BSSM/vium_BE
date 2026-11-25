@@ -4,6 +4,7 @@ public record ConsumeCheckPushCandidate(
 	Long userId,
 	Long inventoryItemId,
 	String ingredientName,
+	boolean pushEnabled,
 	Long existingNotificationId
 ) {
 }

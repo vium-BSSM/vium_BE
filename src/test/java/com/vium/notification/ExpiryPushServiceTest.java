@@ -9,6 +9,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.vium.notification.config.FcmProperties;
 import com.vium.notification.dto.ExpiryPushCandidate;
 import com.vium.notification.entity.Notification;
 import com.vium.notification.entity.PushPlatform;
@@ -16,11 +17,13 @@ import com.vium.notification.entity.UserPushToken;
 import com.vium.notification.repository.ExpiryPushQueryRepository;
 import com.vium.notification.repository.NotificationRepository;
 import com.vium.notification.repository.UserPushTokenRepository;
+import com.vium.notification.service.BatchNotificationDelivery;
 import com.vium.notification.service.ExpiryPushService;
 import com.vium.notification.service.FcmPushClient;
 import com.vium.notification.service.PushDispatchService;
 import com.vium.notification.service.PushResult;
 import com.vium.notification.service.PushTokenService;
+import com.vium.notification.sse.SseConnectionRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -49,20 +52,21 @@ class ExpiryPushServiceTest {
 	@BeforeEach
 	void setUp() {
 		PushDispatchService pushDispatchService =
-			new PushDispatchService(userPushTokenRepository, pushTokenService, fcmPushClient);
+			new PushDispatchService(userPushTokenRepository, pushTokenService, fcmPushClient, new FcmProperties(true, "", 10));
 		service = new ExpiryPushService(
-			expiryPushQueryRepository, notificationRepository, pushDispatchService, clock, self);
+			expiryPushQueryRepository, notificationRepository,
+			new BatchNotificationDelivery(pushDispatchService, mock(SseConnectionRegistry.class)), clock, self);
 		when(self.getObject()).thenReturn(service);
 	}
 
 	private ExpiryPushCandidate newCandidate(long userId, long itemId, int alertDays) {
 		return new ExpiryPushCandidate(userId, itemId, "재료" + itemId,
-			java.time.LocalDate.now(clock).plusDays(1), alertDays, null);
+			java.time.LocalDate.now(clock).plusDays(1), alertDays, true, null);
 	}
 
 	private ExpiryPushCandidate retryCandidate(long userId, long itemId, int alertDays, long existingNotificationId) {
 		return new ExpiryPushCandidate(userId, itemId, "재료" + itemId,
-			java.time.LocalDate.now(clock).plusDays(1), alertDays, existingNotificationId);
+			java.time.LocalDate.now(clock).plusDays(1), alertDays, true, existingNotificationId);
 	}
 
 	private UserPushToken token(String value) {
@@ -175,14 +179,17 @@ class ExpiryPushServiceTest {
 	}
 
 	@Test
-	void doesNotCallFcmWhenUserHasNoToken() {
+	void completesDeliveryWithoutCallingFcmWhenUserHasNoToken() {
 		when(expiryPushQueryRepository.findCandidates(any(), any())).thenReturn(List.of(newCandidate(1L, 10L, 2)));
-		when(notificationRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+		Notification saved = Notification.expiry(1L, 10L, "제목", "본문", LocalDateTime.now(clock), LocalDateTime.now(clock));
+		when(notificationRepository.saveAndFlush(any())).thenReturn(saved);
+		when(notificationRepository.findAllById(any())).thenReturn(List.of(saved));
 		when(userPushTokenRepository.findAllByUserId(1L)).thenReturn(List.of());
 
 		int sentUserCount = service.sendDailyExpiryPush();
 
-		assertThat(sentUserCount).isZero();
+		assertThat(sentUserCount).isEqualTo(1);
+		assertThat(saved.getSentAt()).isNotNull();
 		verify(fcmPushClient, never()).send(any(), any(), any(), any());
 	}
 

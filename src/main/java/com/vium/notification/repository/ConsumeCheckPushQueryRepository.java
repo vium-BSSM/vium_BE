@@ -17,7 +17,7 @@ public class ConsumeCheckPushQueryRepository {
 		String sql = """
 			select i.user_id, i.id as inventory_item_id,
 			       coalesce(c.name, i.custom_name) as ingredient_name,
-			       n.id as existing_notification_id
+			       u.push_enabled, n.id as existing_notification_id
 			from inventory_items i
 			join item_statuses s on s.id = i.status_id and s.code = 'active'
 			join users u on u.id = i.user_id
@@ -32,9 +32,7 @@ public class ConsumeCheckPushQueryRepository {
 			      where p.inventory_item_id = i.id and p.deleted_at is null
 			        and p.status in ('OPEN', 'RESERVED')
 			  )
-			  and u.push_enabled = true
 			  and u.deleted_at is null
-			  and exists (select 1 from "user_push_tokens" t where t.user_id = u.id)
 			  and (n.id is null or n.sent_at is null)
 			order by i.user_id, i.id
 			""";
@@ -42,6 +40,7 @@ public class ConsumeCheckPushQueryRepository {
 			rs.getLong("user_id"),
 			rs.getLong("inventory_item_id"),
 			rs.getString("ingredient_name"),
+			rs.getBoolean("push_enabled"),
 			rs.getObject("existing_notification_id", Long.class)
 		), today);
 	}

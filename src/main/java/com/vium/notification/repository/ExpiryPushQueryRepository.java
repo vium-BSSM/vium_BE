@@ -14,7 +14,7 @@ import org.springframework.stereotype.Repository;
  * InventoryQueryRepository.findActiveIngredients와 동일해야 한다: status=active,
  * expires_on IS NOT NULL인 행만, remaining_quantity 조건 없음, 재고 1건당 1행.
  *
- * notifications를 LEFT JOIN해 이미 성공 발송된(type='expiry', sent_at NOT NULL) 재고는 제외하고,
+ * notifications를 LEFT JOIN해 이미 전달 처리된(type='expiry', sent_at NOT NULL) 재고는 제외하고,
  * sent_at이 NULL인 기존 행이 있으면 그 행의 id를 existingNotificationId로 돌려줘 재시도 경로로 넘긴다.
  */
 @Repository
@@ -27,7 +27,7 @@ public class ExpiryPushQueryRepository {
 		String sql = """
 			select i.user_id, i.id as inventory_item_id,
 			       coalesce(c.name, i.custom_name) as ingredient_name,
-			       i.expires_on, u.expiry_alert_days, n.id as existing_notification_id
+			       i.expires_on, u.expiry_alert_days, u.push_enabled, n.id as existing_notification_id
 			from inventory_items i
 			join item_statuses s on s.id = i.status_id and s.code = 'active'
 			join users u on u.id = i.user_id
@@ -37,9 +37,7 @@ public class ExpiryPushQueryRepository {
 			where i.expires_on is not null
 			  and i.expires_on >= ?
 			  and i.expires_on <= ?
-			  and u.push_enabled = true
 			  and u.deleted_at is null
-			  and exists (select 1 from "user_push_tokens" t where t.user_id = u.id)
 			  and (n.id is null or n.sent_at is null)
 			order by i.user_id, i.expires_on asc, i.id asc
 			""";
@@ -49,6 +47,7 @@ public class ExpiryPushQueryRepository {
 			rs.getString("ingredient_name"),
 			rs.getObject("expires_on", LocalDate.class),
 			rs.getInt("expiry_alert_days"),
+			rs.getBoolean("push_enabled"),
 			(Long) rs.getObject("existing_notification_id")
 		), lowerBound, upperBound);
 	}

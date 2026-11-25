@@ -13,8 +13,11 @@ import com.vium.notification.dto.ConsumeCheckPushCandidate;
 import com.vium.notification.entity.Notification;
 import com.vium.notification.repository.ConsumeCheckPushQueryRepository;
 import com.vium.notification.repository.NotificationRepository;
+import com.vium.notification.service.BatchNotificationDelivery;
 import com.vium.notification.service.ConsumeCheckPushService;
 import com.vium.notification.service.PushDispatchService;
+import com.vium.notification.service.PushDeliveryResult;
+import com.vium.notification.sse.SseConnectionRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -45,7 +48,8 @@ class ConsumeCheckPushServiceTest {
 	@SuppressWarnings("unchecked")
 	void setUp() {
 		ObjectProvider<ConsumeCheckPushService> self = mock(ObjectProvider.class);
-		service = new ConsumeCheckPushService(candidates, notifications, dispatch, clock, self);
+		service = new ConsumeCheckPushService(candidates, notifications,
+			new BatchNotificationDelivery(dispatch, mock(SseConnectionRegistry.class)), clock, self);
 		when(self.getObject()).thenReturn(service);
 		when(notifications.saveAndFlush(any(Notification.class))).thenAnswer(invocation -> {
 			Notification notification = invocation.getArgument(0);
@@ -63,10 +67,10 @@ class ConsumeCheckPushServiceTest {
 	@Test
 	void sendsSingleItemBodyAndOnlyTypeInData() {
 		givenCandidates(item(1, 11, "우유"));
-		when(dispatch.sendToUser(1L, TITLE, "우유, 다 드셨어요?", DATA)).thenReturn(true);
+		when(dispatch.deliverToUser(1L, TITLE, "우유, 다 드셨어요?", DATA)).thenReturn(PushDeliveryResult.SENT);
 
 		assertThat(service.sendDailyConsumeCheckPush()).isEqualTo(1);
-		verify(dispatch).sendToUser(1L, TITLE, "우유, 다 드셨어요?", DATA);
+		verify(dispatch).deliverToUser(1L, TITLE, "우유, 다 드셨어요?", DATA);
 		assertThat(saved.get(11L).getBody()).isEqualTo("우유, 다 드셨어요?");
 		assertThat(saved.get(11L).getSentAt()).isEqualTo(LocalDateTime.now(clock));
 	}
@@ -74,30 +78,31 @@ class ConsumeCheckPushServiceTest {
 	@Test
 	void groupsMultipleItemsIntoOnePush() {
 		givenCandidates(item(1, 11, "우유"), item(1, 12, "오이"));
-		when(dispatch.sendToUser(1L, TITLE, "오늘까지인 재료 2개, 다 드셨나요?", DATA)).thenReturn(true);
+		when(dispatch.deliverToUser(1L, TITLE, "오늘까지인 재료 2개, 다 드셨나요?", DATA)).thenReturn(PushDeliveryResult.SENT);
 
 		assertThat(service.sendDailyConsumeCheckPush()).isEqualTo(1);
-		verify(dispatch).sendToUser(1L, TITLE, "오늘까지인 재료 2개, 다 드셨나요?", DATA);
+		verify(dispatch).deliverToUser(1L, TITLE, "오늘까지인 재료 2개, 다 드셨나요?", DATA);
 		assertThat(saved.values()).allSatisfy(row -> assertThat(row.getSentAt()).isNotNull());
 	}
 
 	@Test
 	void leavesSentAtNullWhenDispatchFails() {
 		givenCandidates(item(1, 11, "우유"));
+		when(dispatch.deliverToUser(1L, TITLE, "우유, 다 드셨어요?", DATA)).thenReturn(PushDeliveryResult.FAILED);
 
 		assertThat(service.sendDailyConsumeCheckPush()).isZero();
-		verify(dispatch).sendToUser(1L, TITLE, "우유, 다 드셨어요?", DATA);
+		verify(dispatch).deliverToUser(1L, TITLE, "우유, 다 드셨어요?", DATA);
 		assertThat(saved.get(11L).getSentAt()).isNull();
 	}
 
 	@Test
 	void continuesToNextUserAfterDispatchThrows() {
 		givenCandidates(item(1, 11, "우유"), item(2, 21, "오이"));
-		when(dispatch.sendToUser(eq(1L), any(), any(), any())).thenThrow(new IllegalStateException("failed"));
-		when(dispatch.sendToUser(2L, TITLE, "오이, 다 드셨어요?", DATA)).thenReturn(true);
+		when(dispatch.deliverToUser(eq(1L), any(), any(), any())).thenThrow(new IllegalStateException("failed"));
+		when(dispatch.deliverToUser(2L, TITLE, "오이, 다 드셨어요?", DATA)).thenReturn(PushDeliveryResult.SENT);
 
 		assertThat(service.sendDailyConsumeCheckPush()).isEqualTo(1);
-		verify(dispatch).sendToUser(2L, TITLE, "오이, 다 드셨어요?", DATA);
+		verify(dispatch).deliverToUser(2L, TITLE, "오이, 다 드셨어요?", DATA);
 		assertThat(saved.get(11L).getSentAt()).isNull();
 		assertThat(saved.get(21L).getSentAt()).isNotNull();
 	}
@@ -107,10 +112,10 @@ class ConsumeCheckPushServiceTest {
 		givenCandidates(item(1, 11, "우유"), item(1, 12, "오이"));
 		when(notifications.saveAndFlush(argThat(row -> row.getInventoryItemId() == 11L)))
 			.thenThrow(new DataIntegrityViolationException("duplicate"));
-		when(dispatch.sendToUser(1L, TITLE, "오이, 다 드셨어요?", DATA)).thenReturn(true);
+		when(dispatch.deliverToUser(1L, TITLE, "오이, 다 드셨어요?", DATA)).thenReturn(PushDeliveryResult.SENT);
 
 		assertThat(service.sendDailyConsumeCheckPush()).isEqualTo(1);
-		verify(dispatch).sendToUser(1L, TITLE, "오이, 다 드셨어요?", DATA);
+		verify(dispatch).deliverToUser(1L, TITLE, "오이, 다 드셨어요?", DATA);
 		assertThat(saved.keySet()).containsExactly(12L);
 	}
 
@@ -119,6 +124,6 @@ class ConsumeCheckPushServiceTest {
 	}
 
 	private ConsumeCheckPushCandidate item(long userId, long inventoryItemId, String name) {
-		return new ConsumeCheckPushCandidate(userId, inventoryItemId, name, null);
+		return new ConsumeCheckPushCandidate(userId, inventoryItemId, name, true, null);
 	}
 }

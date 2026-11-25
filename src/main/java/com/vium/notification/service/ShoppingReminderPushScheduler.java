@@ -26,17 +26,13 @@ public class ShoppingReminderPushScheduler {
 
 	@PostConstruct
 	void logActivation() {
-		if (!fcmProperties.enabled()) {
-			throw new IllegalStateException(
-				"push.shopping-reminder.enabled=true 이지만 fcm.enabled=true가 아닙니다. "
-					+ "실제 전송 없이 sent_at만 채워지는 것을 막기 위해 두 설정을 함께 켜야 합니다.");
-		}
-		log.info("장보기 리마인더 푸시 스케줄러 활성화: cron={}, zone={}", properties.cron(), properties.timeZone());
+		log.info("장보기 리마인더 푸시 스케줄러 활성화: cron={}, zone={}, fcm={}",
+			properties.cron(), properties.timeZone(), fcmProperties.enabled());
 	}
 
 	@Scheduled(cron = "${push.shopping-reminder.cron}", zone = "${push.shopping-reminder.time-zone}")
 	public void run() {
-		int sent = shoppingReminderPushService.sendShoppingReminderPush();
-		log.info("장보기 리마인더 푸시 배치 완료: 발송 사용자 {}명", sent);
+		int processed = shoppingReminderPushService.sendShoppingReminderPush();
+		log.info("장보기 리마인더 푸시 배치 완료: 처리 사용자 {}명", processed);
 	}
 }

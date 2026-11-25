@@ -3,17 +3,21 @@ package com.vium.notification;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.vium.notification.config.FcmProperties;
 import com.vium.notification.service.ExpiryPushService;
 import com.vium.notification.service.FcmPushClient;
 import com.vium.notification.service.PushResult;
+import com.vium.notification.sse.SseConnectionRegistry;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
@@ -24,6 +28,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.jdbc.Sql;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * ExpiryPushService.sendDailyExpiryPush()의 하루 단위 반복 실행 동작(최초 1회만 알림,
@@ -48,6 +53,12 @@ class ExpiryPushServiceIntegrationTest {
 	@MockitoBean
 	private FcmPushClient fcmPushClient;
 
+	@MockitoBean
+	private FcmProperties fcmProperties;
+
+	@MockitoBean
+	private SseConnectionRegistry sseConnections;
+
 	private void setToday(LocalDate day) {
 		when(clock.instant()).thenReturn(day.atStartOfDay(ZoneId.of("Asia/Seoul")).toInstant().plusSeconds(32400)); // 09:00 KST
 		when(clock.getZone()).thenReturn(ZoneId.of("Asia/Seoul"));
@@ -55,8 +66,10 @@ class ExpiryPushServiceIntegrationTest {
 
 	@BeforeEach
 	void setUp() {
+		when(fcmProperties.enabled()).thenReturn(true);
 		jdbc.update("delete from \"notifications\"");
 		jdbc.update("delete from \"consumption_events\"");
+		jdbc.update("delete from \"posts\"");
 		jdbc.update("delete from \"inventory_items\"");
 		jdbc.update("delete from \"user_push_tokens\"");
 		jdbc.update("delete from \"ingredient_catalog\"");
@@ -94,7 +107,55 @@ class ExpiryPushServiceIntegrationTest {
 	}
 
 	private List<Map<String, Object>> notificationRows() {
-		return jdbc.queryForList("select inventory_item_id, sent_at from \"notifications\" order by id");
+		return jdbc.queryForList("select id, inventory_item_id, sent_at from \"notifications\" order by id");
+	}
+
+	@Test
+	void createsAndCompletesNotificationWithoutFcmOrTokensAndDoesNotDuplicateIt() {
+		when(fcmProperties.enabled()).thenReturn(false);
+		jdbc.update("delete from user_push_tokens where user_id = 1");
+		insertItem(10, 1, DAY1.plusDays(1));
+
+		assertThat(expiryPushService.sendDailyExpiryPush()).isEqualTo(1);
+		assertThat(notificationRows()).singleElement()
+			.satisfies(row -> assertThat(row.get("sent_at")).isNotNull());
+		assertThat(expiryPushService.sendDailyExpiryPush()).isZero();
+		assertThat(notificationRows()).hasSize(1);
+		verifyNoInteractions(fcmPushClient);
+		verify(sseConnections).broadcast(1L, "notification", Map.of("type", "expiry"));
+	}
+
+	@Test
+	void createsAndCompletesNotificationForUserWithPushDisabled() {
+		jdbc.update("update users set push_enabled = false where id = 1");
+		insertItem(10, 1, DAY1.plusDays(1));
+
+		assertThat(expiryPushService.sendDailyExpiryPush()).isEqualTo(1);
+		assertThat(notificationRows()).singleElement()
+			.satisfies(row -> assertThat(row.get("sent_at")).isNotNull());
+		verifyNoInteractions(fcmPushClient);
+		verify(sseConnections).broadcast(1L, "notification", Map.of("type", "expiry"));
+	}
+
+	@Test
+	void broadcastsAfterCommitAndContinuesToPushWhenSseFails() {
+		insertItem(10, 1, DAY1.plusDays(1));
+		var completedAt = clock.instant().plusSeconds(2);
+		doAnswer(invocation -> {
+			assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
+			assertThat(notificationRows()).singleElement()
+				.satisfies(row -> assertThat(row.get("sent_at")).isNull());
+			throw new IllegalStateException("SSE unavailable");
+		}).when(sseConnections).broadcast(1L, "notification", Map.of("type", "expiry"));
+		when(fcmPushClient.send(any(), any(), any(), any())).thenAnswer(invocation -> {
+			when(clock.instant()).thenReturn(completedAt);
+			return PushResult.SUCCESS;
+		});
+
+		assertThat(expiryPushService.sendDailyExpiryPush()).isEqualTo(1);
+		assertThat(jdbc.queryForObject("select sent_at from notifications", LocalDateTime.class))
+			.isEqualTo(LocalDateTime.ofInstant(completedAt, clock.getZone()));
+		verify(fcmPushClient).send(any(), any(), any(), any());
 	}
 
 	@Test
@@ -123,15 +184,18 @@ class ExpiryPushServiceIntegrationTest {
 		int day1Sent = expiryPushService.sendDailyExpiryPush();
 		assertThat(day1Sent).isZero();
 		assertThat(notificationRows()).hasSize(1);
-		assertThat(notificationRows().get(0).get("sent_at")).isNull();
+		assertThat(notificationRows().getFirst().get("sent_at")).isNull();
+		Object firstId = notificationRows().getFirst().get("id");
 
 		setToday(DAY2);
 		when(fcmPushClient.send(any(), any(), any(), any())).thenReturn(PushResult.SUCCESS);
 		int day2Sent = expiryPushService.sendDailyExpiryPush();
 
 		assertThat(day2Sent).isEqualTo(1);
-		assertThat(notificationRows()).hasSize(1); // 행 수 증가 없음, 같은 행 재사용
-		assertThat(notificationRows().get(0).get("sent_at")).isNotNull();
+		assertThat(notificationRows()).hasSize(1);
+		assertThat(notificationRows().getFirst().get("id")).isEqualTo(firstId);
+		assertThat(notificationRows().getFirst().get("sent_at")).isNotNull();
+		verify(sseConnections).broadcast(1L, "notification", Map.of("type", "expiry"));
 	}
 
 	@Test
@@ -142,6 +206,7 @@ class ExpiryPushServiceIntegrationTest {
 		expiryPushService.sendDailyExpiryPush(); // 둘 다 최초 알림: 요약 "2개"
 
 		verify(fcmPushClient).send(any(), any(), eq("소비기한이 임박한 재료가 2개 있어요"), any());
+		verify(sseConnections).broadcast(1L, "notification", Map.of("type", "expiry"));
 		reset(fcmPushClient);
 		when(fcmPushClient.send(any(), any(), any(), any())).thenReturn(PushResult.SUCCESS);
 
