@@ -27,6 +27,11 @@ public class ConsumeCheckPushQueryRepository {
 			where i.expires_on = ?
 			  and i.remaining_quantity > 0
 			  and i.keep_confirmed_expires_on is distinct from i.expires_on
+			  and not exists (
+			      select 1 from posts p
+			      where p.inventory_item_id = i.id and p.deleted_at is null
+			        and p.status in ('OPEN', 'RESERVED')
+			  )
 			  and u.push_enabled = true
 			  and u.deleted_at is null
 			  and exists (select 1 from "user_push_tokens" t where t.user_id = u.id)

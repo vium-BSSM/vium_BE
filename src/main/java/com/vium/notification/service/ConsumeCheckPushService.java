@@ -50,7 +50,7 @@ public class ConsumeCheckPushService {
 					sentUserCount++;
 				}
 			} catch (Exception e) {
-				log.error("소진 확인 푸시 처리 실패: userId={}, error={}", userId, e.getClass().getSimpleName());
+				log.error("소진 확인 푸시 처리 실패: userId={}", userId, e);
 			}
 		}
 		return sentUserCount;

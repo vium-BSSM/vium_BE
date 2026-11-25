@@ -76,6 +76,11 @@ public class InventoryQueryRepository {
 			where i.user_id = ? and s.code = 'active'
 			  and i.remaining_quantity > 0 and i.expires_on <= ?
 			  and i.keep_confirmed_expires_on is distinct from i.expires_on
+			  and not exists (
+			      select 1 from posts p
+			      where p.inventory_item_id = i.id and p.deleted_at is null
+			        and p.status in ('OPEN', 'RESERVED')
+			  )
 			order by i.expires_on asc, i.id asc
 			""";
 		return jdbcTemplate.query(sql, (rs, rowNum) -> new ConsumptionCheckCandidate(

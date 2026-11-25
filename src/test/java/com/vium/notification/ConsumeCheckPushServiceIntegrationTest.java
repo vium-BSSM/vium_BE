@@ -47,6 +47,7 @@ class ConsumeCheckPushServiceIntegrationTest {
 	void setUp() {
 		jdbc.update("delete from notifications");
 		jdbc.update("delete from consumption_events");
+		jdbc.update("delete from posts");
 		jdbc.update("delete from inventory_items");
 		jdbc.update("delete from user_push_tokens");
 		jdbc.update("delete from ingredient_catalog");
@@ -93,6 +94,27 @@ class ConsumeCheckPushServiceIntegrationTest {
 			assertThat(row.sentAt()).isNotNull();
 		});
 		verify(fcmPushClient).send("token-1", "소진 확인", "우유, 다 드셨어요?", Map.of("type", "consume_check"));
+	}
+
+	@Test
+	void excludesItemsWithOpenOrReservedPostsButIncludesDeletedOrCompletedPosts() {
+		for (long itemId = 20; itemId <= 23; itemId++) {
+			insertItem(itemId, 1, 1, 1, TODAY, null);
+		}
+		jdbc.update("""
+			insert into posts (author_id, inventory_item_id, type, status, title, description, price,
+			 is_opened, latitude, longitude, like_count, created_at, updated_at, deleted_at)
+			values (1, 20, 'SHARE', 'OPEN', '제목', '', 0, false, 37.5, 127.0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, null),
+			       (1, 21, 'SHARE', 'RESERVED', '제목', '', 0, false, 37.5, 127.0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, null),
+			       (1, 22, 'SHARE', 'OPEN', '제목', '', 0, false, 37.5, 127.0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+			       (1, 23, 'SHARE', 'COMPLETED', '제목', '', 0, false, 37.5, 127.0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, null)
+			""");
+		when(fcmPushClient.send(any(), any(), any(), any())).thenReturn(PushResult.SUCCESS);
+
+		assertThat(consumeCheckPushService.sendDailyConsumeCheckPush()).isEqualTo(1);
+
+		assertThat(rows()).extracting(NotificationRow::inventoryItemId).containsExactly(22L, 23L);
+		verify(fcmPushClient).send("token-1", "소진 확인", "오늘까지인 재료 2개, 다 드셨나요?", Map.of("type", "consume_check"));
 	}
 
 	@Test

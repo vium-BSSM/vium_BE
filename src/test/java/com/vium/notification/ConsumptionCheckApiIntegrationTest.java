@@ -57,6 +57,7 @@ class ConsumptionCheckApiIntegrationTest {
 
 		jdbc.update("delete from notifications");
 		jdbc.update("delete from consumption_events");
+		jdbc.update("delete from posts");
 		jdbc.update("delete from inventory_items");
 		jdbc.update("delete from ingredient_catalog");
 		jdbc.update("delete from user_sessions");
@@ -104,6 +105,24 @@ class ConsumptionCheckApiIntegrationTest {
 			.andExpect(jsonPath("$.data.items[0].unit").value("L"))
 			.andExpect(jsonPath("$.data.items[1].name").value("직접 만든 반찬"))
 			.andExpect(jsonPath("$.data.items[1].expiresOn").value(TODAY.toString()));
+	}
+
+	@Test
+	void excludesItemsWithOpenOrReservedPostsButIncludesDeletedOrCompletedPosts() throws Exception {
+		for (long itemId = 20; itemId <= 23; itemId++) {
+			insertItem(itemId, 1, 1, TODAY);
+		}
+		jdbc.update("""
+			insert into posts (author_id, inventory_item_id, type, status, title, description, price,
+			 is_opened, latitude, longitude, like_count, created_at, updated_at, deleted_at)
+			values (1, 20, 'SHARE', 'OPEN', '제목', '', 0, false, 37.5, 127.0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, null),
+			       (1, 21, 'SHARE', 'RESERVED', '제목', '', 0, false, 37.5, 127.0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, null),
+			       (1, 22, 'SHARE', 'OPEN', '제목', '', 0, false, 37.5, 127.0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+			       (1, 23, 'SHARE', 'COMPLETED', '제목', '', 0, false, 37.5, 127.0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, null)
+			""");
+
+		list().andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.items[*].inventoryItemId", contains(22, 23)));
 	}
 
 	@Test
