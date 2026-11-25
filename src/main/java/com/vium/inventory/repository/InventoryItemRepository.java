@@ -30,9 +30,6 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, Lo
 
 	List<InventoryItem> findAllByStatusIdAndExpiresOnBefore(Short statusId, LocalDate expiresOn);
 
-	List<InventoryItem> findAllByStatusIdAndExpiresOnBeforeAndRemainingQuantityGreaterThan(
-			Short statusId, LocalDate expiresOn, BigDecimal remainingQuantityThreshold);
-
 	@Modifying(clearAutomatically = true)
 	@Query("""
 		UPDATE InventoryItem i
@@ -40,6 +37,7 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, Lo
 		WHERE i.id = :id
 		  AND i.statusId = :activeStatusId
 		  AND i.remainingQuantity = :expectedRemainingQuantity
+		  AND (i.keepConfirmedExpiresOn IS NULL OR i.keepConfirmedExpiresOn <> i.expiresOn)
 		""")
 	int disposeIfUnchanged(
 			@Param("id") Long id,

@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import com.vium.dispose.repository.AutoDisposeQueryRepository;
 import com.vium.dispose.service.AutoDisposeItemProcessor;
 import com.vium.dispose.service.AutoDisposeService;
 import com.vium.global.code.EventSource;
@@ -37,6 +38,7 @@ class AutoDisposeServiceTest {
 	private static final Short EVENT_SOURCE_ID = 2;
 
 	private final InventoryService inventoryService = mock(InventoryService.class);
+	private final AutoDisposeQueryRepository autoDisposeQueryRepository = mock(AutoDisposeQueryRepository.class);
 	private final EventSourceRepository eventSourceRepository = mock(EventSourceRepository.class);
 	private final ItemStatusRepository itemStatusRepository = mock(ItemStatusRepository.class);
 	private final AutoDisposeItemProcessor itemProcessor = mock(AutoDisposeItemProcessor.class);
@@ -64,7 +66,7 @@ class AutoDisposeServiceTest {
 		when(eventSourceRepository.findByCode("auto_estimated")).thenReturn(Optional.of(eventSource));
 
 		service = new AutoDisposeService(
-			inventoryService, eventSourceRepository, itemStatusRepository, itemProcessor, clock);
+			inventoryService, autoDisposeQueryRepository, eventSourceRepository, itemStatusRepository, itemProcessor, clock);
 	}
 
 	@AfterEach
@@ -79,7 +81,7 @@ class AutoDisposeServiceTest {
 	}
 
 	private void givenCandidates(AutoDisposeCandidate... candidates) {
-		when(inventoryService.findAutoDisposeCandidates(ACTIVE_STATUS_ID, LocalDate.now(clock)))
+		when(autoDisposeQueryRepository.findCandidates(ACTIVE_STATUS_ID, LocalDate.now(clock)))
 			.thenReturn(List.of(candidates));
 	}
 

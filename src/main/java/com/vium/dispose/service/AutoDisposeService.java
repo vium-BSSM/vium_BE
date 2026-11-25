@@ -1,5 +1,6 @@
 package com.vium.dispose.service;
 
+import com.vium.dispose.repository.AutoDisposeQueryRepository;
 import com.vium.global.code.EventSourceRepository;
 import com.vium.global.code.ItemStatusRepository;
 import com.vium.global.exception.NotFoundException;
@@ -18,6 +19,7 @@ import org.springframework.stereotype.Service;
  * 수동 트리거 엔드포인트(POST /api/ingredients/auto-dispose, 미구현)가 공유하는 서비스.
  * disposal.auto-dispose.enabled 값과 무관하게 항상 빈으로 존재해야 하므로
  * 활성화 여부에 대한 조건은 이 클래스가 아니라 {@link AutoDisposeScheduler}에 둔다.
+ * 자동 폐기를 끈 사용자의 재고와 현재 소비기한에 대해 잔여를 확인한 재고는 제외한다.
  */
 @Slf4j
 @Service
@@ -25,6 +27,7 @@ import org.springframework.stereotype.Service;
 public class AutoDisposeService {
 
 	private final InventoryService inventoryService;
+	private final AutoDisposeQueryRepository autoDisposeQueryRepository;
 	private final EventSourceRepository eventSourceRepository;
 	private final ItemStatusRepository itemStatusRepository;
 	private final AutoDisposeItemProcessor itemProcessor;
@@ -49,8 +52,7 @@ public class AutoDisposeService {
 			.orElseThrow(() -> new NotFoundException("Event source not found: " + EVENT_SOURCE_AUTO_ESTIMATED))
 			.getId();
 
-		List<AutoDisposeCandidate> candidates = inventoryService
-			.findAutoDisposeCandidates(activeStatusId, today);
+		List<AutoDisposeCandidate> candidates = autoDisposeQueryRepository.findCandidates(activeStatusId, today);
 
 		LocalDateTime now = LocalDateTime.now(clock);
 

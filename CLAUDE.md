@@ -217,9 +217,9 @@ com.vium
 - SSE 연결 레지스트리(`SseConnectionRegistry`)는 인메모리로만 연결을 관리하며 단일 인스턴스를 전제로 한다. 서버 인스턴스를 늘리면 각 인스턴스가 서로 다른 연결 상태를 가지므로, 다른 인스턴스에 연결된 사용자에게는 이벤트가 전달되지 않는다. 확장 시 별도 설계(예: 공유 저장소·pub/sub)가 필요하다.
 - 로컬에서 CI와 같은 결과를 보려면 `TZ=UTC ./gradlew --no-daemon test`로 실행한다. 날짜·시간이 걸린 테스트는 `Asia/Seoul`을 코드에서 명시한다.
 - 같은 트랜잭션 안에서 UNIQUE 제약 위반이 나면 PostgreSQL이 그 트랜잭션 전체를 중단 상태로 만들어 이후 조회까지 막는다. 이런 경우 `ObjectProvider<Self>`로 자기 자신을 주입해 각 시도를 독립된 `@Transactional` 메서드 호출로 분리한다(예: `PushTokenService`, `ExpiryPushService`).
-- cron 기반 배치 스케줄러(`SessionCleanupScheduler`, `AutoDisposeScheduler`, `TradeAutoCompleteScheduler`, `PostExpiryScheduler`, `ExpiryPushScheduler`, `RecipeImageBackfillScheduler`)는 `@ConditionalOnProperty`로 활성화 플래그가 꺼져 있으면(기본값) 빈 자체가 생성되지 않으며, 활성화되면 `@PostConstruct`에서 cron·zone을 로그로 남기는 패턴을 따른다. `fixedDelay` 기반 주기 작업(`UserActivityMetrics`, `ImageCleanup`)은 이 패턴의 대상이 아니다.
+- cron 기반 배치 스케줄러(`SessionCleanupScheduler`, `AutoDisposeScheduler`, `TradeAutoCompleteScheduler`, `PostExpiryScheduler`, `ExpiryPushScheduler`, `ConsumeCheckPushScheduler`, `RecipeImageBackfillScheduler`)는 `@ConditionalOnProperty`로 활성화 플래그가 꺼져 있으면(기본값) 빈 자체가 생성되지 않으며, 활성화되면 `@PostConstruct`에서 cron·zone을 로그로 남기는 패턴을 따른다. `fixedDelay` 기반 주기 작업(`UserActivityMetrics`, `ImageCleanup`)은 이 패턴의 대상이 아니다.
 - 사용자별 푸시 전송(여러 기기 토큰 순회, 무효 토큰 삭제)은 `PushDispatchService`를 거친다. `UserPushTokenRepository`나 FCM 클라이언트를 도메인 서비스에서 직접 호출하지 않는다.
-- `ExpiryPushScheduler`는 기동 시 `push.expiry.enabled=true`인데 FCM 전송이 꺼져 있으면(`fcm.enabled=false`) `IllegalStateException`을 던진다. 실제 전송 없이 `sent_at`만 채워지는 상태를 막기 위해서다.
+- `ExpiryPushScheduler`와 `ConsumeCheckPushScheduler`는 각 활성화 설정(`push.expiry.enabled`, `push.consume-check.enabled`)이 켜져 있고 FCM 전송이 꺼져 있으면(`fcm.enabled=false`) 기동 시 `IllegalStateException`을 던진다. 실제 전송 없이 `sent_at`만 채워지는 상태를 막기 위해서다.
 - 로그와 푸시 data에는 메시지 내용·푸시 토큰·이메일을 남기지 않는다.
 
 ### 7.6 리팩토링 범위와 검증

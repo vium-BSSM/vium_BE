@@ -9,6 +9,8 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
 
 	Optional<Notification> findByIdAndUserId(Long id, Long userId);
 
+	Optional<Notification> findByUserIdAndInventoryItemIdAndType(Long userId, Long inventoryItemId, String type);
+
 	List<Notification> findAllByUserIdOrderByScheduledAtDescIdDesc(Long userId);
 
 	List<Notification> findAllByUserIdAndReadAtIsNotNullOrderByScheduledAtDescIdDesc(Long userId);

@@ -11,7 +11,7 @@ import com.vium.image.service.ImageService;
 import com.vium.ingredient.service.ExpiryEstimationService;
 import com.vium.ingredient.service.IngredientCatalogService;
 import com.vium.inventory.dto.ActiveIngredientState;
-import com.vium.inventory.dto.AutoDisposeCandidate;
+import com.vium.inventory.dto.ConsumptionCheckCandidate;
 import com.vium.inventory.dto.IngredientDetailResponse;
 import com.vium.inventory.dto.IngredientListResponse;
 import com.vium.inventory.dto.IngredientRegisterRequest;
@@ -26,6 +26,7 @@ import com.vium.inventory.repository.InventoryItemRepository;
 import com.vium.inventory.repository.InventoryQueryRepository;
 import com.vium.user.service.UserSettingsService;
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collection;
@@ -51,6 +52,7 @@ public class InventoryService {
 	private final UserSettingsService userSettingsService;
 	private final ImageService imageService;
 	private final List<InventoryLockChecker> lockCheckers;
+	private final Clock clock;
 
 	@Transactional
 	public IngredientUpdateResponse update(Long userId, Long inventoryItemId, IngredientUpdateRequest request) {
@@ -171,20 +173,9 @@ public class InventoryService {
 			item.getInitialQuantity(), item.getAmount());
 	}
 
-	@Transactional(readOnly = true)
-	public List<AutoDisposeCandidate> findAutoDisposeCandidates(Short activeStatusId, LocalDate expiresBefore) {
-		return inventoryItemRepository
-			.findAllByStatusIdAndExpiresOnBeforeAndRemainingQuantityGreaterThan(
-				activeStatusId, expiresBefore, BigDecimal.ZERO)
-			.stream()
-			.map(item -> new AutoDisposeCandidate(item.getId(), item.getUserId(), item.getRemainingQuantity(),
-				item.getInitialQuantity(), item.getAmount(), item.getExpiresOn()))
-			.toList();
-	}
-
 	/**
 	 * 조건부 폐기 처리: status가 여전히 activeStatusId이고 remainingQuantity가 expectedRemainingQuantity와
-	 * 일치할 때만 disposedStatusId로 변경하고 remainingQuantity를 0으로 설정한다.
+	 * 일치하며 현재 소비기한에 대한 잔여 확인이 없을 때 disposedStatusId로 변경하고 remainingQuantity를 0으로 설정한다.
 	 * 동시 처리로 인한 경쟁 상황에서 중복 폐기를 방지하기 위한 조건부 UPDATE.
 	 *
 	 * @return 실제로 변경되었으면 true, 다른 프로세스가 이미 변경했으면 false
@@ -216,6 +207,26 @@ public class InventoryService {
 	@Transactional(readOnly = true)
 	public List<IngredientListResponse.Item> findExpiringIngredients(Long userId, LocalDate expiresThrough) {
 		return inventoryQueryRepository.findActiveIngredients(userId, expiresThrough);
+	}
+
+	@Transactional(readOnly = true)
+	public List<ConsumptionCheckCandidate> findConsumptionCheckCandidates(Long userId, LocalDate today) {
+		return inventoryQueryRepository.findConsumptionCheckCandidates(userId, today);
+	}
+
+	@Transactional
+	public LocalDate confirmKeep(Long userId, Long inventoryItemId) {
+		InventoryItem item = inventoryItemRepository.findByIdAndUserIdForUpdate(inventoryItemId, userId)
+			.orElseThrow(() -> new NotFoundException("Inventory item not found"));
+		Short activeStatusId = itemStatusRepository.findByCode(ACTIVE_STATUS_CODE)
+			.orElseThrow(() -> new BusinessException(ErrorCode.INTERNAL_ERROR, "item_statuses 시드 데이터가 없습니다"))
+			.getId();
+		LocalDate expiresOn = item.getExpiresOn();
+		if (!activeStatusId.equals(item.getStatusId()) || expiresOn == null || expiresOn.isAfter(LocalDate.now(clock))) {
+			throw new BusinessException(ErrorCode.INVALID_REQUEST, "보유 중이고 소비기한이 오늘 또는 과거인 재료만 잔여를 확인할 수 있습니다");
+		}
+		item.confirmKeep();
+		return item.getKeepConfirmedExpiresOn();
 	}
 
 	@Transactional(readOnly = true)
